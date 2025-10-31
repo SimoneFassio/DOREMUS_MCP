@@ -5,6 +5,7 @@ A Model Context Protocol (MCP) server for accessing the DOREMUS Knowledge Graph,
 ## Overview
 
 This MCP server enables LLMs to query the DOREMUS Knowledge Graph (https://data.doremus.org) using natural language, with optimized tools for:
+
 - Finding composers and musical works
 - Searching works by composer, genre, date, instrumentation
 - Retrieving detailed entity information
@@ -30,6 +31,8 @@ The server is built with FastMCP and designed for fast, efficient querying with 
 
 ### 📚 Resources
 
+So far the resources are implemented as tools because not all clients support them yet.
+
 - **Knowledge Graph Structure** - Detailed ontology documentation
 - **Usage Guide** - Comprehensive LLM interaction guide with examples
 
@@ -43,47 +46,34 @@ The server is built with FastMCP and designed for fast, efficient querying with 
 ### Using Docker (Recommended)
 
 1. **Build and run the container:**
+
 ```bash
 docker-compose up --build
 ```
 
 2. **Access the MCP server at:**
+
 ```
-http://127.0.0.1:8000/mcp
+http://localhost:8000/mcp
 ```
 
 3. **Test the server:**
-```bash
-# Check health
-curl http://127.0.0.1:8000/health
 
-# Example MCP request
-curl -X POST http://127.0.0.1:8000/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "tools/call",
-    "params": {
-      "name": "find_candidate_entities",
-      "arguments": {
-        "name": "Mozart",
-        "entity_type": "composer"
-      }
-    },
-    "id": 1
-  }'
-```
+````bash
+# Check health
+curl -i http://localhost:8000/health
 
 ### Local Development
 
 1. **Install dependencies:**
 ```bash
 pip install -r requirements.txt
-```
+````
 
 2. **Run the server:**
+
 ```bash
-python -m fastmcp run server:mcp --host 0.0.0.0 --port 8000
+python3 server.py
 ```
 
 ## Architecture
@@ -156,11 +146,11 @@ WHERE {
   ?expression a efrbroo:F22_Self-Contained_Expression ;
       rdfs:label ?title ;
       mus:U13_has_casting ?casting .
-  
+
   ?casting mus:U23_has_casting_detail ?det1, ?det2 .
-  ?det1 mus:U2_foresees_use_of_medium_of_performance / skos:exactMatch* 
+  ?det1 mus:U2_foresees_use_of_medium_of_performance / skos:exactMatch*
         <http://www.mimo-db.eu/InstrumentsKeywords/3955> .  # Flute
-  ?det2 mus:U2_foresees_use_of_medium_of_performance / skos:exactMatch* 
+  ?det2 mus:U2_foresees_use_of_medium_of_performance / skos:exactMatch*
         <http://www.mimo-db.eu/InstrumentsKeywords/3795> .  # Bassoon
 }
 LIMIT 50
@@ -205,6 +195,7 @@ See the Knowledge Graph Structure resource in the server for complete documentat
 ## Data Coverage
 
 The DOREMUS Knowledge Graph focuses on:
+
 - **European classical music** (primarily French sources)
 - **~200,000 musical works**
 - **Detailed instrumentation** data
@@ -222,6 +213,7 @@ The DOREMUS Knowledge Graph focuses on:
 ### Query Timeouts
 
 If queries timeout:
+
 1. Add more specific filters (date range, composer)
 2. Reduce the limit parameter
 3. Check query complexity
@@ -229,6 +221,7 @@ If queries timeout:
 ### No Results
 
 If searches return empty:
+
 1. Check spelling and entity names
 2. Try broader searches (remove filters incrementally)
 3. Use `find_candidate_entities` to verify entity existence
@@ -236,6 +229,7 @@ If searches return empty:
 ### Connection Errors
 
 If the server can't reach the endpoint:
+
 1. Check internet connection
 2. Verify SPARQL endpoint is accessible: https://data.doremus.org/sparql/
 3. Check firewall settings
@@ -244,12 +238,11 @@ If the server can't reach the endpoint:
 
 ### Running Tests
 
-```bash
-# Install dev dependencies
-pip install pytest pytest-asyncio
+The docker compose command will automatically run the necessary tests, however, it is possible to re-run them using the following command:
 
+```bash
 # Run tests
-pytest tests/
+docker compose run --rm test
 ```
 
 ### Adding New Tools
@@ -262,6 +255,7 @@ pytest tests/
 ### Query Builder Enhancements
 
 To add new filter types:
+
 1. Add parameter to `build_works_query()` in `query_builder.py`
 2. Create SPARQL pattern in the function
 3. Add to WHERE clause composition
@@ -270,6 +264,7 @@ To add new filter types:
 ## Contributing
 
 Contributions welcome! Areas for improvement:
+
 - Additional query patterns
 - Performance optimizations
 - Extended filtering options
@@ -292,6 +287,7 @@ This MCP server implementation is provided as-is for accessing the publicly avai
 Built on top of the DOREMUS (DOing REusable MUSical data) project, funded by the French National Research Agency (ANR-14-CE24-0020).
 
 Special thanks to:
+
 - DOREMUS consortium members
 - Bibliothèque nationale de France
 - Philharmonie de Paris
@@ -300,6 +296,7 @@ Special thanks to:
 ## Support
 
 For issues related to:
+
 - **This MCP server**: Open an issue on the repository
 - **DOREMUS data or ontology**: Contact the DOREMUS project
 - **SPARQL endpoint**: Check https://data.doremus.org/

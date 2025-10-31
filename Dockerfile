@@ -3,6 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies
+COPY test_server.py .
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -15,3 +16,4 @@ EXPOSE 8000
 
 # Run the FastMCP server
 CMD ["python", "server.py"]
+

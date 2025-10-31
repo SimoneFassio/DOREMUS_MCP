@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   doremus-mcp:
@@ -15,3 +15,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+  test:
+    build: .
+    container_name: doremus-mcp-test
+    command: python3 test_server.py
+    working_dir: /app
+    volumes:
+      - ./:/app
+    depends_on:
+      - doremus-mcp
+    environment:
+      - PYTHONUNBUFFERED=1
