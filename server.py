@@ -1,0 +1,956 @@
+"""
+DOREMUS Knowledge Graph MCP Server
+
+A Model Context Protocol server for querying the DOREMUS music knowledge graph
+via SPARQL endpoint at https://data.doremus.org/sparql/
+"""
+
+import logging
+from typing import Any, Optional
+import requests
+from fastmcp import FastMCP
+import json
+from urllib.parse import quote_plus
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("doremus-mcp")
+
+# Initialize FastMCP server
+mcp = FastMCP("DOREMUS Knowledge Graph Server")
+
+# SPARQL endpoint configuration
+SPARQL_ENDPOINT = "https://data.doremus.org/sparql/"
+REQUEST_TIMEOUT = 60
+
+
+def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
+    """
+    Execute a SPARQL query against the DOREMUS endpoint.
+    
+    Args:
+        query: SPARQL query string
+        limit: Maximum number of results (default: 100)
+        
+    Returns:
+        Dictionary containing query results or error information
+    """
+    try:
+        logger.info(f"Executing SPARQL query with limit {limit}")
+        
+        response = requests.get(
+            SPARQL_ENDPOINT,
+            params={"query": query},
+            headers={"Accept": "application/sparql-results+json"},
+            timeout=REQUEST_TIMEOUT
+        )
+        response.raise_for_status()
+        
+        data = response.json()
+        results = data.get("results", {}).get("bindings", [])
+        
+        logger.info(f"Query returned {len(results)} results")
+        
+        # Simplify result structure
+        simplified_results = []
+        for binding in results[:limit]:
+            simplified = {}
+            for key, value in binding.items():
+                simplified[key] = value.get("value")
+            simplified_results.append(simplified)
+        
+        return {
+            "success": True,
+            "count": len(simplified_results),
+            "results": simplified_results
+        }
+        
+    except requests.exceptions.Timeout:
+        logger.error("Query timeout")
+        return {
+            "success": False,
+            "error": "Query timeout - try simplifying your query or reducing the scope"
+        }
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Request error: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Request error: {str(e)}"
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Unexpected error: {str(e)}"
+        }
+
+
+@mcp.tool()
+def find_candidate_entities(
+    name: str,
+    entity_type: str = "any"
+) -> dict[str, Any]:
+    """
+    Find entities by name using case-insensitive search.
+    
+    Use this tool to discover the unique URI identifier for an entity before retrieving
+    detailed information or using it in other queries.
+    
+    Args:
+        name: The name to search for (e.g., "Mozart", "Symphony No. 5", "Vienna", "Radio France")
+        entity_type: Type of entity to search for. Options:
+            - "artist": Composers, performers, conductors (foaf:Person or ecrm:E21_Person)
+            - "work": Musical works/expressions (efrbroo:F22_Self-Contained_Expression)
+            - "place": Geographic locations/venues (ecrm:E53_Place)
+            - "performance": Live performances (efrbroo:F31_Performance)
+            - "track": Individual tracks on albums (mus:M24_Track)
+            - "any": Search across all entity types (default)
+        
+    Returns:
+        Dictionary with matching entities, including their URIs, labels, and types
+        
+    Examples:
+        - find_candidate_entities("Beethoven", "artist")
+        - find_candidate_entities("Don Giovanni", "work")
+        - find_candidate_entities("Royal Albert Hall", "place")
+        - find_candidate_entities("Radio France", "organization")
+        - find_candidate_entities("violin", "any")
+    """
+    
+    # Build type filter
+    type_filter = ""
+    if entity_type == "artist":
+        type_filter = "{ ?entity a foaf:Person } UNION { ?entity a ecrm:E21_Person }"
+    elif entity_type == "work":
+        type_filter = "?entity a efrbroo:F22_Self-Contained_Expression ."
+    elif entity_type == "place":
+        type_filter = "?entity a ecrm:E53_Place ."
+    elif entity_type == "performance":
+        type_filter = "?entity a efrbroo:F31_Performance ."
+    elif entity_type == "track":
+        type_filter = "?entity a mus:M24_Track ."
+    
+    query = f"""
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    PREFIX efrbroo: <http://erlangen-crm.org/efrbroo/>
+    PREFIX ecrm: <http://erlangen-crm.org/current/>
+    PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+    
+    SELECT DISTINCT ?entity ?label ?type
+    WHERE {{
+        {type_filter}
+        ?entity rdfs:label ?label .
+        ?entity a ?type .
+        FILTER (REGEX(?label, "{name}", "i"))
+    }}
+    LIMIT 50
+    """
+    
+    result = execute_sparql_query(query, limit=50)
+    
+    if result["success"]:
+        return {
+            "query": name,
+            "entity_type": entity_type,
+            "matches_found": result["count"],
+            "entities": result["results"]
+        }
+    else:
+        return result
+
+def _get_entity_details_internal(
+    entity_uri: str,
+    include_labels: bool = True,
+    depth: int = 1
+) -> dict[str, Any]:
+    """
+    Internal function to retrieve entity details with recursion support.
+    """
+    
+    # Get all properties of the entity
+    query = f"""
+    SELECT DISTINCT ?property ?value
+    WHERE {{
+        <{entity_uri}> ?property ?value .
+    }}
+    LIMIT 200
+    """
+    
+    result = execute_sparql_query(query, limit=200)
+    
+    if not result["success"]:
+        return result
+    
+    # Organize all properties
+    properties = {}
+    entity_types = []
+    entity_label = None
+    linked_entity_uris = set()
+    
+    for binding in result["results"]:
+        prop = binding.get("property", "")
+        value = binding.get("value", "")
+        
+        # Extract short property name
+        prop_name = prop.split("#")[-1].split("/")[-1] if "#" in prop or "/" in prop else prop
+        
+        # Handle special properties
+        if prop_name == "type":
+            type_name = value.split("#")[-1].split("/")[-1] if "#" in value or "/" in value else value
+            entity_types.append(type_name)
+            continue
+        
+        if prop_name == "label" and not entity_label:
+            entity_label = value
+        
+        # Track URIs for linked entities
+        if value.startswith("http://"):
+            linked_entity_uris.add(value)
+        
+        # Store property
+        if prop_name not in properties:
+            properties[prop_name] = []
+        properties[prop_name].append(value)
+    
+    # Build basic response
+    response = {
+        "entity_uri": entity_uri,
+        "entity_label": entity_label,
+        "entity_types": entity_types,
+        "properties": properties
+    }
+    
+    # Optionally resolve labels for linked entities
+    if include_labels and linked_entity_uris:
+        linked_entities = {}
+        
+        uris_str = " ".join([f"<{uri}>" for uri in list(linked_entity_uris)[:50]])  # Limit to 50
+        label_query = f"""
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        
+        SELECT DISTINCT ?entity ?label
+        WHERE {{
+            VALUES ?entity {{ {uris_str} }}
+            OPTIONAL {{ ?entity rdfs:label ?label }}
+        }}
+        """
+        
+        label_result = execute_sparql_query(label_query, limit=100)
+        
+        if label_result["success"]:
+            for binding in label_result["results"]:
+                uri = binding.get("entity", "")
+                label = binding.get("label", "")
+                if label:
+                    linked_entities[uri] = label
+        
+        response["linked_entities"] = linked_entities
+    
+    # Optionally fetch details of linked entities (depth >= 2)
+    if depth > 1 and linked_entity_uris:
+        related_details = {}
+        
+        # Only fetch details for first 5 linked entities to avoid timeout
+        for linked_uri in list(linked_entity_uris)[:5]:
+            nested_result = _get_entity_details_internal(
+                linked_uri, 
+                include_labels=False, 
+                depth=depth - 1
+            )
+            if nested_result.get("entity_label"):
+                related_details[linked_uri] = {
+                    "label": nested_result.get("entity_label"),
+                    "types": nested_result.get("entity_types", []),
+                    "properties": nested_result.get("properties", {})
+                }
+        
+        if related_details:
+            response["related_entity_details"] = related_details
+    
+    return response
+
+
+@mcp.tool()
+def get_entity_details(
+    entity_uri: str,
+    include_labels: bool = True,
+    depth: int = 1
+) -> dict[str, Any]:
+    """
+    Retrieve detailed information about a specific entity with optional recursive resolution.
+    
+    Use this as the first step after finding an entity with find_candidate_entities.
+    This is the "business card" tool - it shows all direct properties of an entity.
+    
+    Args:
+        entity_uri: The full URI of the entity (e.g., "http://data.doremus.org/artist/...")
+        include_labels: If True, automatically fetch human-readable labels for all linked entity URIs (default: True).
+                       This helps you understand what entities are connected without needing separate lookups.
+        depth: How deep to fetch related entity details:
+               - 1 (default): Only this entity's properties, with labels for linked entities
+               - 2 or more: Also fetch full details of linked entities (slower but more complete)
+        
+    Returns:
+        Dictionary with:
+        - entity_uri: The requested entity
+        - entity_label: Human-readable name
+        - entity_types: All type classifications (short names)
+        - properties: All properties as key-value pairs (property name → list of values)
+        - linked_entities: Dict mapping entity URIs to their labels (if include_labels=True)
+        - related_entity_details: Full details of linked entities (if depth >= 2)
+        
+    Examples:
+        # Basic usage - get entity properties with labels
+        get_entity_details("http://data.doremus.org/artist/123")
+        
+        # Deep dive - get composer details from a work in one call
+        get_entity_details("http://data.doremus.org/expression/456", depth=2)
+        
+        # Fast mode - skip label resolution
+        get_entity_details("http://data.doremus.org/performance/789", include_labels=False)
+    """
+    return _get_entity_details_internal(entity_uri, include_labels, depth)
+
+
+from query_builder import build_works_query
+
+@mcp.tool()
+def search_musical_works(
+    composers: Optional[list[str]] = None,
+    work_type: Optional[str] = None,
+    date_start: Optional[int] = None,
+    date_end: Optional[int] = None,
+    instruments: Optional[list[dict[str, Any]]] = None,
+    place_of_composition: Optional[str] = None,
+    place_of_performance: Optional[str] = None,
+    duration_min: Optional[int] = None,
+    duration_max: Optional[int] = None,
+    topic: Optional[str] = None,
+    limit: int = 50
+) -> dict[str, Any]:
+    """
+    Search for musical works with flexible filtering criteria.
+    
+    This is the main tool for querying works in the DOREMUS knowledge graph with
+    support for multiple filter combinations.
+    
+    Args:
+        composers: List of composer names or URIs (e.g., ["Mozart", "Beethoven"])
+        work_type: Type/genre of work (e.g., "sonata", "symphony", "concerto")
+        date_start: Start year for composition date range (e.g., 1800)
+        date_end: End year for composition date range (e.g., 1850)
+        instruments: List of instrument specifications, each with:
+            - name: instrument name/URI (e.g., "violin", "piano")
+            - quantity: exact number (optional)
+            - min_quantity: minimum number (optional)
+            - max_quantity: maximum number (optional)
+        place_of_composition: Place where work was composed
+        place_of_performance: Place where work was performed
+        duration_min: Minimum duration in seconds
+        duration_max: Maximum duration in seconds
+        topic: Topic or subject matter of the work
+        limit: Maximum number of results (default: 50, max: 200)
+        
+    Returns:
+        Dictionary with matching works and their details
+        
+    Examples:
+        - search_musical_works(composers=["Mozart"], work_type="sonata")
+        - search_musical_works(instruments=[{"name": "violin", "quantity": 2}, {"name": "viola"}])
+        - search_musical_works(date_start=1800, date_end=1850, place_of_composition="Vienna")
+    """
+    
+    try:
+        query = build_works_query(
+            composers=composers,
+            work_type=work_type,
+            date_start=date_start,
+            date_end=date_end,
+            instruments=instruments,
+            place_of_composition=place_of_composition,
+            place_of_performance=place_of_performance,
+            duration_min=duration_min,
+            duration_max=duration_max,
+            topic=topic,
+            limit=min(limit, 200)
+        )
+        
+        result = execute_sparql_query(query, limit=limit)
+        
+        if result["success"]:
+            return {
+                "filters_applied": {
+                    "composers": composers,
+                    "work_type": work_type,
+                    "date_range": f"{date_start}-{date_end}" if date_start or date_end else None,
+                    "instruments": instruments,
+                    "duration_range": f"{duration_min}-{duration_max}s" if duration_min or duration_max else None
+                },
+                "total_results": result["count"],
+                "works": result["results"]
+            }
+        else:
+            return result
+            
+    except Exception as e:
+        logger.error(f"Error building works query: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Query building error: {str(e)}"
+        }
+
+
+@mcp.tool()
+def execute_custom_sparql(query: str, limit: int = 100) -> dict[str, Any]:
+    """
+    Execute a custom SPARQL query against the DOREMUS knowledge graph.
+    
+    Use this tool when the pre-built tools don't cover your specific use case.
+    You have full control over the SPARQL query, but should be familiar with
+    the DOREMUS ontology structure.
+    
+    Args:
+        query: Complete SPARQL query string (SELECT, CONSTRUCT, or ASK)
+        limit: Maximum number of results to return (default: 100, max: 500)
+        
+    Returns:
+        Raw query results from the SPARQL endpoint
+        
+    Note:
+        For complex queries, consider checking the knowledge graph structure
+        resource first to understand available classes and properties.
+        
+    Example:
+        ```sparql
+        PREFIX mus: <http://data.doremus.org/ontology#>
+        PREFIX efrbroo: <http://erlangen-crm.org/efrbroo/>
+        
+        SELECT ?work ?title
+        WHERE {
+            ?work a efrbroo:F22_Self-Contained_Expression ;
+                  rdfs:label ?title .
+        }
+        LIMIT 10
+        ```
+    """
+    
+    limited_query = query
+    if "LIMIT" not in query.upper():
+        limited_query = f"{query}\nLIMIT {min(limit, 500)}"
+    
+    return execute_sparql_query(limited_query, limit=min(limit, 500))
+
+
+# Documentation tools
+
+@mcp.tool()
+def get_kg_structure() -> str:
+    """
+    Get a comprehensive description of the DOREMUS Knowledge Graph structure.
+    
+    This tool provides essential information about the ontology, including:
+    - Main entity types (classes)
+    - Key properties and relationships
+    - Common URI patterns
+    - Ontology prefixes
+    
+    Essential for understanding how to write custom SPARQL queries.
+    
+    Returns:
+        Detailed documentation of the DOREMUS ontology structure
+    """
+    
+    structure = """
+# DOREMUS Knowledge Graph Structure
+
+## Overview
+The DOREMUS Knowledge Graph describes classical music metadata using the FRBRoo
+(Functional Requirements for Bibliographic Records - object oriented) and
+CIDOC-CRM ontologies, extended with a music-specific ontology.
+
+## Core Entity Types
+
+### 1. Musical Works & Expressions
+- **efrbroo:F22_Self-Contained_Expression**: A musical work/composition
+  - Properties:
+    - `rdfs:label`: Title of the work
+    - `mus:U12_has_genre`: Genre/type (symphony, sonata, concerto, etc.)
+    - `mus:U13_has_casting`: Instrumentation specification
+    - `mus:U11_has_key`: Musical key
+    - `mus:U78_estimated_duration`: Duration in seconds
+    - `mus:U16_has_catalogue_statement`: Catalogue number (BWV, K., Op., etc.)
+    
+- **efrbroo:F14_Individual_Work**: Abstract work concept
+  - `efrbroo:R9_is_realised_in`: Links to expressions
+  - `ecrm:P148_has_component`: Links to movements/parts
+
+### 2. Composers & Artists
+- **foaf:Person**: Composers, performers, conductors
+  - Properties:
+    - `foaf:name`: Full name
+    - `schema:birthDate`: Birth date
+    - `schema:deathDate`: Death date
+    - `schema:birthPlace`: Birth location
+    - `ecrm:P107_has_current_or_former_member`: For ensembles
+
+### 3. Performances & Recordings
+- **efrbroo:F31_Performance**: A performance event
+  - `ecrm:P7_took_place_at`: Performance venue
+  - `ecrm:P4_has_time-span`: When it occurred
+  - `ecrm:P9_consists_of`: Component activities (conducting, playing)
+  - `efrbroo:R25_performed`: What was performed
+
+- **mus:M42_Performed_Expression_Creation**: Performance of a work
+  - `efrbroo:R17_created`: Creates a performed expression
+  - `mus:U54_is_performed_expression_of`: Links to original work
+
+- **efrbroo:F29_Recording_Event**: Audio/video recording
+  - `efrbroo:R20_recorded`: Links to performance
+  
+- **mus:M24_Track**: Individual track on an album
+  - `mus:U51_is_partial_or_full_recording_of`: Links to performed expression
+  - `mus:U10_has_order_number`: Track number
+
+### 4. Instrumentation (Casting)
+- **mus:M6_Casting**: Instrumentation specification
+  - `mus:U23_has_casting_detail`: Details for each instrument
+
+- **mus:M7_Casting_Detail**: Specific instrument detail
+  - `mus:U2_foresees_use_of_medium_of_performance`: Instrument URI
+  - `mus:U30_foresees_quantity_of_mop`: Number of instruments
+
+### 5. Creation & Composition
+- **efrbroo:F28_Expression_Creation**: Composition activity
+  - `efrbroo:R17_created`: Links to created work
+  - `ecrm:P9_consists_of`: Component activities
+  - `ecrm:P4_has_time-span`: Composition date
+  - `ecrm:P7_took_place_at`: Composition location
+
+- **ecrm:P14_carried_out_by**: Links activity to person
+  - `mus:U31_had_function`: Role (composer, librettist, arranger)
+
+### 6. Genres & Types
+Common genre URIs:
+- `<http://data.doremus.org/vocabulary/iaml/genre/sy>` - Symphony
+- `<http://data.doremus.org/vocabulary/iaml/genre/sn>` - Sonata
+- `<http://data.doremus.org/vocabulary/iaml/genre/co>` - Concerto
+- `<http://data.doremus.org/vocabulary/iaml/genre/op>` - Opera
+- `<http://data.doremus.org/vocabulary/iaml/genre/mld>` - Melody
+
+### 7. Instruments
+Common instrument URIs (with MIMO equivalents):
+- Violin: `<http://data.doremus.org/vocabulary/iaml/mop/svl>` or `<http://www.mimo-db.eu/InstrumentsKeywords/3573>`
+- Piano: `<http://data.doremus.org/vocabulary/iaml/mop/kpf>` or `<http://www.mimo-db.eu/InstrumentsKeywords/2299>`
+- Cello: `<http://data.doremus.org/vocabulary/iaml/mop/svc>` or `<http://www.mimo-db.eu/InstrumentsKeywords/3582>`
+- Flute: `<http://data.doremus.org/vocabulary/iaml/mop/wfl>` or `<http://www.mimo-db.eu/InstrumentsKeywords/3955>`
+- Orchestra: `<http://data.doremus.org/vocabulary/iaml/mop/o>`
+
+### 8. Functions/Roles
+- `<http://data.doremus.org/vocabulary/function/composer>` - Composer
+- `<http://data.doremus.org/vocabulary/function/conductor>` - Conductor
+- `<http://data.doremus.org/vocabulary/function/librettist>` - Librettist
+
+## Common SPARQL Patterns
+
+### Find works by composer:
+```sparql
+?expression a efrbroo:F22_Self-Contained_Expression ;
+    rdfs:label ?title .
+?expCreation efrbroo:R17_created ?expression ;
+    ecrm:P9_consists_of / ecrm:P14_carried_out_by ?composer .
+?composer foaf:name "Wolfgang Amadeus Mozart" .
+```
+
+### Filter by composition date:
+```sparql
+?expCreation efrbroo:R17_created ?expression ;
+    ecrm:P4_has_time-span ?ts .
+?ts time:hasEnd / time:inXSDDate ?end ;
+    time:hasBeginning / time:inXSDDate ?start .
+FILTER (?start >= "1800"^^xsd:gYear AND ?end <= "1850"^^xsd:gYear)
+```
+
+### Filter by instrumentation:
+```sparql
+?expression mus:U13_has_casting ?casting .
+?casting mus:U23_has_casting_detail ?castingDet .
+?castingDet mus:U2_foresees_use_of_medium_of_performance ?instrument .
+VALUES ?instrument { <http://data.doremus.org/vocabulary/iaml/mop/svl> }
+```
+
+### Filter by genre:
+```sparql
+?expression mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/sn> .
+```
+
+## Namespace Prefixes
+
+```sparql
+PREFIX mus: <http://data.doremus.org/ontology#>
+PREFIX ecrm: <http://erlangen-crm.org/current/>
+PREFIX efrbroo: <http://erlangen-crm.org/efrbroo/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX schema: <http://schema.org/>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX geonames: <http://www.geonames.org/ontology#>
+```
+
+## URI Patterns
+- Works: `http://data.doremus.org/expression/{uuid}`
+- Artists: `http://data.doremus.org/artist/{uuid}`
+- Vocabularies: `http://data.doremus.org/vocabulary/{domain}/{term}`
+- Places: `http://data.doremus.org/place/{uuid}` or `http://sws.geonames.org/{id}/`
+
+## Tips for Query Writing
+1. Use `SAMPLE()` aggregation when grouping to avoid duplicates
+2. Use `skos:exactMatch*` for instrument matching (connects to MIMO vocabulary)
+3. Add `LIMIT` clauses to prevent timeouts
+4. Use `FILTER` for text matching with `REGEX()` or `contains()`
+5. Use `OPTIONAL` blocks for properties that may not exist
+6. COUNT grouped casting details with HAVING to filter by instrumentation size
+"""
+    
+    return structure
+
+
+@mcp.tool()
+def get_usage_guide() -> str:
+    """
+    Get a comprehensive usage guide and prompt for LLMs interacting with DOREMUS.
+    
+    This tool provides guidance on:
+    - How to effectively use the available tools
+    - Common query patterns and workflows
+    - Best practices for entity resolution
+    - Tips for handling ambiguous requests
+    
+    Returns:
+        Detailed guide for effectively querying the DOREMUS knowledge graph
+    """
+    
+    guide = """
+# DOREMUS MCP Server - LLM Usage Guide
+
+## Purpose
+This MCP server provides access to the DOREMUS Knowledge Graph, a comprehensive
+database of classical music metadata including works, composers, performances,
+recordings, and instrumentation.
+
+## Available Tools
+
+### 1. find_candidate_entities
+**When to use**: As the first step when you need to reference a specific composer,
+work, or place by name.
+
+**Why**: Entity names may have variations, and you need the exact URI to query
+reliably.
+
+**Example workflow**:
+```
+User: "Find sonatas by Beethoven"
+1. find_candidate_entities("Beethoven", "composer")
+2. Note the composer URI from results
+3. search_musical_works(composers=[uri], work_type="sonata")
+```
+
+### 2. get_entity_details
+**When to use**: After finding an entity URI, to get comprehensive information
+about that entity.
+
+**Why**: Provides all available properties like birth/death dates, alternative
+names, relationships, etc.
+
+**Example workflow**:
+```
+User: "Tell me about Mozart"
+1. find_candidate_entities("Mozart", "composer")
+2. get_entity_details(mozart_uri)
+3. Present formatted information to user
+```
+
+### 3. search_musical_works
+**When to use**: For most work discovery queries with filtering criteria.
+
+**Why**: This is optimized for the most common use cases with a flexible
+parameter-based interface.
+
+**Key features**:
+- Composer filtering (by name or URI)
+- Genre/type filtering (sonata, symphony, concerto, etc.)
+- Date range filtering
+- Instrumentation filtering with quantity specifications
+- Duration filtering
+- Place filtering (composition or performance)
+
+**Example workflows**:
+
+Simple composer search:
+```
+User: "Show me works by Mozart"
+search_musical_works(composers=["Wolfgang Amadeus Mozart"], limit=20)
+```
+
+Complex instrumentation:
+```
+User: "Find works for 2 violins, viola, and cello"
+search_musical_works(
+    instruments=[
+        {"name": "violin", "quantity": 2},
+        {"name": "viola", "quantity": 1},
+        {"name": "cello", "quantity": 1}
+    ]
+)
+```
+
+Combined filters:
+```
+User: "German chamber music from 1800-1850"
+1. First search for works with date range
+2. Consider using custom SPARQL for nationality filter
+```
+
+### 4. execute_custom_sparql
+**When to use**: For complex queries not covered by search_musical_works.
+
+**Why**: Provides maximum flexibility for specialized queries.
+
+**When NOT to use**: If search_musical_works can handle it - the query builder
+is optimized and tested.
+
+**Before using**:
+1. Check the knowledge graph structure resource
+2. Look at example queries from competency questions
+3. Test incrementally, starting simple
+
+## Best Practices
+
+### Entity Resolution
+1. **Always search before assuming**: Don't assume you know the exact URI or name
+   - ❌ Bad: search_musical_works(composers=["Mozart"])
+   - ✅ Good: find_candidate_entities("Mozart") → use returned URI
+
+2. **Handle ambiguity**: If multiple matches, ask user to clarify
+   ```
+   Found 3 composers named "Bach":
+   - Johann Sebastian Bach
+   - Carl Philipp Emanuel Bach  
+   - Johann Christian Bach
+   Which one did you mean?
+   ```
+
+### Query Building
+1. **Start specific, broaden if needed**: Begin with restrictive filters, relax if no results
+
+2. **Use appropriate limits**: Default to 20-50 results for exploration, higher for comprehensive searches
+
+3. **Combine tools strategically**:
+   - Discovery: find_candidate_entities → search_musical_works
+   - Deep dive: search_musical_works → get_entity_details for each result
+   - Analysis: execute_custom_sparql with aggregations
+
+### Performance
+1. **Date ranges**: Narrower is faster
+2. **Instrumentation**: Specific instruments faster than "any strings"
+3. **Limits**: Keep reasonable (50-100), paginate if needed
+4. **Timeouts**: If query times out, simplify or add more filters
+
+### Error Handling
+1. **No results**: Try broader search or check spelling
+2. **Timeout**: Reduce scope or limit, add more specific filters
+3. **Multiple URIs**: Present options to user
+
+## Common Query Patterns
+
+### Pattern 1: Composer Catalog
+```
+Goal: List all works by a specific composer
+Steps:
+1. find_candidate_entities(composer_name, "composer")
+2. search_musical_works(composers=[uri], limit=100)
+```
+
+### Pattern 2: Genre Exploration
+```
+Goal: Explore a musical genre/type
+Steps:
+1. search_musical_works(work_type="sonata", limit=50)
+2. Optionally filter by composer, date, instruments
+```
+
+### Pattern 3: Instrumentation Discovery
+```
+Goal: Find works for specific ensemble
+Steps:
+1. find_candidate_entities for each instrument (if needed)
+2. search_musical_works with instruments list
+3. Consider strict vs. flexible matching (exactly these vs. including these)
+```
+
+### Pattern 4: Historical Period
+```
+Goal: Works from a specific time period
+Steps:
+1. search_musical_works(date_start=X, date_end=Y)
+2. Optionally filter by place or composer nationality
+```
+
+### Pattern 5: Performance Research
+```
+Goal: When/where was a work performed?
+Steps:
+1. find_candidate_entities for the work
+2. execute_custom_sparql to find performance history
+```
+
+## Handling Ambiguous Requests
+
+### "Chamber music"
+- Broad genre category
+- Filter by: small instrumentation (2-10 instruments), no orchestra
+- Consider suggesting specific formats (string quartet, piano trio)
+
+### "Modern"/"Contemporary"
+- Define timeframe (20th century = 1900-2000, contemporary = 2000+)
+- Ask user to clarify or assume based on context
+
+### "Famous works"
+- No "fame" metric in database
+- Proxy: works by well-known composers, frequently performed/recorded
+- Use custom SPARQL with COUNT of performances/recordings
+
+### Instrument variations
+- Piano vs. keyboard vs. harpsichord
+- Violin vs. strings
+- Use skos:broader relationships or suggest alternatives
+
+## Data Limitations & Workarounds
+
+### Missing Data
+- Not all works have all properties
+- Use OPTIONAL in custom SPARQL
+- Report what's available, note what's missing
+
+### Incomplete Coverage
+- Focus on European classical music
+- Better coverage for certain periods/composers
+- Set expectations with user
+
+### No "popularity" metric
+- Can count performances/recordings
+- Cannot directly rank by "importance"
+- Suggest manual curation or external sources
+
+## Example User Interactions
+
+### Example 1: Simple Discovery
+```
+User: "Show me Mozart's piano concertos"
+Assistant:
+1. find_candidate_entities("Mozart", "composer")
+   → Found: Wolfgang Amadeus Mozart, URI: ...
+2. search_musical_works(
+     composers=[mozart_uri],
+     work_type="concerto",
+     instruments=[{"name": "piano"}],
+     limit=30
+   )
+   → Found 27 piano concertos
+3. Present formatted list with K. numbers if available
+```
+
+### Example 2: Complex Research
+```
+User: "What chamber music for strings was composed in Vienna between 1780 and 1800?"
+Assistant:
+1. search_musical_works(
+     date_start=1780,
+     date_end=1800,
+     place_of_composition="Vienna",
+     limit=100
+   )
+2. Filter results programmatically for string instruments only
+3. Group by composer
+4. Present organized results
+Note: Place of composition data may be incomplete - consider mentioning this
+```
+
+### Example 3: Exploration
+```
+User: "I like Beethoven's late quartets. What's similar?"
+Assistant:
+1. find_candidate_entities("Beethoven", "composer")
+2. search_musical_works(
+     composers=[beethoven_uri],
+     work_type="quartet",
+     date_start=1820  # Late period
+   )
+3. Note instrumentation pattern (2 violins, viola, cello)
+4. search_musical_works(
+     work_type="quartet",
+     date_start=1820,
+     instruments=[same pattern]
+   )
+5. Exclude Beethoven from results
+6. Present recommendations with context
+```
+
+## Advanced: Custom SPARQL Scenarios
+
+### Scenario 1: Works frequently performed together
+Query concerts/albums where work X and work Y appear together
+
+### Scenario 2: Composer collaborations
+Find works where two people collaborated (different functions)
+
+### Scenario 3: Temporal analysis
+Count works per decade, identify compositional trends
+
+### Scenario 4: Instrument evolution
+Track instrument usage over time periods
+
+### Scenario 5: Geographic mapping
+Distribution of composers by birthplace or composition location
+
+For these scenarios, consult the knowledge graph structure resource and
+build appropriate SPARQL queries using execute_custom_sparql.
+
+## Formatting Results
+
+### For Lists
+- Group by logical categories (composer, date, type)
+- Include key identifying info (title, composer, date)
+- Limit long lists, offer to show more
+
+### For Details
+- Organize by topic (biographical, compositional, performance)
+- Format dates human-readably
+- Translate technical terms (genre codes, URIs) to readable labels
+
+### For Comparisons
+- Use tables when appropriate
+- Highlight similarities and differences
+- Provide context for numbers
+
+## Remember
+- The database is authoritative but not complete
+- Always verify entity resolution before complex queries
+- When in doubt, start simple and iterate
+- Provide context and explanations, not just raw data
+- Acknowledge limitations when encountered
+"""
+    
+    return guide
+
+
+if __name__ == "__main__":
+    # Run the MCP server
+    import uvicorn
+    import os
+    
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    
+    mcp.run(transport="sse", host=host, port=port)
