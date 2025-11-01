@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+env/
+venv/
+.venv/
+venv*/
+env.bak/
+ENV/
+
+# Packaging
+build/
+dist/
+eggs/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+wheelhouse/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# Type checking / caches
+.mypy_cache/
+.pytype/
+.pyre/
+cython_debug/
+
+# IDEs/editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Logs, databases, local settings
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
