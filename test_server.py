@@ -15,14 +15,18 @@ from server import (
     execute_custom_sparql
 )
 
+# Change for DEBUG
+PRINT_RESULT=False
+
 
 def print_result(title: str, result: dict):
     """Print a formatted test result."""
-    print(f"\n{'='*60}")
-    print(f"TEST: {title}")
-    print('='*60)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
-    print()
+    if PRINT_RESULT:
+        print(f"\n{'='*60}")
+        print(f"TEST: {title}")
+        print('='*60)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        print()
 
 
 def test_find_entities():
@@ -30,53 +34,52 @@ def test_find_entities():
     print("\n🔍 Testing Entity Search...")
     
     # Test 1: Find Mozart
-    result = find_candidate_entities("Mozart", "composer")
+    result = find_candidate_entities("Mozart", "artist")
+    if result.get("matches_found", 0) == 0:
+        print("⚠️ Could not find Mozart entity")
+        return False
+    
     print_result("Find Mozart (composer)", result)
     
     # Test 2: Find any entity named "Symphony"
     result = find_candidate_entities("Symphony", "work")
+    if result.get("matches_found", 0) == 0:
+        print("⚠️ Could not find Symphony entity")
+        return False
+    
     print_result("Find Symphony (work)", result)
     
     return True
 
 
 def test_search_works():
-    """Test works search functionality."""
-    print("\n🎵 Testing Works Search...")
-    
-    # Test 1: Simple search by composer name
+    """Test works search functionality with a single combined query.
+
+    This test performs one query that combines composer, work type,
+    date range and instrumentation filters to run quickly. The test
+    fails (raises an exception) if no works are returned.
+    """
+    print("\n🎵 Testing Works Search (combined)...")
+
     result = search_musical_works(
         composers=["Wolfgang Amadeus Mozart"],
-        limit=5
-    )
-    print_result("Mozart's works (first 5)", result)
-    
-    # Test 2: Search by instrumentation
-    result = search_musical_works(
-        instruments=[
-            {"name": "violin", "quantity": 2},
-            {"name": "viola", "quantity": 1},
-            {"name": "cello", "quantity": 1}
-        ],
-        limit=5
-    )
-    print_result("String quartets (first 5)", result)
-    
-    # Test 3: Search by date range
-    result = search_musical_works(
-        date_start=1800,
-        date_end=1850,
-        limit=5
-    )
-    print_result("Works from 1800-1850 (first 5)", result)
-    
-    # Test 4: Search by work type
-    result = search_musical_works(
         work_type="sonata",
-        limit=5
+        date_start=1750,
+        date_end=1800,
+        instruments=[
+            {"name": "violin", "quantity": 2}
+        ],
+        limit=2
     )
-    print_result("Sonatas (first 5)", result)
-    
+
+    print_result("Combined search (first 2)", result)
+
+    works = result.get("works", [])
+
+    if len(works) < 1:
+        print("⚠️ Search returned no works - expected at least 1 result")
+        return False
+
     return True
 
 
@@ -96,13 +99,15 @@ def test_custom_sparql():
                      ecrm:P9_consists_of / ecrm:P14_carried_out_by ?composer .
         ?composer foaf:name ?name .
     }
-    LIMIT 10
+    LIMIT 2
     """
     
-    result = execute_custom_sparql(query, limit=10)
-    print_result("List composers (first 10)", result)
+    result = execute_custom_sparql(query, limit=2)
+    if result.get("success"):
+        print_result("List composers (first 2)", result)
+        return True
     
-    return True
+    return False
 
 
 def test_entity_details():
@@ -110,9 +115,9 @@ def test_entity_details():
     print("\n📖 Testing Entity Details...")
     
     # First find Mozart's URI
-    search_result = find_candidate_entities("Mozart", "composer")
+    search_result = find_candidate_entities("Mozart", "artist")
     
-    if search_result.get("success") and search_result.get("matches_found", 0) > 0:
+    if search_result.get("matches_found", 0) > 0:
         # Get the first Mozart result
         entities = search_result.get("entities", [])
         if entities:

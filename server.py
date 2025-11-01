@@ -284,8 +284,8 @@ def _get_entity_details_internal(
     if depth > 1 and linked_entity_uris:
         related_details = {}
         
-        # Only fetch details for first 5 linked entities to avoid timeout
-        for linked_uri in list(linked_entity_uris)[:5]:
+        # Only fetch details for first 20 linked entities to avoid timeout
+        for linked_uri in list(linked_entity_uris)[:20]:
             nested_result = _get_entity_details_internal(
                 linked_uri, 
                 include_labels=False, 
