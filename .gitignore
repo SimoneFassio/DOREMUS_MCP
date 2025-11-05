@@ -3,14 +3,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.python-version
 
 # Virtual environments
+.env
 env/
 venv/
 .venv/
 venv*/
 env.bak/
 ENV/
+.client
 
 # Packaging
 build/
