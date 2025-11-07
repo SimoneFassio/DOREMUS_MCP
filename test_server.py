@@ -9,10 +9,10 @@ before deployment.
 import sys
 import json
 from server import (
-    find_candidate_entities,
-    get_entity_details,
-    search_musical_works,
-    execute_custom_sparql
+    find_candidate_entities_internal,
+    get_entity_details_internal,
+    search_musical_works_internal,
+    execute_custom_sparql_internal
 )
 
 # Change for DEBUG
@@ -34,7 +34,7 @@ def test_find_entities():
     print("\n🔍 Testing Entity Search...")
     
     # Test 1: Find Mozart
-    result = find_candidate_entities("Mozart", "artist")
+    result = find_candidate_entities_internal("Mozart", "artist")
     if result.get("matches_found", 0) == 0:
         print("⚠️ Could not find Mozart entity")
         return False
@@ -42,7 +42,7 @@ def test_find_entities():
     print_result("Find Mozart (composer)", result)
     
     # Test 2: Find any entity named "Symphony"
-    result = find_candidate_entities("Symphony", "work")
+    result = find_candidate_entities_internal("Symphony", "work")
     if result.get("matches_found", 0) == 0:
         print("⚠️ Could not find Symphony entity")
         return False
@@ -61,7 +61,7 @@ def test_search_works():
     """
     print("\n🎵 Testing Works Search (combined)...")
 
-    result = search_musical_works(
+    result = search_musical_works_internal(
         composers=["Wolfgang Amadeus Mozart"],
         work_type="sonata",
         date_start=1750,
@@ -89,10 +89,6 @@ def test_custom_sparql():
     
     # Simple query to list some composers
     query = """
-    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-    PREFIX ecrm: <http://erlangen-crm.org/current/>
-    PREFIX efrbroo: <http://erlangen-crm.org/efrbroo/>
-    
     SELECT DISTINCT ?composer ?name
     WHERE {
         ?expCreation efrbroo:R17_created ?expression ;
@@ -102,7 +98,7 @@ def test_custom_sparql():
     LIMIT 2
     """
     
-    result = execute_custom_sparql(query, limit=2)
+    result = execute_custom_sparql_internal(query, limit=2)
     if result.get("success"):
         print_result("List composers (first 2)", result)
         return True
@@ -115,7 +111,7 @@ def test_entity_details():
     print("\n📖 Testing Entity Details...")
     
     # First find Mozart's URI
-    search_result = find_candidate_entities("Mozart", "artist")
+    search_result = find_candidate_entities_internal("Mozart", "artist")
     
     if search_result.get("matches_found", 0) > 0:
         # Get the first Mozart result
@@ -123,7 +119,7 @@ def test_entity_details():
         if entities:
             mozart_uri = entities[0].get("entity")
             if mozart_uri:
-                result = get_entity_details(mozart_uri)
+                result = get_entity_details_internal(mozart_uri)
                 print_result(f"Details for {mozart_uri}", result)
                 return True
     

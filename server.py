@@ -11,10 +11,8 @@ import requests
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
-import json
 import os
-import uvicorn
-from urllib.parse import quote_plus
+from query_builder import build_works_query
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +29,46 @@ async def health_check(request: Request) -> PlainTextResponse:
 SPARQL_ENDPOINT = "https://data.doremus.org/sparql/"
 REQUEST_TIMEOUT = 60
 
+PREFIXES = {
+    "mus": "http://data.doremus.org/ontology#",
+    "ecrm": "http://erlangen-crm.org/current/",
+    "efrbroo": "http://erlangen-crm.org/efrbroo/",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "modsrdf": "http://www.loc.gov/standards/mods/rdf/v1/#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "foaf": "http://xmlns.com/foaf/0.1/",
+    "geonames": "http://www.geonames.org/ontology#",
+    "time": "http://www.w3.org/2006/time#",
+    "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "dbpprop" : "http://dbpedia.org/property/",
+    "schema" : "http://schema.org/"
+}
+
+# Helper: expand prefixed URI to full URI
+def expand_prefixed_uri(uri: str) -> str:
+    if uri.startswith("<") and uri.endswith(">"):
+        uri = uri[1:-1]
+    if ":" in uri:
+        prefix, local = uri.split(":", 1)
+        if prefix in PREFIXES:
+            return f"{PREFIXES[prefix]}{local}"
+    return uri
+
+# Helper: contract full URI to prefixed name
+def contract_uri(uri: str) -> str:
+    for prefix, base in PREFIXES.items():
+        if uri.startswith(base):
+            return f"{prefix}:{uri[len(base):]}"
+    return uri
+
+def contract_uri_restrict(uri: str) -> str:
+    """
+    Contract a given uri if present in PREFIXES, else return None
+    """
+    for prefix, base in PREFIXES.items():
+        if uri.startswith(base):
+            return f"{prefix}:{uri[len(base):]}"
+    return None
 
 def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
     """
@@ -45,6 +83,10 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
     """
     try:
         logger.info(f"Executing SPARQL query with limit {limit}")
+        
+        # Prepend standard PREFIX declarations
+        prefix_lines = "".join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
+        query = prefix_lines + "\n" + query
         
         response = requests.get(
             SPARQL_ENDPOINT,
@@ -94,11 +136,11 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
     
 # Helper to sample entities for a given class URI
 def sample_for_class(class_uri: str, sample_limit: int = 5) -> list[tuple[str, str]]:
+    class_uri_expanded = expand_prefixed_uri(class_uri)
     q = f"""
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
     SELECT DISTINCT ?entity ?label
     WHERE {{
-        ?entity a <{class_uri}> .
+        ?entity a <{class_uri_expanded}> .
         OPTIONAL {{ ?entity rdfs:label ?label }}
     }} LIMIT {sample_limit}
     """
@@ -106,7 +148,9 @@ def sample_for_class(class_uri: str, sample_limit: int = 5) -> list[tuple[str, s
     samples = []
     if res.get("success"):
         for r in res.get("results", []):
-            samples.append((r.get("entity", ""), r.get("label", "") or ""))
+            ent_uri = r.get("entity", "")
+            ent_label = r.get("label", "") or ""
+            samples.append((contract_uri(ent_uri), ent_label))
     return samples
 
 
@@ -114,8 +158,7 @@ def find_candidate_entities_internal(
     name: str,
     entity_type: str = "any"
 ) -> dict[str, Any]:
-    
-    # Build type filter
+    # Build type filter (all use prefixes)
     type_filter = ""
     if entity_type == "artist":
         type_filter = "{ ?entity a foaf:Person } UNION { ?entity a ecrm:E21_Person }"
@@ -127,14 +170,8 @@ def find_candidate_entities_internal(
         type_filter = "?entity a efrbroo:F31_Performance ."
     elif entity_type == "track":
         type_filter = "?entity a mus:M24_Track ."
-    
+
     query = f"""
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-    PREFIX efrbroo: <http://erlangen-crm.org/efrbroo/>
-    PREFIX ecrm: <http://erlangen-crm.org/current/>
-    PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-    
     SELECT DISTINCT ?entity ?label ?type
     WHERE {{
         {type_filter}
@@ -144,15 +181,24 @@ def find_candidate_entities_internal(
     }}
     LIMIT 50
     """
-    
+
     result = execute_sparql_query(query, limit=50)
 
+    def prefixify_entity(ent):
+        ent = ent.copy()
+        if "entity" in ent:
+            ent["entity"] = contract_uri(ent["entity"])
+        if "type" in ent:
+            ent["type"] = contract_uri(ent["type"])
+        return ent
+
     if result.get("success"):
+        entities = [prefixify_entity(e) for e in result.get("results", [])]
         return {
             "query": name,
             "entity_type": entity_type,
-            "matches_found": result.get("count", 0),
-            "entities": result.get("results", [])
+            "matches_found": len(entities),
+            "entities": entities
         }
     else:
         return result
@@ -160,7 +206,7 @@ def find_candidate_entities_internal(
 
 # Register the callable as an MCP tool but keep a plain Python function exported for tests
 @mcp.tool()
-async def find_candidate_entities_tool(name: str, entity_type: str = "any") -> dict[str, Any]:
+async def find_candidate_entities(name: str, entity_type: str = "any") -> dict[str, Any]:
     """
     Find entities by name using case-insensitive search.
     
@@ -189,10 +235,7 @@ async def find_candidate_entities_tool(name: str, entity_type: str = "any") -> d
     """
     return find_candidate_entities_internal(name, entity_type)
 
-# Export the plain implementation under the original name for direct imports/tests
-find_candidate_entities = find_candidate_entities_internal
-
-def _get_entity_details_internal(
+def get_entity_details_internal(
     entity_uri: str,
     include_labels: bool = True,
     depth: int = 1
@@ -200,112 +243,91 @@ def _get_entity_details_internal(
     """
     Internal function to retrieve entity details with recursion support.
     """
-    
-    # Get all properties of the entity
+    # Expand input URI if prefixed
+    entity_uri_expanded = expand_prefixed_uri(entity_uri)
     query = f"""
     SELECT DISTINCT ?property ?value
     WHERE {{
-        <{entity_uri}> ?property ?value .
+           <{entity_uri_expanded}> ?property ?value .
+           FILTER (
+              !(?property = rdfs:comment) || lang(?value) = "en"
+           )
     }}
     LIMIT 200
     """
-    
     result = execute_sparql_query(query, limit=200)
-    
     if not result["success"]:
         return result
-    
     # Organize all properties
     properties = {}
-    entity_types = []
     entity_label = None
     linked_entity_uris = set()
-    
     for binding in result["results"]:
         prop = binding.get("property", "")
         value = binding.get("value", "")
-        
-        # Extract short property name
-        prop_name = prop.split("#")[-1].split("/")[-1] if "#" in prop or "/" in prop else prop
-        
-        # Handle special properties
-        if prop_name == "type":
-            type_name = value.split("#")[-1].split("/")[-1] if "#" in value or "/" in value else value
-            entity_types.append(type_name)
+        # Contract URIs to prefixes
+        prop_prefixed = contract_uri_restrict(prop)
+        # If uri not present in PREFIXES ignore the property
+        if prop_prefixed is None:
             continue
+        value_prefixed = contract_uri(value) if value.startswith("http://") or value.startswith("https://") else value
         
-        if prop_name == "label" and not entity_label:
+        if prop_prefixed.endswith(":label") and not entity_label:
             entity_label = value
-        
         # Track URIs for linked entities
-        if value.startswith("http://"):
-            linked_entity_uris.add(value)
-        
+        if value.startswith("http://") or value.startswith("https://"): 
+            linked_entity_uris.add(value) #TODO not always works
         # Store property
-        if prop_name not in properties:
-            properties[prop_name] = []
-        properties[prop_name].append(value)
-    
+        if prop_prefixed not in properties:
+            properties[prop_prefixed] = []
+        properties[prop_prefixed].append(value_prefixed)
     # Build basic response
     response = {
-        "entity_uri": entity_uri,
+        "entity_uri": contract_uri(entity_uri_expanded),
         "entity_label": entity_label,
-        "entity_types": entity_types,
         "properties": properties
     }
-    
     # Optionally resolve labels for linked entities
     if include_labels and linked_entity_uris:
         linked_entities = {}
-        
         uris_str = " ".join([f"<{uri}>" for uri in list(linked_entity_uris)[:50]])  # Limit to 50
         label_query = f"""
-        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        
         SELECT DISTINCT ?entity ?label
         WHERE {{
             VALUES ?entity {{ {uris_str} }}
             OPTIONAL {{ ?entity rdfs:label ?label }}
         }}
         """
-        
         label_result = execute_sparql_query(label_query, limit=100)
-        
         if label_result["success"]:
             for binding in label_result["results"]:
                 uri = binding.get("entity", "")
                 label = binding.get("label", "")
                 if label:
-                    linked_entities[uri] = label
-        
+                    linked_entities[contract_uri(uri)] = label
         response["linked_entities"] = linked_entities
-    
     # Optionally fetch details of linked entities (depth >= 2)
     if depth > 1 and linked_entity_uris:
         related_details = {}
-        
         # Only fetch details for first 20 linked entities to avoid timeout
         for linked_uri in list(linked_entity_uris)[:20]:
-            nested_result = _get_entity_details_internal(
-                linked_uri, 
-                include_labels=False, 
+            nested_result = get_entity_details_internal(
+                contract_uri(linked_uri),
+                include_labels=False,
                 depth=depth - 1
             )
             if nested_result.get("entity_label"):
-                related_details[linked_uri] = {
+                related_details[contract_uri(linked_uri)] = {
                     "label": nested_result.get("entity_label"),
-                    "types": nested_result.get("entity_types", []),
                     "properties": nested_result.get("properties", {})
                 }
-        
         if related_details:
             response["related_entity_details"] = related_details
-    
     return response
 
 # Register tool wrapper and export plain callable
 @mcp.tool()
-async def get_entity_details_tool(entity_uri: str, include_labels: bool = True, depth: int = 1) -> dict[str, Any]:
+async def get_entity_details(entity_uri: str, include_labels: bool = True, depth: int = 1) -> dict[str, Any]:
     """
     Retrieve detailed information about a specific entity with optional recursive resolution.
     
@@ -324,7 +346,6 @@ async def get_entity_details_tool(entity_uri: str, include_labels: bool = True, 
         Dictionary with:
         - entity_uri: The requested entity
         - entity_label: Human-readable name
-        - entity_types: All type classifications (short names)
         - properties: All properties as key-value pairs (property name → list of values)
         - linked_entities: Dict mapping entity URIs to their labels (if include_labels=True)
         - related_entity_details: Full details of linked entities (if depth >= 2)
@@ -339,12 +360,7 @@ async def get_entity_details_tool(entity_uri: str, include_labels: bool = True, 
         # Fast mode - skip label resolution
         get_entity_details("http://data.doremus.org/performance/789", include_labels=False)
     """
-    return _get_entity_details_internal(entity_uri, include_labels, depth)
-
-get_entity_details = _get_entity_details_internal
-
-
-from query_builder import build_works_query
+    return get_entity_details_internal(entity_uri, include_labels, depth)
 
 def search_musical_works_internal(
     composers: Optional[list[str]] = None,
@@ -400,7 +416,7 @@ def search_musical_works_internal(
         }
 
 @mcp.tool()
-async def search_musical_works_tool(
+async def search_musical_works(
         composers: Optional[list[str]] = None,
         work_type: Optional[str] = None,
         date_start: Optional[int] = None,
@@ -446,9 +462,6 @@ async def search_musical_works_tool(
     """
     return search_musical_works_internal(composers, work_type, date_start, date_end, instruments, place_of_composition, place_of_performance, duration_min, duration_max, topic, limit)
 
-search_musical_works = search_musical_works_internal
-
-
 
 def execute_custom_sparql_internal(query: str, limit: int = 100) -> dict[str, Any]:
     limited_query = query
@@ -460,7 +473,7 @@ def execute_custom_sparql_internal(query: str, limit: int = 100) -> dict[str, An
 
 # Register tool wrapper and export plain callable
 @mcp.tool()
-async def execute_custom_sparql_tool(query: str, limit: int = 100) -> dict[str, Any]:
+async def execute_custom_sparql(query: str, limit: int = 100) -> dict[str, Any]:
     """
     Execute a custom SPARQL query against the DOREMUS knowledge graph.
     
@@ -481,9 +494,6 @@ async def execute_custom_sparql_tool(query: str, limit: int = 100) -> dict[str, 
         
     Example:
         ```sparql
-        PREFIX mus: <http://data.doremus.org/ontology#>
-        PREFIX efrbroo: <http://erlangen-crm.org/efrbroo/>
-        
         SELECT ?work ?title
         WHERE {
             ?work a efrbroo:F22_Self-Contained_Expression ;
@@ -493,8 +503,6 @@ async def execute_custom_sparql_tool(query: str, limit: int = 100) -> dict[str, 
         ```
     """
     return execute_custom_sparql_internal(query, limit)
-
-execute_custom_sparql = execute_custom_sparql_internal
 
 
 # Documentation tools
@@ -513,24 +521,9 @@ def get_kg_structure() -> str:
     Returns:
         str: Markdown-formatted description (classes, properties, samples, prefixes).
     """
-    # Common prefixes to include in the output (these are stable and helpful)
-    prefixes_md = """```sparql
-PREFIX mus: <http://data.doremus.org/ontology#>
-PREFIX ecrm: <http://erlangen-crm.org/current/>
-PREFIX efrbroo: <http://erlangen-crm.org/efrbroo/>
-PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-PREFIX schema: <http://schema.org/>
-PREFIX time: <http://www.w3.org/2006/time#>
-PREFIX geonames: <http://www.geonames.org/ontology#>
-```"""
 
     # Schema query (classes & properties)
     schema_query = """
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    PREFIX owl: <http://www.w3.org/2002/07/owl#>
-    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     SELECT DISTINCT ?entity ?type
     WHERE {
         { ?entity a rdfs:Class . BIND("rdfs:Class" as ?type) } UNION
@@ -650,10 +643,6 @@ PREFIX geonames: <http://www.geonames.org/ontology#>
         # Build final markdown
         md_parts = [
             "# DOREMUS Knowledge Graph - Dynamic Structure",
-            "",
-            "## Namespace prefixes (recommended to use in queries)",
-            "",
-            prefixes_md,
             "",
             "## Schema summary",
             ""
@@ -820,20 +809,6 @@ PREFIX geonames: <http://www.geonames.org/ontology#>
             ### Filter by genre:
             ```sparql
             ?expression mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/sn> .
-            ```
-
-            ## Namespace Prefixes
-
-            ```sparql
-            PREFIX mus: <http://data.doremus.org/ontology#>
-            PREFIX ecrm: <http://erlangen-crm.org/current/>
-            PREFIX efrbroo: <http://erlangen-crm.org/efrbroo/>
-            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-            PREFIX schema: <http://schema.org/>
-            PREFIX time: <http://www.w3.org/2006/time#>
-            PREFIX geonames: <http://www.geonames.org/ontology#>
             ```
 
             ## URI Patterns
