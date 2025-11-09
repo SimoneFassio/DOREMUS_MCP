@@ -13,6 +13,7 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import os
 from query_builder import build_works_query
+from find_paths import load_graph, find_k_shortest_paths
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -361,6 +362,25 @@ async def get_entity_details(entity_uri: str, include_labels: bool = True, depth
         get_entity_details("http://data.doremus.org/performance/789", include_labels=False)
     """
     return get_entity_details_internal(entity_uri, include_labels, depth)
+
+@mcp.tool()
+def find_paths(start_entity: str, end_entity: str, k: int = 5) -> dict[str, Any]:
+    """
+    Find the top k shortest paths between two node types in the local graph.
+    
+    Use this tool to explore the topology and connnecting two node types e.g. ecrm:E21_Person and mus:M42_Performed_Expression_Creation
+    Args:
+        start_entity: Prefixed URI of the type start node
+        end_entity: Prefixed URI of the type end node
+        k: Number of shortest paths to return (5-10 works most of the times)
+    Returns:
+        Dict with 'paths': list of paths, each path is a list of triples (subject, predicate, object) in prefix form
+    """
+    # Load graph from CSV (cache in memory for repeated calls)
+    graph = load_graph("graph.csv")
+    # Find paths
+    paths = find_k_shortest_paths(graph, start_entity, end_entity, k)
+    return {"paths": paths, "count": len(paths)}
 
 def search_musical_works_internal(
     composers: Optional[list[str]] = None,
@@ -1157,6 +1177,97 @@ build appropriate SPARQL queries using execute_custom_sparql.
     
     return guide
 
+
+def get_nodes_list() ->str:
+    """
+    Get the list of all node types, use this to identify useful nodes before find_path tool
+    """
+    nodes = """
+    time:Instant
+    mus:M28_Individual_Performance
+    ecrm:E52_Time-Span
+    time:Interval
+    ecrm:E7_Activity
+    efrbroo:F28_Expression_Creation
+    mus:M156_Title_Statement
+    ecrm:E13_Attribute_Assignment
+    efrbroo:F22_Self-Contained_Expression
+    mus:M46_Set_of_Tracks
+    mus:M44_Performed_Work
+    mus:M43_Performed_Expression
+    mus:M42_Performed_Expression_Creation
+    efrbroo:F14_Individual_Work
+    efrbroo:F15_Complex_Work
+    mus:M19_Categorization
+    mus:M23_Casting_Detail
+    efrbroo:F26_Recording
+    efrbroo:F21_Recording_Work
+    ecrm:E21_Person
+    mus:M157_Statement_of_Responsibility
+    efrbroo:F24_Publication_Expression
+    efrbroo:F20_Performance_Work
+    efrbroo:F30_Publication_Event
+    efrbroo:F25_Performance_Plan
+    mus:M160_Publication_Statement
+    mus:M161_Distribution_Statement
+    efrbroo:F31_Performance
+    efrbroo:F3_Manifestation_Product_Type
+    mus:M6_Casting
+    efrbroo:F19_Publication_Work
+    mus:M158_Title_and_Statement_of_Responsibility
+    ecrm:E42_Identifier
+    mus:M155_Cast_Statement
+    efrbroo:F29_Recording_Event
+    efrbroo:F42_Representative_Expression_Assignment
+    ecrm:E54_Dimension
+    ecrm:E67_Birth
+    mus:M31_Actor_Function
+    mus:M29_Editing
+    efrbroo:F38_Character
+    mus:M24_Track
+    mus:M171_Container
+    ecrm:E69_Death
+    efrbroo:F11_Corporate_Body
+    mus:M2_Opus_Statement
+    mus:M1_Catalogue_Statement
+    ecrm:E53_Place
+    efrbroo:F25_PerformancePlan
+    mus:M27_Foreseen_Individual_Performance
+    mus:M167_Publication_Expression_Fragment
+    efrbroo:F4_Manifestation_Singleton
+    mus:M39_Derivation_Type_Assignment
+    skos:Concept
+    mus:M15_Dedication_Statement
+    mus:M33_Set_of_Characters
+    mus:M45_Descriptive_Expression_Assignment
+    mus:M15_Dedication
+    mus:M14_Medium_Of_Performance
+    efrbroo:F19_Publication_Expression
+    ecrm:E1_CRM_Entity
+    mus:M154_Label_Name
+    mus:M26_Foreseen_Performance
+    geonames:Feature
+    foaf:Document
+    efrbroo:F32_Carrier_Production_Event
+    ecrm:E39_Actor
+    mus:M40_Context
+    mus:M159_Edition_Statement
+    ecrm:E66_Formation
+    mus:M50_Creation_or_Performance_Mode
+    mus:M4_Key
+    mus:M25_Foreseen_Activity
+    mus:M5_Genre
+    mus:M36_Award
+    modsrdf:NoteGroup
+    modsrdf:ModsResource
+    rdfs:Class
+    ecrm:E22_Man-Made_Object
+    ecrm:E68_Dissolution
+    skos:ConceptScheme
+    rdfs:Datatype
+    ecrm:E4_Period
+    """
+    return nodes
 
 if __name__ == "__main__":
     # Run the MCP server
