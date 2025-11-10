@@ -80,7 +80,7 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
         limit: Maximum number of results (default: 100)
         
     Returns:
-        Dictionary containing query results or error information
+        Dictionary containing query results or error information, including the executed query.
     """
     try:
         logger.info(f"Executing SPARQL query with limit {limit}")
@@ -113,26 +113,30 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
         return {
             "success": True,
             "count": len(simplified_results),
-            "results": simplified_results
+            "results": simplified_results,
+            "generated_query": query  # Include the executed query
         }
         
     except requests.exceptions.Timeout:
         logger.error("Query timeout")
         return {
             "success": False,
-            "error": "Query timeout - try simplifying your query or reducing the scope"
+            "error": "Query timeout - try simplifying your query or reducing the scope",
+            "executed_query": query  # Include the executed query even on error
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error: {str(e)}")
         return {
             "success": False,
-            "error": f"Request error: {str(e)}"
+            "error": f"Request error: {str(e)}",
+            "executed_query": query  # Include the executed query even on error
         }
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         return {
             "success": False,
-            "error": f"Unexpected error: {str(e)}"
+            "error": f"Unexpected error: {str(e)}",
+            "executed_query": query  # Include the executed query even on error
         }
     
 # Helper to sample entities for a given class URI

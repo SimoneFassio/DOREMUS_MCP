@@ -252,6 +252,22 @@ docker compose run --rm test
 3. Add examples to usage guide
 4. Test with example queries
 
+### Testing Query Generation
+
+First of all we need to build the environment for the langchain client:
+
+```bash
+pip install -e .
+```
+
+Then we can run the command
+
+```bash
+python3 ./tests/test_query.py
+```
+
+This command allows to see how the given client generates the SPARQL queriesfrom the competency questions in the dataset, the final results can be seen in the langchain testing dashboard.
+
 ### Query Builder Enhancements
 
 To add new filter types:

@@ -1,0 +1,9 @@
+{
+  "dockerfile_lines": [],
+  "graphs": {
+    "doremus_assistant": "./src/rdf_assistant/doremus_assistant.py:doremus_assistant"
+  },
+  "python_version": "3.11",
+  "env": ".env",
+  "dependencies": ["."]
+}

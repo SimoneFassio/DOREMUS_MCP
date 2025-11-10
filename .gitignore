@@ -55,3 +55,6 @@ db.sqlite3-journal
 .AppleDouble
 .LSOverride
 ._*
+
+#langgraph
+.langgraph_api

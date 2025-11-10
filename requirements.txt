@@ -6,4 +6,6 @@ pytest
 mcp-use
 langchain
 langchain_groq
+langchain_openai
+langchain-mcp-adapters
 python-dotenv
