@@ -5,6 +5,7 @@ WORKDIR /app
 # Install dependencies
 COPY test_server.py .
 COPY requirements.txt .
+COPY find_paths.py .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files

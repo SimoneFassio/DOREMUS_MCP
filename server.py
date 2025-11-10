@@ -114,7 +114,7 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
             "success": True,
             "count": len(simplified_results),
             "results": simplified_results,
-            "generated_query": query  # Include the executed query
+            "generated_query": query
         }
         
     except requests.exceptions.Timeout:
