@@ -21,8 +21,13 @@ dist/
 eggs/
 .eggs/
 *.egg-info/
+*.egg
 pip-wheel-metadata/
 wheelhouse/
+
+# Poetry
+poetry.lock
+.poetry/
 
 # Testing / coverage
 .pytest_cache/

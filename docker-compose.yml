@@ -18,7 +18,7 @@ services:
   test:
     build: .
     container_name: doremus-mcp-test
-    command: python3 test_server.py
+    command: python tests/test_server.py
     working_dir: /app
     volumes:
       - ./:/app
@@ -26,3 +26,4 @@ services:
       - doremus-mcp
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app

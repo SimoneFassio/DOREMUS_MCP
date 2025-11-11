@@ -12,8 +12,8 @@ from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import os
-from query_builder import build_works_query
-from find_paths import load_graph, find_k_shortest_paths
+from src.server.query_builder import build_works_query
+from src.server.find_paths import load_graph, find_k_shortest_paths
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -381,7 +381,11 @@ def find_paths(start_entity: str, end_entity: str, k: int = 5) -> dict[str, Any]
         Dict with 'paths': list of paths, each path is a list of triples (subject, predicate, object) in prefix form
     """
     # Load graph from CSV (cache in memory for repeated calls)
-    graph = load_graph("graph.csv")
+    # Use path relative to the project root
+    import pathlib
+    project_root = pathlib.Path(__file__).parent.parent.parent
+    graph_path = project_root / "data" / "graph.csv"
+    graph = load_graph(str(graph_path))
     # Find paths
     paths = find_k_shortest_paths(graph, start_entity, end_entity, k)
     return {"paths": paths, "count": len(paths)}

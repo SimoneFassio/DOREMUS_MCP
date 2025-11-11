@@ -1,8 +1,8 @@
 import asyncio
 import json
 
-from rdf_assistant.doremus_assistant import doremus_assistant, client
-from rdf_assistant.eval.doremus_dataset import examples_queries
+from src.rdf_assistant.doremus_assistant import doremus_assistant, client
+from src.rdf_assistant.eval.doremus_dataset import examples_queries
 
 ClientEvalList = ["openai", "groq", "anthropic", "mistral"]
 

@@ -1,7 +1,11 @@
 import json
+import pathlib
 
-# Read cq json file
-with open("cq.json", "r") as f:
+# Read cq json file from data directory
+project_root = pathlib.Path(__file__).parent.parent.parent.parent
+cq_path = project_root / "data" / "cq.json"
+
+with open(cq_path, "r") as f:
     cq_data = json.load(f)
 
 """Text-to-SPARQL evaluation dataset with ground truth classifications."""

@@ -8,7 +8,7 @@ before deployment.
 
 import sys
 import json
-from server import (
+from src.server.server import (
     find_candidate_entities_internal,
     get_entity_details_internal,
     search_musical_works_internal,
