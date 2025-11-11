@@ -1,5 +1,6 @@
 import csv
 import sys
+import heapq
 from collections import defaultdict
 
 # Usage: python find_paths.py start_node end_node k
@@ -14,10 +15,6 @@ def load_graph(csv_path):
             subj, pred, obj = row[:3]
             graph[subj].append((pred, obj))
     return graph
-
-# Find first k simple paths (no repeated nodes)
-
-import heapq
 
 # Find top k shortest simple paths (Yen's algorithm-like)
 def find_k_shortest_paths(graph, start, end, k):

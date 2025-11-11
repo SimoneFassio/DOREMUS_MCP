@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Test script for DOREMUS MCP Server
 
@@ -8,12 +7,12 @@ before deployment.
 
 import sys
 import json
-from src.server.server import (
+from src.server.tools_internal import (
     find_candidate_entities_internal,
     get_entity_details_internal,
-    search_musical_works_internal,
-    execute_custom_sparql_internal
+    search_musical_works_internal
 )
+from src.server.utils import execute_sparql_query
 
 # Change for DEBUG
 PRINT_RESULT=False
@@ -98,7 +97,7 @@ def test_custom_sparql():
     LIMIT 2
     """
     
-    result = execute_custom_sparql_internal(query, limit=2)
+    result = execute_sparql_query(query, limit=2)
     if result.get("success"):
         print_result("List composers (first 2)", result)
         return True

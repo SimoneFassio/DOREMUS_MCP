@@ -5,19 +5,19 @@ A Model Context Protocol server for querying the DOREMUS music knowledge graph
 via SPARQL endpoint at https://data.doremus.org/sparql/
 """
 
-import logging
 from typing import Any, Optional
-import requests
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import os
-from src.server.query_builder import build_works_query
-from src.server.find_paths import load_graph, find_k_shortest_paths
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("doremus-mcp")
+from src.server.find_paths import find_k_shortest_paths
+from src.server.tools_internal import (
+    graph,
+    find_candidate_entities_internal,
+    get_entity_details_internal,
+    search_musical_works_internal,
+)
+from src.server.utils import execute_sparql_query, logger
 
 # Initialize FastMCP server
 mcp = FastMCP("DOREMUS Knowledge Graph Server")
@@ -26,190 +26,7 @@ mcp = FastMCP("DOREMUS Knowledge Graph Server")
 async def health_check(request: Request) -> PlainTextResponse:
     return PlainTextResponse("OK")
 
-# SPARQL endpoint configuration
-SPARQL_ENDPOINT = "https://data.doremus.org/sparql/"
-REQUEST_TIMEOUT = 60
 
-PREFIXES = {
-    "mus": "http://data.doremus.org/ontology#",
-    "ecrm": "http://erlangen-crm.org/current/",
-    "efrbroo": "http://erlangen-crm.org/efrbroo/",
-    "skos": "http://www.w3.org/2004/02/skos/core#",
-    "modsrdf": "http://www.loc.gov/standards/mods/rdf/v1/#",
-    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-    "foaf": "http://xmlns.com/foaf/0.1/",
-    "geonames": "http://www.geonames.org/ontology#",
-    "time": "http://www.w3.org/2006/time#",
-    "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-    "dbpprop" : "http://dbpedia.org/property/",
-    "schema" : "http://schema.org/"
-}
-
-# Helper: expand prefixed URI to full URI
-def expand_prefixed_uri(uri: str) -> str:
-    if uri.startswith("<") and uri.endswith(">"):
-        uri = uri[1:-1]
-    if ":" in uri:
-        prefix, local = uri.split(":", 1)
-        if prefix in PREFIXES:
-            return f"{PREFIXES[prefix]}{local}"
-    return uri
-
-# Helper: contract full URI to prefixed name
-def contract_uri(uri: str) -> str:
-    for prefix, base in PREFIXES.items():
-        if uri.startswith(base):
-            return f"{prefix}:{uri[len(base):]}"
-    return uri
-
-def contract_uri_restrict(uri: str) -> str:
-    """
-    Contract a given uri if present in PREFIXES, else return None
-    """
-    for prefix, base in PREFIXES.items():
-        if uri.startswith(base):
-            return f"{prefix}:{uri[len(base):]}"
-    return None
-
-def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
-    """
-    Execute a SPARQL query against the DOREMUS endpoint.
-    
-    Args:
-        query: SPARQL query string
-        limit: Maximum number of results (default: 100)
-        
-    Returns:
-        Dictionary containing query results or error information, including the executed query.
-    """
-    try:
-        logger.info(f"Executing SPARQL query with limit {limit}")
-        
-        # Prepend standard PREFIX declarations
-        prefix_lines = "".join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
-        query = prefix_lines + "\n" + query
-        
-        response = requests.get(
-            SPARQL_ENDPOINT,
-            params={"query": query},
-            headers={"Accept": "application/sparql-results+json"},
-            timeout=REQUEST_TIMEOUT
-        )
-        response.raise_for_status()
-        
-        data = response.json()
-        results = data.get("results", {}).get("bindings", [])
-        
-        logger.info(f"Query returned {len(results)} results")
-        
-        # Simplify result structure
-        simplified_results = []
-        for binding in results[:limit]:
-            simplified = {}
-            for key, value in binding.items():
-                simplified[key] = value.get("value")
-            simplified_results.append(simplified)
-        
-        return {
-            "success": True,
-            "count": len(simplified_results),
-            "results": simplified_results,
-            "generated_query": query
-        }
-        
-    except requests.exceptions.Timeout:
-        logger.error("Query timeout")
-        return {
-            "success": False,
-            "error": "Query timeout - try simplifying your query or reducing the scope",
-            "executed_query": query  # Include the executed query even on error
-        }
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Request error: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Request error: {str(e)}",
-            "executed_query": query  # Include the executed query even on error
-        }
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Unexpected error: {str(e)}",
-            "executed_query": query  # Include the executed query even on error
-        }
-    
-# Helper to sample entities for a given class URI
-def sample_for_class(class_uri: str, sample_limit: int = 5) -> list[tuple[str, str]]:
-    class_uri_expanded = expand_prefixed_uri(class_uri)
-    q = f"""
-    SELECT DISTINCT ?entity ?label
-    WHERE {{
-        ?entity a <{class_uri_expanded}> .
-        OPTIONAL {{ ?entity rdfs:label ?label }}
-    }} LIMIT {sample_limit}
-    """
-    res = execute_sparql_query(q, limit=sample_limit)
-    samples = []
-    if res.get("success"):
-        for r in res.get("results", []):
-            ent_uri = r.get("entity", "")
-            ent_label = r.get("label", "") or ""
-            samples.append((contract_uri(ent_uri), ent_label))
-    return samples
-
-
-def find_candidate_entities_internal(
-    name: str,
-    entity_type: str = "any"
-) -> dict[str, Any]:
-    # Build type filter (all use prefixes)
-    type_filter = ""
-    if entity_type == "artist":
-        type_filter = "{ ?entity a foaf:Person } UNION { ?entity a ecrm:E21_Person }"
-    elif entity_type == "work":
-        type_filter = "?entity a efrbroo:F22_Self-Contained_Expression ."
-    elif entity_type == "place":
-        type_filter = "?entity a ecrm:E53_Place ."
-    elif entity_type == "performance":
-        type_filter = "?entity a efrbroo:F31_Performance ."
-    elif entity_type == "track":
-        type_filter = "?entity a mus:M24_Track ."
-
-    query = f"""
-    SELECT DISTINCT ?entity ?label ?type
-    WHERE {{
-        {type_filter}
-        ?entity rdfs:label ?label .
-        ?entity a ?type .
-        FILTER (REGEX(?label, "{name}", "i"))
-    }}
-    LIMIT 50
-    """
-
-    result = execute_sparql_query(query, limit=50)
-
-    def prefixify_entity(ent):
-        ent = ent.copy()
-        if "entity" in ent:
-            ent["entity"] = contract_uri(ent["entity"])
-        if "type" in ent:
-            ent["type"] = contract_uri(ent["type"])
-        return ent
-
-    if result.get("success"):
-        entities = [prefixify_entity(e) for e in result.get("results", [])]
-        return {
-            "query": name,
-            "entity_type": entity_type,
-            "matches_found": len(entities),
-            "entities": entities
-        }
-    else:
-        return result
-
-
-# Register the callable as an MCP tool but keep a plain Python function exported for tests
 @mcp.tool()
 async def find_candidate_entities(name: str, entity_type: str = "any") -> dict[str, Any]:
     """
@@ -240,97 +57,7 @@ async def find_candidate_entities(name: str, entity_type: str = "any") -> dict[s
     """
     return find_candidate_entities_internal(name, entity_type)
 
-def get_entity_details_internal(
-    entity_uri: str,
-    include_labels: bool = True,
-    depth: int = 1
-) -> dict[str, Any]:
-    """
-    Internal function to retrieve entity details with recursion support.
-    """
-    # Expand input URI if prefixed
-    entity_uri_expanded = expand_prefixed_uri(entity_uri)
-    query = f"""
-    SELECT DISTINCT ?property ?value
-    WHERE {{
-           <{entity_uri_expanded}> ?property ?value .
-           FILTER (
-              !(?property = rdfs:comment) || lang(?value) = "en"
-           )
-    }}
-    LIMIT 200
-    """
-    result = execute_sparql_query(query, limit=200)
-    if not result["success"]:
-        return result
-    # Organize all properties
-    properties = {}
-    entity_label = None
-    linked_entity_uris = set()
-    for binding in result["results"]:
-        prop = binding.get("property", "")
-        value = binding.get("value", "")
-        # Contract URIs to prefixes
-        prop_prefixed = contract_uri_restrict(prop)
-        # If uri not present in PREFIXES ignore the property
-        if prop_prefixed is None:
-            continue
-        value_prefixed = contract_uri(value) if value.startswith("http://") or value.startswith("https://") else value
-        
-        if prop_prefixed.endswith(":label") and not entity_label:
-            entity_label = value
-        # Track URIs for linked entities
-        if value.startswith("http://") or value.startswith("https://"): 
-            linked_entity_uris.add(value) #TODO not always works
-        # Store property
-        if prop_prefixed not in properties:
-            properties[prop_prefixed] = []
-        properties[prop_prefixed].append(value_prefixed)
-    # Build basic response
-    response = {
-        "entity_uri": contract_uri(entity_uri_expanded),
-        "entity_label": entity_label,
-        "properties": properties
-    }
-    # Optionally resolve labels for linked entities
-    if include_labels and linked_entity_uris:
-        linked_entities = {}
-        uris_str = " ".join([f"<{uri}>" for uri in list(linked_entity_uris)[:50]])  # Limit to 50
-        label_query = f"""
-        SELECT DISTINCT ?entity ?label
-        WHERE {{
-            VALUES ?entity {{ {uris_str} }}
-            OPTIONAL {{ ?entity rdfs:label ?label }}
-        }}
-        """
-        label_result = execute_sparql_query(label_query, limit=100)
-        if label_result["success"]:
-            for binding in label_result["results"]:
-                uri = binding.get("entity", "")
-                label = binding.get("label", "")
-                if label:
-                    linked_entities[contract_uri(uri)] = label
-        response["linked_entities"] = linked_entities
-    # Optionally fetch details of linked entities (depth >= 2)
-    if depth > 1 and linked_entity_uris:
-        related_details = {}
-        # Only fetch details for first 20 linked entities to avoid timeout
-        for linked_uri in list(linked_entity_uris)[:20]:
-            nested_result = get_entity_details_internal(
-                contract_uri(linked_uri),
-                include_labels=False,
-                depth=depth - 1
-            )
-            if nested_result.get("entity_label"):
-                related_details[contract_uri(linked_uri)] = {
-                    "label": nested_result.get("entity_label"),
-                    "properties": nested_result.get("properties", {})
-                }
-        if related_details:
-            response["related_entity_details"] = related_details
-    return response
 
-# Register tool wrapper and export plain callable
 @mcp.tool()
 async def get_entity_details(entity_uri: str, include_labels: bool = True, depth: int = 1) -> dict[str, Any]:
     """
@@ -380,68 +107,8 @@ def find_paths(start_entity: str, end_entity: str, k: int = 5) -> dict[str, Any]
     Returns:
         Dict with 'paths': list of paths, each path is a list of triples (subject, predicate, object) in prefix form
     """
-    # Load graph from CSV (cache in memory for repeated calls)
-    # Use path relative to the project root
-    import pathlib
-    project_root = pathlib.Path(__file__).parent.parent.parent
-    graph_path = project_root / "data" / "graph.csv"
-    graph = load_graph(str(graph_path))
-    # Find paths
     paths = find_k_shortest_paths(graph, start_entity, end_entity, k)
     return {"paths": paths, "count": len(paths)}
-
-def search_musical_works_internal(
-    composers: Optional[list[str]] = None,
-    work_type: Optional[str] = None,
-    date_start: Optional[int] = None,
-    date_end: Optional[int] = None,
-    instruments: Optional[list[dict[str, Any]]] = None,
-    place_of_composition: Optional[str] = None,
-    place_of_performance: Optional[str] = None,
-    duration_min: Optional[int] = None,
-    duration_max: Optional[int] = None,
-    topic: Optional[str] = None,
-    limit: int = 50
-) -> dict[str, Any]:
-    
-    try:
-        query = build_works_query(
-            composers=composers,
-            work_type=work_type,
-            date_start=date_start,
-            date_end=date_end,
-            instruments=instruments,
-            place_of_composition=place_of_composition,
-            place_of_performance=place_of_performance,
-            duration_min=duration_min,
-            duration_max=duration_max,
-            topic=topic,
-            limit=min(limit, 200)
-        )
-        
-        result = execute_sparql_query(query, limit=limit)
-
-        if result.get("success"):
-            return {
-                "filters_applied": {
-                    "composers": composers,
-                    "work_type": work_type,
-                    "date_range": f"{date_start}-{date_end}" if date_start or date_end else None,
-                    "instruments": instruments,
-                    "duration_range": f"{duration_min}-{duration_max}s" if duration_min or duration_max else None
-                },
-                "total_results": result.get("count", 0),
-                "works": result.get("results", [])
-            }
-        else:
-            return result
-            
-    except Exception as e:
-        logger.error(f"Error building works query: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Query building error: {str(e)}"
-        }
 
 @mcp.tool()
 async def search_musical_works(
@@ -490,16 +157,6 @@ async def search_musical_works(
     """
     return search_musical_works_internal(composers, work_type, date_start, date_end, instruments, place_of_composition, place_of_performance, duration_min, duration_max, topic, limit)
 
-
-def execute_custom_sparql_internal(query: str, limit: int = 100) -> dict[str, Any]:
-    limited_query = query
-    if "LIMIT" not in query.upper():
-        limited_query = f"{query}\nLIMIT {min(limit, 500)}"
-
-    return execute_sparql_query(limited_query, limit=min(limit, 500))
-
-
-# Register tool wrapper and export plain callable
 @mcp.tool()
 async def execute_custom_sparql(query: str, limit: int = 100) -> dict[str, Any]:
     """
@@ -530,7 +187,7 @@ async def execute_custom_sparql(query: str, limit: int = 100) -> dict[str, Any]:
         LIMIT 10
         ```
     """
-    return execute_custom_sparql_internal(query, limit)
+    return execute_sparql_query(query, limit)
 
 
 # Documentation tools
@@ -855,7 +512,6 @@ def get_kg_structure() -> str:
             """
     
     return fallback
-
 
 @mcp.tool()
 def get_usage_guide() -> str:
@@ -1185,7 +841,7 @@ build appropriate SPARQL queries using execute_custom_sparql.
     
     return guide
 
-
+@mcp.tool()
 def get_nodes_list() ->str:
     """
     Get the list of all node types, use this to identify useful nodes before find_path tool
