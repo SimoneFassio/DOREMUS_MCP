@@ -50,60 +50,62 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
     """
     try:
         logger.info(f"Executing SPARQL query with limit {limit}")
-        
-        # Prepend standard PREFIX declarations
-        prefix_lines = "".join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
+        prefix_lines = ""#.join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
         query = prefix_lines + "\n" + query
-        
         if "LIMIT" not in query.upper():
             query = f"{query}\nLIMIT {limit}"
-        
+
         response = requests.get(
             SPARQL_ENDPOINT,
             params={"query": query},
             headers={"Accept": "application/sparql-results+json"},
             timeout=REQUEST_TIMEOUT
         )
-        response.raise_for_status()
-        
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            # Capture Virtuoso error message from response body
+            error_text = response.text
+            logger.error(f"SPARQL endpoint error: {error_text}")
+            return {
+                "success": False,
+                "error": f"SPARQL endpoint error: {error_text}",
+                "generated_query": query
+            }
+
         data = response.json()
         results = data.get("results", {}).get("bindings", [])
-        
         logger.info(f"Query returned {len(results)} results")
-        
-        # Simplify result structure
         simplified_results = []
         for binding in results[:limit]:
             simplified = {}
             for key, value in binding.items():
                 simplified[key] = value.get("value")
             simplified_results.append(simplified)
-        
         return {
             "success": True,
             "count": len(simplified_results),
             "results": simplified_results,
             "generated_query": query
         }
-        
     except requests.exceptions.Timeout:
         logger.error("Query timeout")
         return {
             "success": False,
             "error": "Query timeout - try simplifying your query or reducing the scope",
-            "executed_query": query  # Include the executed query even on error
+            "generated_query": query
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error: {str(e)}")
         return {
             "success": False,
             "error": f"Request error: {str(e)}",
-            "executed_query": query  # Include the executed query even on error
+            "generated_query": query
         }
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         return {
             "success": False,
             "error": f"Unexpected error: {str(e)}",
-            "executed_query": query  # Include the executed query even on error
+            "generated_query": query
         }
