@@ -109,52 +109,52 @@ def find_paths(start_entity: str, end_entity: str, k: int = 5) -> dict[str, Any]
     paths = find_k_shortest_paths(graph, start_entity, end_entity, k)
     return {"paths": paths, "count": len(paths)}
 
-@mcp.tool()
-async def search_musical_works(
-        composers: Optional[list[str]] = None,
-        work_type: Optional[str] = None,
-        date_start: Optional[int] = None,
-        date_end: Optional[int] = None,
-        instruments: Optional[list[dict[str, Any]]] = None,
-        place_of_composition: Optional[str] = None,
-        place_of_performance: Optional[str] = None,
-        duration_min: Optional[int] = None,
-        duration_max: Optional[int] = None,
-        topic: Optional[str] = None,
-        limit: int = 50
-    ) -> dict[str, Any]:
-    """
-    Search for musical works with flexible filtering criteria.
+# @mcp.tool()
+# async def search_musical_works(
+#         composers: Optional[list[str]] = None,
+#         work_type: Optional[str] = None,
+#         date_start: Optional[int] = None,
+#         date_end: Optional[int] = None,
+#         instruments: Optional[list[dict[str, Any]]] = None,
+#         place_of_composition: Optional[str] = None,
+#         place_of_performance: Optional[str] = None,
+#         duration_min: Optional[int] = None,
+#         duration_max: Optional[int] = None,
+#         topic: Optional[str] = None,
+#         limit: int = 50
+#     ) -> dict[str, Any]:
+#     """
+#     Search for musical works with flexible filtering criteria.
     
-    This is the main tool for querying works in the DOREMUS knowledge graph with
-    support for multiple filter combinations.
+#     This is the main tool for querying works in the DOREMUS knowledge graph with
+#     support for multiple filter combinations.
     
-    Args:
-        composers: List of composer names or URIs (e.g., ["Mozart", "Beethoven"])
-        work_type: Type/genre of work (e.g., "sonata", "symphony", "concerto")
-        date_start: Start year for composition date range (e.g., 1800)
-        date_end: End year for composition date range (e.g., 1850)
-        instruments: List of instrument specifications, each with:
-            - name: instrument name/URI (e.g., "violin", "piano")
-            - quantity: exact number (optional)
-            - min_quantity: minimum number (optional)
-            - max_quantity: maximum number (optional)
-        place_of_composition: Place where work was composed
-        place_of_performance: Place where work was performed
-        duration_min: Minimum duration in seconds
-        duration_max: Maximum duration in seconds
-        topic: Topic or subject matter of the work
-        limit: Maximum number of results (default: 50, max: 200)
+#     Args:
+#         composers: List of composer names or URIs (e.g., ["Mozart", "Beethoven"])
+#         work_type: Type/genre of work (e.g., "sonata", "symphony", "concerto")
+#         date_start: Start year for composition date range (e.g., 1800)
+#         date_end: End year for composition date range (e.g., 1850)
+#         instruments: List of instrument specifications, each with:
+#             - name: instrument name/URI (e.g., "violin", "piano")
+#             - quantity: exact number (optional)
+#             - min_quantity: minimum number (optional)
+#             - max_quantity: maximum number (optional)
+#         place_of_composition: Place where work was composed
+#         place_of_performance: Place where work was performed
+#         duration_min: Minimum duration in seconds
+#         duration_max: Maximum duration in seconds
+#         topic: Topic or subject matter of the work
+#         limit: Maximum number of results (default: 50, max: 200)
         
-    Returns:
-        Dictionary with matching works and their details
+#     Returns:
+#         Dictionary with matching works and their details
         
-    Examples:
-        - search_musical_works(composers=["Mozart"], work_type="sonata")
-        - search_musical_works(instruments=[{"name": "violin", "quantity": 2}, {"name": "viola"}])
-        - search_musical_works(date_start=1800, date_end=1850, place_of_composition="Vienna")
-    """
-    return search_musical_works_internal(composers, work_type, date_start, date_end, instruments, place_of_composition, place_of_performance, duration_min, duration_max, topic, limit)
+#     Examples:
+#         - search_musical_works(composers=["Mozart"], work_type="sonata")
+#         - search_musical_works(instruments=[{"name": "violin", "quantity": 2}, {"name": "viola"}])
+#         - search_musical_works(date_start=1800, date_end=1850, place_of_composition="Vienna")
+#     """
+#     return search_musical_works_internal(composers, work_type, date_start, date_end, instruments, place_of_composition, place_of_performance, duration_min, duration_max, topic, limit)
 
 @mcp.tool()
 async def execute_custom_sparql(query: str, limit: int = 100) -> dict[str, Any]:
