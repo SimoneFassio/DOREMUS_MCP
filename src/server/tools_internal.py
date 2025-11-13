@@ -67,7 +67,6 @@ def find_candidate_entities_internal(
     
 def get_entity_details_internal(
     entity_uri: str,
-    include_labels: bool = True,
     depth: int = 1
 ) -> dict[str, Any]:
     """
@@ -83,7 +82,6 @@ def get_entity_details_internal(
               !(?property = rdfs:comment) || lang(?value) = "en"
            )
     }}
-    LIMIT 200
     """
     result = execute_sparql_query(query, limit=200)
     if not result["success"]:
@@ -118,7 +116,7 @@ def get_entity_details_internal(
         "properties": properties
     }
     # Optionally resolve labels for linked entities
-    if include_labels and linked_entity_uris:
+    if linked_entity_uris:
         linked_entities = {}
         uris_str = " ".join([f"<{uri}>" for uri in list(linked_entity_uris)[:50]])  # Limit to 50
         label_query = f"""
@@ -143,7 +141,6 @@ def get_entity_details_internal(
         for linked_uri in list(linked_entity_uris)[:20]:
             nested_result = get_entity_details_internal(
                 contract_uri(linked_uri),
-                include_labels=False,
                 depth=depth - 1
             )
             if nested_result.get("entity_label"):

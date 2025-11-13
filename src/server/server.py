@@ -58,17 +58,15 @@ async def find_candidate_entities(name: str, entity_type: str = "any") -> dict[s
     return find_candidate_entities_internal(name, entity_type)
 
 @mcp.tool()
-async def get_entity_details(entity_uri: str, include_labels: bool = True, depth: int = 1) -> dict[str, Any]:
+async def get_entity_details(entity_uri: str, depth: int = 1) -> dict[str, Any]:
     """
     Retrieve detailed information about a specific entity with optional recursive resolution.
     
     Use this as the first step after finding an entity with find_candidate_entities.
-    This is the "business card" tool - it shows all direct properties of an entity.
+    It shows all direct properties of an entity.
     
     Args:
         entity_uri: The full URI of the entity (e.g., "http://data.doremus.org/artist/...")
-        include_labels: If True, automatically fetch human-readable labels for all linked entity URIs (default: True).
-                       This helps you understand what entities are connected without needing separate lookups.
         depth: How deep to fetch related entity details:
                - 1 (default): Only this entity's properties, with labels for linked entities
                - 2 or more: Also fetch full details of linked entities (slower but more complete)
@@ -78,7 +76,7 @@ async def get_entity_details(entity_uri: str, include_labels: bool = True, depth
         - entity_uri: The requested entity
         - entity_label: Human-readable name
         - properties: All properties as key-value pairs (property name → list of values)
-        - linked_entities: Dict mapping entity URIs to their labels (if include_labels=True)
+        - linked_entities: Dict mapping entity URIs to their labels
         - related_entity_details: Full details of linked entities (if depth >= 2)
         
     Examples:
@@ -87,14 +85,11 @@ async def get_entity_details(entity_uri: str, include_labels: bool = True, depth
         
         # Deep dive - get composer details from a work in one call
         get_entity_details("http://data.doremus.org/expression/456", depth=2)
-        
-        # Fast mode - skip label resolution
-        get_entity_details("http://data.doremus.org/performance/789", include_labels=False)
     """
-    return get_entity_details_internal(entity_uri, include_labels, depth)
+    return get_entity_details_internal(entity_uri, depth)
 
 @mcp.tool()
-def find_paths(start_entity: str, end_entity: str, k: int = 5) -> dict[str, Any]:
+def find_paths(start_entity: str, end_entity: str, k: int = 5) -> str:
     """
     Find the top k shortest paths between two node types in the local graph.
     
@@ -104,10 +99,23 @@ def find_paths(start_entity: str, end_entity: str, k: int = 5) -> dict[str, Any]
         end_entity: Prefixed URI of the type end node
         k: Number of shortest paths to return (5-10 works most of the times)
     Returns:
-        Dict with 'paths': list of paths, each path is a list of triples (subject, predicate, object) in prefix form
+        The formatted paths
     """
     paths = find_k_shortest_paths(graph, start_entity, end_entity, k)
-    return {"paths": paths, "count": len(paths)}
+    
+    # format the output
+    res = ""
+    for i, path in enumerate(paths):
+        res += f"{i+1}# "
+        for idx, triplet in enumerate(path):
+            if idx==0:
+                res += f"{triplet[0]}->"
+            else:
+                res += "->"
+            res += f"{triplet[1]}->{triplet[2]}"
+        res += "\n"
+        
+    return res
 
 # @mcp.tool()
 # async def search_musical_works(
