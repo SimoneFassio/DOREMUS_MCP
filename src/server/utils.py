@@ -107,23 +107,3 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
             "error": f"Unexpected error: {str(e)}",
             "executed_query": query  # Include the executed query even on error
         }
-        
-
-# Helper to sample entities for a given class URI, used in get_kg_structure
-def sample_for_class(class_uri: str, sample_limit: int = 5) -> list[tuple[str, str]]:
-    class_uri_expanded = expand_prefixed_uri(class_uri)
-    q = f"""
-    SELECT DISTINCT ?entity ?label
-    WHERE {{
-        ?entity a <{class_uri_expanded}> .
-        OPTIONAL {{ ?entity rdfs:label ?label }}
-    }} LIMIT {sample_limit}
-    """
-    res = execute_sparql_query(q, limit=sample_limit)
-    samples = []
-    if res.get("success"):
-        for r in res.get("results", []):
-            ent_uri = r.get("entity", "")
-            ent_label = r.get("label", "") or ""
-            samples.append((contract_uri(ent_uri), ent_label))
-    return samples

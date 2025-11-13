@@ -57,7 +57,6 @@ async def find_candidate_entities(name: str, entity_type: str = "any") -> dict[s
     """
     return find_candidate_entities_internal(name, entity_type)
 
-
 @mcp.tool()
 async def get_entity_details(entity_uri: str, include_labels: bool = True, depth: int = 1) -> dict[str, Any]:
     """
@@ -195,323 +194,158 @@ async def execute_custom_sparql(query: str, limit: int = 100) -> dict[str, Any]:
 @mcp.tool()
 def get_kg_structure() -> str:
     """
-    Dynamically retrieve a description of the DOREMUS Knowledge Graph structure.
-
-    This tool provides essential information about the ontology, including:
-        - Ontology prefixes
-        - Main entity types (classes)
-        - Key properties and relationships
-        - Common URI patterns
-
-    Returns:
-        str: Markdown-formatted description (classes, properties, samples, prefixes).
-    """
-
-    # Schema query (classes & properties)
-    schema_query = """
-    SELECT DISTINCT ?entity ?type
-    WHERE {
-        { ?entity a rdfs:Class . BIND("rdfs:Class" as ?type) } UNION
-        { ?entity a owl:Class . BIND("owl:Class" as ?type) } UNION
-        { ?entity a rdf:Property . BIND("rdf:Property" as ?type) } UNION
-        { ?entity a owl:ObjectProperty . BIND("owl:ObjectProperty" as ?type) } UNION
-        { ?entity a owl:DatatypeProperty . BIND("owl:DatatypeProperty" as ?type) } UNION
-        { ?entity a owl:AnnotationProperty . BIND("owl:AnnotationProperty" as ?type) }
-    }
-    ORDER BY ?type ?entity
-    LIMIT 500
-    """
-
-    try:
-        schema_results = execute_sparql_query(schema_query, limit=500)
-        if not schema_results.get("success"):
-            raise RuntimeError(f"Schema query failed: {schema_results.get('error')}")
-
-        # Group schema entities by type
-        from collections import defaultdict
-        schema_by_type = defaultdict(list)
-        for row in schema_results.get("results", []):
-            etype = row.get("type", "unknown")
-            entity = row.get("entity", "")
-            schema_by_type[etype].append(entity)
-
-        # Candidate class URIs to sample (prefer common ones used in previous static doc)
-        candidate_classes = {
-            "Expression (work/expression)": [
-                "http://erlangen-crm.org/efrbroo/F22_Self-Contained_Expression",
-                "http://data.doremus.org/ontology#F22_Self-Contained_Expression"
-            ],
-            "Individual Work (abstract work)": [
-                "http://erlangen-crm.org/efrbroo/F14_Individual_Work",
-                "http://data.doremus.org/ontology#F14_Individual_Work"
-            ],
-            "Artist / Person": [
-                "http://xmlns.com/foaf/0.1/Person",
-                "http://erlangen-crm.org/current/E21_Person"
-            ],
-            "Performance (event)": [
-                "http://erlangen-crm.org/efrbroo/F31_Performance",
-                "http://data.doremus.org/ontology#F31_Performance"
-            ],
-            "Track": [
-                "http://data.doremus.org/ontology#M24_Track"
-            ],
-            "Vocabulary term (genre/instrument)": [
-                "http://www.w3.org/2004/02/skos/core#Concept"  # vocab terms are often SKOS concepts
-            ]
-        }
-
-        # Collect samples
-        samples_md = []
-        sampled_uris_for_patterns = []
-        for label, uris in candidate_classes.items():
-            samples_md.append(f"### Samples for {label}")
-            found_any = False
-            for uri in uris:
-                s = sample_for_class(uri, sample_limit=5)
-                if s:
-                    found_any = True
-                    samples_md.append(f"- Class URI tried: <{uri}>")
-                    for ent_uri, ent_label in s:
-                        samples_md.append(f"  - {ent_label or '(no label)'} — <{ent_uri}>")
-                        sampled_uris_for_patterns.append(ent_uri)
-                    break
-            if not found_any:
-                samples_md.append(f"- No sample entities found for known URIs for `{label}` (endpoint may have different class URIs).")
-
-        # Infer URI patterns from sampled URIs
-        patterns = set()
-        for u in sampled_uris_for_patterns:
-            if "/expression/" in u:
-                patterns.add("http://data.doremus.org/expression/{uuid}")
-            if "/artist/" in u:
-                patterns.add("http://data.doremus.org/artist/{uuid}")
-            if "/place/" in u:
-                patterns.add("http://data.doremus.org/place/{uuid}")
-            if "/vocabulary/" in u or "/vocabularies/" in u:
-                patterns.add("http://data.doremus.org/vocabulary/{domain}/{term}")
-            # fallback heuristics
-            if u.startswith("http://sws.geonames.org/"):
-                patterns.add("http://sws.geonames.org/{geonameid}/")
-            if "mimo-db.eu" in u:
-                patterns.add("MIMO URIs (e.g. http://www.mimo-db.eu/InstrumentsKeywords/{id})")
-
-        patterns_md = ["## Inferred URI patterns"]
-        if patterns:
-            for p in sorted(patterns):
-                patterns_md.append(f"- `{p}`")
-        else:
-            patterns_md.append("- No reliable URI patterns inferred from samples.")
-
-        # Summarize schema counts and list a few top classes/properties
-        classes = schema_by_type.get("owl:Class", []) + schema_by_type.get("rdfs:Class", [])
-        properties = (
-            schema_by_type.get("rdf:Property", [])
-            + schema_by_type.get("owl:ObjectProperty", [])
-            + schema_by_type.get("owl:DatatypeProperty", [])
-            + schema_by_type.get("owl:AnnotationProperty", [])
-        )
-
-        schema_summary = [
-            f"Found {len(classes)} classes and {len(properties)} properties (unique entities from schema query).",
-            "",
-            "### A few notable classes (sample)",
-        ]
-        for c in classes[:25]:
-            schema_summary.append(f"- <{c}>")
-
-        schema_summary.append("")
-        schema_summary.append("### A few notable properties (sample)")
-        for p in properties[:25]:
-            schema_summary.append(f"- <{p}>")
-
-        # Build final markdown
-        md_parts = [
-            "# DOREMUS Knowledge Graph - Dynamic Structure",
-            "",
-            "## Schema summary",
-            ""
-        ]
-        md_parts.extend(schema_summary)
-        md_parts.append("")
-        md_parts.append("## Representative samples")
-        md_parts.append("")
-        md_parts.extend(samples_md)
-        md_parts.append("")
-        md_parts.extend(patterns_md)
-        md_parts.append("")
-        md_parts.append("## Notes and tips")
-        md_parts.append(
-            "- The schema query lists declared classes and properties; not every class has many instances.\n"
-            "- If a sample query returned no results for a class, the endpoint may expose the concept under a different URI. Use `find_candidate_entities()` and `get_entity_details()` to discover exact URIs.\n"
-            "- Use `LIMIT` and `SAMPLE()` in SPARQL to avoid duplicates and timeouts.\n"
-        )
-        md_parts.append("")
-        md_parts.append("## How to get more (examples)")
-        md_parts.append(
-            "- Find a composer: `find_candidate_entities(\"Beethoven\", \"artist\")`\n"
-            "- Get full details: `get_entity_details(<uri>, depth=2)`\n"
-            "- Run a custom query: `execute_custom_sparql(<sparql>)`\n"
-        )
-
-        return "\n".join(md_parts)
-
-    except Exception as e:
-        """
-        Get a comprehensive description of the DOREMUS Knowledge Graph structure.
-        
-        This tool provides essential information about the ontology, including:
-        - Main entity types (classes)
-        - Key properties and relationships
-        - Common URI patterns
-        - Ontology prefixes
-        
-        Essential for understanding how to write custom SPARQL queries.
-        
-        Returns:
-            Detailed documentation of the DOREMUS ontology structure
-        """
-        # Fallback: return compact static description (keeps the server useful if endpoint is unreachable)
-        logger.exception("Dynamic get_kg_structure failed, returning fallback structure.")
-        fallback = """
-            # DOREMUS Knowledge Graph Structure
-
-            ## Overview
-            The DOREMUS Knowledge Graph describes classical music metadata using the FRBRoo
-            (Functional Requirements for Bibliographic Records - object oriented) and
-            CIDOC-CRM ontologies, extended with a music-specific ontology.
-
-            ## Core Entity Types
-
-            ### 1. Musical Works & Expressions
-            - **efrbroo:F22_Self-Contained_Expression**: A musical work/composition
-            - Properties:
-                - `rdfs:label`: Title of the work
-                - `mus:U12_has_genre`: Genre/type (symphony, sonata, concerto, etc.)
-                - `mus:U13_has_casting`: Instrumentation specification
-                - `mus:U11_has_key`: Musical key
-                - `mus:U78_estimated_duration`: Duration in seconds
-                - `mus:U16_has_catalogue_statement`: Catalogue number (BWV, K., Op., etc.)
-                
-            - **efrbroo:F14_Individual_Work**: Abstract work concept
-            - `efrbroo:R9_is_realised_in`: Links to expressions
-            - `ecrm:P148_has_component`: Links to movements/parts
-
-            ### 2. Composers & Artists
-            - **foaf:Person**: Composers, performers, conductors
-            - Properties:
-                - `foaf:name`: Full name
-                - `schema:birthDate`: Birth date
-                - `schema:deathDate`: Death date
-                - `schema:birthPlace`: Birth location
-                - `ecrm:P107_has_current_or_former_member`: For ensembles
-
-            ### 3. Performances & Recordings
-            - **efrbroo:F31_Performance**: A performance event
-            - `ecrm:P7_took_place_at`: Performance venue
-            - `ecrm:P4_has_time-span`: When it occurred
-            - `ecrm:P9_consists_of`: Component activities (conducting, playing)
-            - `efrbroo:R25_performed`: What was performed
-
-            - **mus:M42_Performed_Expression_Creation**: Performance of a work
-            - `efrbroo:R17_created`: Creates a performed expression
-            - `mus:U54_is_performed_expression_of`: Links to original work
-
-            - **efrbroo:F29_Recording_Event**: Audio/video recording
-            - `efrbroo:R20_recorded`: Links to performance
-            
-            - **mus:M24_Track**: Individual track on an album
-            - `mus:U51_is_partial_or_full_recording_of`: Links to performed expression
-            - `mus:U10_has_order_number`: Track number
-
-            ### 4. Instrumentation (Casting)
-            - **mus:M6_Casting**: Instrumentation specification
-            - `mus:U23_has_casting_detail`: Details for each instrument
-
-            - **mus:M7_Casting_Detail**: Specific instrument detail
-            - `mus:U2_foresees_use_of_medium_of_performance`: Instrument URI
-            - `mus:U30_foresees_quantity_of_mop`: Number of instruments
-
-            ### 5. Creation & Composition
-            - **efrbroo:F28_Expression_Creation**: Composition activity
-            - `efrbroo:R17_created`: Links to created work
-            - `ecrm:P9_consists_of`: Component activities
-            - `ecrm:P4_has_time-span`: Composition date
-            - `ecrm:P7_took_place_at`: Composition location
-
-            - **ecrm:P14_carried_out_by**: Links activity to person
-            - `mus:U31_had_function`: Role (composer, librettist, arranger)
-
-            ### 6. Genres & Types
-            Common genre URIs:
-            - `<http://data.doremus.org/vocabulary/iaml/genre/sy>` - Symphony
-            - `<http://data.doremus.org/vocabulary/iaml/genre/sn>` - Sonata
-            - `<http://data.doremus.org/vocabulary/iaml/genre/co>` - Concerto
-            - `<http://data.doremus.org/vocabulary/iaml/genre/op>` - Opera
-            - `<http://data.doremus.org/vocabulary/iaml/genre/mld>` - Melody
-
-            ### 7. Instruments
-            Common instrument URIs (with MIMO equivalents):
-            - Violin: `<http://data.doremus.org/vocabulary/iaml/mop/svl>` or `<http://www.mimo-db.eu/InstrumentsKeywords/3573>`
-            - Piano: `<http://data.doremus.org/vocabulary/iaml/mop/kpf>` or `<http://www.mimo-db.eu/InstrumentsKeywords/2299>`
-            - Cello: `<http://data.doremus.org/vocabulary/iaml/mop/svc>` or `<http://www.mimo-db.eu/InstrumentsKeywords/3582>`
-            - Flute: `<http://data.doremus.org/vocabulary/iaml/mop/wfl>` or `<http://www.mimo-db.eu/InstrumentsKeywords/3955>`
-            - Orchestra: `<http://data.doremus.org/vocabulary/iaml/mop/o>`
-
-            ### 8. Functions/Roles
-            - `<http://data.doremus.org/vocabulary/function/composer>` - Composer
-            - `<http://data.doremus.org/vocabulary/function/conductor>` - Conductor
-            - `<http://data.doremus.org/vocabulary/function/librettist>` - Librettist
-
-            ## Common SPARQL Patterns
-
-            ### Find works by composer:
-            ```sparql
-            ?expression a efrbroo:F22_Self-Contained_Expression ;
-                rdfs:label ?title .
-            ?expCreation efrbroo:R17_created ?expression ;
-                ecrm:P9_consists_of / ecrm:P14_carried_out_by ?composer .
-            ?composer foaf:name "Wolfgang Amadeus Mozart" .
-            ```
-
-            ### Filter by composition date:
-            ```sparql
-            ?expCreation efrbroo:R17_created ?expression ;
-                ecrm:P4_has_time-span ?ts .
-            ?ts time:hasEnd / time:inXSDDate ?end ;
-                time:hasBeginning / time:inXSDDate ?start .
-            FILTER (?start >= "1800"^^xsd:gYear AND ?end <= "1850"^^xsd:gYear)
-            ```
-
-            ### Filter by instrumentation:
-            ```sparql
-            ?expression mus:U13_has_casting ?casting .
-            ?casting mus:U23_has_casting_detail ?castingDet .
-            ?castingDet mus:U2_foresees_use_of_medium_of_performance ?instrument .
-            VALUES ?instrument { <http://data.doremus.org/vocabulary/iaml/mop/svl> }
-            ```
-
-            ### Filter by genre:
-            ```sparql
-            ?expression mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/sn> .
-            ```
-
-            ## URI Patterns
-            - Works: `http://data.doremus.org/expression/{uuid}`
-            - Artists: `http://data.doremus.org/artist/{uuid}`
-            - Vocabularies: `http://data.doremus.org/vocabulary/{domain}/{term}`
-            - Places: `http://data.doremus.org/place/{uuid}` or `http://sws.geonames.org/{id}/`
-
-            ## Tips for Query Writing
-            1. Use `SAMPLE()` aggregation when grouping to avoid duplicates
-            2. Use `skos:exactMatch*` for instrument matching (connects to MIMO vocabulary)
-            3. Add `LIMIT` clauses to prevent timeouts
-            4. Use `FILTER` for text matching with `REGEX()` or `contains()`
-            5. Use `OPTIONAL` blocks for properties that may not exist
-            6. COUNT grouped casting details with HAVING to filter by instrumentation size
-            """
+    Get a comprehensive description of the DOREMUS Knowledge Graph structure.
     
-    return fallback
+    This tool provides essential information about the ontology, including:
+    - Main entity types (classes)
+    - Key properties and relationships
+    - Common URI patterns
+    - Ontology prefixes
+    
+    Essential for understanding how to write custom SPARQL queries.
+    
+    Returns:
+        Detailed documentation of the DOREMUS ontology structure
+    """
+    guide = """
+        # DOREMUS Knowledge Graph Structure
+
+        ## Overview
+        The DOREMUS Knowledge Graph describes classical music metadata using the FRBRoo
+        (Functional Requirements for Bibliographic Records - object oriented) and
+        CIDOC-CRM ontologies, extended with a music-specific ontology.
+
+        ## Core Entity Types
+
+        ### 1. Musical Works & Expressions
+        - **efrbroo:F22_Self-Contained_Expression**: A musical work/composition
+        - Properties:
+            - `rdfs:label`: Title of the work
+            - `mus:U12_has_genre`: Genre/type (symphony, sonata, concerto, etc.)
+            - `mus:U13_has_casting`: Instrumentation specification
+            - `mus:U11_has_key`: Musical key
+            - `mus:U78_estimated_duration`: Duration in seconds
+            - `mus:U16_has_catalogue_statement`: Catalogue number (BWV, K., Op., etc.)
+            
+        - **efrbroo:F14_Individual_Work**: Abstract work concept
+        - `efrbroo:R9_is_realised_in`: Links to expressions
+        - `ecrm:P148_has_component`: Links to movements/parts
+
+        ### 2. Composers & Artists
+        - **foaf:Person**: Composers, performers, conductors
+        - Properties:
+            - `foaf:name`: Full name
+            - `schema:birthDate`: Birth date
+            - `schema:deathDate`: Death date
+            - `schema:birthPlace`: Birth location
+            - `ecrm:P107_has_current_or_former_member`: For ensembles
+
+        ### 3. Performances & Recordings
+        - **efrbroo:F31_Performance**: A performance event
+        - `ecrm:P7_took_place_at`: Performance venue
+        - `ecrm:P4_has_time-span`: When it occurred
+        - `ecrm:P9_consists_of`: Component activities (conducting, playing)
+        - `efrbroo:R25_performed`: What was performed
+
+        - **mus:M42_Performed_Expression_Creation**: Performance of a work
+        - `efrbroo:R17_created`: Creates a performed expression
+        - `mus:U54_is_performed_expression_of`: Links to original work
+
+        - **efrbroo:F29_Recording_Event**: Audio/video recording
+        - `efrbroo:R20_recorded`: Links to performance
+        
+        - **mus:M24_Track**: Individual track on an album
+        - `mus:U51_is_partial_or_full_recording_of`: Links to performed expression
+        - `mus:U10_has_order_number`: Track number
+
+        ### 4. Instrumentation (Casting)
+        - **mus:M6_Casting**: Instrumentation specification
+        - `mus:U23_has_casting_detail`: Details for each instrument
+
+        - **mus:M7_Casting_Detail**: Specific instrument detail
+        - `mus:U2_foresees_use_of_medium_of_performance`: Instrument URI
+        - `mus:U30_foresees_quantity_of_mop`: Number of instruments
+
+        ### 5. Creation & Composition
+        - **efrbroo:F28_Expression_Creation**: Composition activity
+        - `efrbroo:R17_created`: Links to created work
+        - `ecrm:P9_consists_of`: Component activities
+        - `ecrm:P4_has_time-span`: Composition date
+        - `ecrm:P7_took_place_at`: Composition location
+
+        - **ecrm:P14_carried_out_by**: Links activity to person
+        - `mus:U31_had_function`: Role (composer, librettist, arranger)
+
+        ### 6. Genres & Types
+        Common genre URIs:
+        - `<http://data.doremus.org/vocabulary/iaml/genre/sy>` - Symphony
+        - `<http://data.doremus.org/vocabulary/iaml/genre/sn>` - Sonata
+        - `<http://data.doremus.org/vocabulary/iaml/genre/co>` - Concerto
+        - `<http://data.doremus.org/vocabulary/iaml/genre/op>` - Opera
+        - `<http://data.doremus.org/vocabulary/iaml/genre/mld>` - Melody
+
+        ### 7. Instruments
+        Common instrument URIs (with MIMO equivalents):
+        - Violin: `<http://data.doremus.org/vocabulary/iaml/mop/svl>` or `<http://www.mimo-db.eu/InstrumentsKeywords/3573>`
+        - Piano: `<http://data.doremus.org/vocabulary/iaml/mop/kpf>` or `<http://www.mimo-db.eu/InstrumentsKeywords/2299>`
+        - Cello: `<http://data.doremus.org/vocabulary/iaml/mop/svc>` or `<http://www.mimo-db.eu/InstrumentsKeywords/3582>`
+        - Flute: `<http://data.doremus.org/vocabulary/iaml/mop/wfl>` or `<http://www.mimo-db.eu/InstrumentsKeywords/3955>`
+        - Orchestra: `<http://data.doremus.org/vocabulary/iaml/mop/o>`
+
+        ### 8. Functions/Roles
+        - `<http://data.doremus.org/vocabulary/function/composer>` - Composer
+        - `<http://data.doremus.org/vocabulary/function/conductor>` - Conductor
+        - `<http://data.doremus.org/vocabulary/function/librettist>` - Librettist
+
+        ## Common SPARQL Patterns
+
+        ### Find works by composer:
+        ```sparql
+        ?expression a efrbroo:F22_Self-Contained_Expression ;
+            rdfs:label ?title .
+        ?expCreation efrbroo:R17_created ?expression ;
+            ecrm:P9_consists_of / ecrm:P14_carried_out_by ?composer .
+        ?composer foaf:name "Wolfgang Amadeus Mozart" .
+        ```
+
+        ### Filter by composition date:
+        ```sparql
+        ?expCreation efrbroo:R17_created ?expression ;
+            ecrm:P4_has_time-span ?ts .
+        ?ts time:hasEnd / time:inXSDDate ?end ;
+            time:hasBeginning / time:inXSDDate ?start .
+        FILTER (?start >= "1800"^^xsd:gYear AND ?end <= "1850"^^xsd:gYear)
+        ```
+
+        ### Filter by instrumentation:
+        ```sparql
+        ?expression mus:U13_has_casting ?casting .
+        ?casting mus:U23_has_casting_detail ?castingDet .
+        ?castingDet mus:U2_foresees_use_of_medium_of_performance ?instrument .
+        VALUES ?instrument { <http://data.doremus.org/vocabulary/iaml/mop/svl> }
+        ```
+
+        ### Filter by genre:
+        ```sparql
+        ?expression mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/sn> .
+        ```
+
+        ## URI Patterns
+        - Works: `http://data.doremus.org/expression/{uuid}`
+        - Artists: `http://data.doremus.org/artist/{uuid}`
+        - Vocabularies: `http://data.doremus.org/vocabulary/{domain}/{term}`
+        - Places: `http://data.doremus.org/place/{uuid}` or `http://sws.geonames.org/{id}/`
+
+        ## Tips for Query Writing
+        1. Use `SAMPLE()` aggregation when grouping to avoid duplicates
+        2. Use `skos:exactMatch*` for instrument matching (connects to MIMO vocabulary)
+        3. Add `LIMIT` clauses to prevent timeouts
+        4. Use `FILTER` for text matching with `REGEX()` or `contains()`
+        5. Use `OPTIONAL` blocks for properties that may not exist
+        6. COUNT grouped casting details with HAVING to filter by instrumentation size
+        """
+    
+    return guide
 
 @mcp.tool()
 def get_usage_guide() -> str:
@@ -520,7 +354,6 @@ def get_usage_guide() -> str:
     
     This tool provides guidance on:
     - How to effectively use the available tools
-    - Common query patterns and workflows
     - Best practices for entity resolution
     - Tips for handling ambiguous requests
     
@@ -568,58 +401,12 @@ User: "Tell me about Mozart"
 3. Present formatted information to user
 ```
 
-### 3. search_musical_works
-**When to use**: For most work discovery queries with filtering criteria.
-
-**Why**: This is optimized for the most common use cases with a flexible
-parameter-based interface.
-
-**Key features**:
-- Composer filtering (by name or URI)
-- Genre/type filtering (sonata, symphony, concerto, etc.)
-- Date range filtering
-- Instrumentation filtering with quantity specifications
-- Duration filtering
-- Place filtering (composition or performance)
-
-**Example workflows**:
-
-Simple composer search:
-```
-User: "Show me works by Mozart"
-search_musical_works(composers=["Wolfgang Amadeus Mozart"], limit=20)
-```
-
-Complex instrumentation:
-```
-User: "Find works for 2 violins, viola, and cello"
-search_musical_works(
-    instruments=[
-        {"name": "violin", "quantity": 2},
-        {"name": "viola", "quantity": 1},
-        {"name": "cello", "quantity": 1}
-    ]
-)
-```
-
-Combined filters:
-```
-User: "German chamber music from 1800-1850"
-1. First search for works with date range
-2. Consider using custom SPARQL for nationality filter
-```
-
-### 4. execute_custom_sparql
-**When to use**: For complex queries not covered by search_musical_works.
-
-**Why**: Provides maximum flexibility for specialized queries.
-
-**When NOT to use**: If search_musical_works can handle it - the query builder
-is optimized and tested.
+### 3. execute_custom_sparql
+**When to use**: For execcuting queries
 
 **Before using**:
 1. Check the knowledge graph structure resource
-2. Look at example queries from competency questions
+2. Look at example queries
 3. Test incrementally, starting simple
 
 ## Best Practices
@@ -644,8 +431,8 @@ is optimized and tested.
 2. **Use appropriate limits**: Default to 20-50 results for exploration, higher for comprehensive searches
 
 3. **Combine tools strategically**:
-   - Discovery: find_candidate_entities → search_musical_works
-   - Deep dive: search_musical_works → get_entity_details for each result
+   - Discovery: find_candidate_entities
+   - Deep dive: get_entity_details
    - Analysis: execute_custom_sparql with aggregations
 
 ### Performance
@@ -658,49 +445,6 @@ is optimized and tested.
 1. **No results**: Try broader search or check spelling
 2. **Timeout**: Reduce scope or limit, add more specific filters
 3. **Multiple URIs**: Present options to user
-
-## Common Query Patterns
-
-### Pattern 1: Composer Catalog
-```
-Goal: List all works by a specific composer
-Steps:
-1. find_candidate_entities(composer_name, "composer")
-2. search_musical_works(composers=[uri], limit=100)
-```
-
-### Pattern 2: Genre Exploration
-```
-Goal: Explore a musical genre/type
-Steps:
-1. search_musical_works(work_type="sonata", limit=50)
-2. Optionally filter by composer, date, instruments
-```
-
-### Pattern 3: Instrumentation Discovery
-```
-Goal: Find works for specific ensemble
-Steps:
-1. find_candidate_entities for each instrument (if needed)
-2. search_musical_works with instruments list
-3. Consider strict vs. flexible matching (exactly these vs. including these)
-```
-
-### Pattern 4: Historical Period
-```
-Goal: Works from a specific time period
-Steps:
-1. search_musical_works(date_start=X, date_end=Y)
-2. Optionally filter by place or composer nationality
-```
-
-### Pattern 5: Performance Research
-```
-Goal: When/where was a work performed?
-Steps:
-1. find_candidate_entities for the work
-2. execute_custom_sparql to find performance history
-```
 
 ## Handling Ambiguous Requests
 
@@ -722,97 +466,6 @@ Steps:
 - Piano vs. keyboard vs. harpsichord
 - Violin vs. strings
 - Use skos:broader relationships or suggest alternatives
-
-## Data Limitations & Workarounds
-
-### Missing Data
-- Not all works have all properties
-- Use OPTIONAL in custom SPARQL
-- Report what's available, note what's missing
-
-### Incomplete Coverage
-- Focus on European classical music
-- Better coverage for certain periods/composers
-- Set expectations with user
-
-### No "popularity" metric
-- Can count performances/recordings
-- Cannot directly rank by "importance"
-- Suggest manual curation or external sources
-
-## Example User Interactions
-
-### Example 1: Simple Discovery
-```
-User: "Show me Mozart's piano concertos"
-Assistant:
-1. find_candidate_entities("Mozart", "composer")
-   → Found: Wolfgang Amadeus Mozart, URI: ...
-2. search_musical_works(
-     composers=[mozart_uri],
-     work_type="concerto",
-     instruments=[{"name": "piano"}],
-     limit=30
-   )
-   → Found 27 piano concertos
-3. Present formatted list with K. numbers if available
-```
-
-### Example 2: Complex Research
-```
-User: "What chamber music for strings was composed in Vienna between 1780 and 1800?"
-Assistant:
-1. search_musical_works(
-     date_start=1780,
-     date_end=1800,
-     place_of_composition="Vienna",
-     limit=100
-   )
-2. Filter results programmatically for string instruments only
-3. Group by composer
-4. Present organized results
-Note: Place of composition data may be incomplete - consider mentioning this
-```
-
-### Example 3: Exploration
-```
-User: "I like Beethoven's late quartets. What's similar?"
-Assistant:
-1. find_candidate_entities("Beethoven", "composer")
-2. search_musical_works(
-     composers=[beethoven_uri],
-     work_type="quartet",
-     date_start=1820  # Late period
-   )
-3. Note instrumentation pattern (2 violins, viola, cello)
-4. search_musical_works(
-     work_type="quartet",
-     date_start=1820,
-     instruments=[same pattern]
-   )
-5. Exclude Beethoven from results
-6. Present recommendations with context
-```
-
-## Advanced: Custom SPARQL Scenarios
-
-### Scenario 1: Works frequently performed together
-Query concerts/albums where work X and work Y appear together
-
-### Scenario 2: Composer collaborations
-Find works where two people collaborated (different functions)
-
-### Scenario 3: Temporal analysis
-Count works per decade, identify compositional trends
-
-### Scenario 4: Instrument evolution
-Track instrument usage over time periods
-
-### Scenario 5: Geographic mapping
-Distribution of composers by birthplace or composition location
-
-For these scenarios, consult the knowledge graph structure resource and
-build appropriate SPARQL queries using execute_custom_sparql.
 
 ## Formatting Results
 
@@ -838,7 +491,7 @@ build appropriate SPARQL queries using execute_custom_sparql.
 - Provide context and explanations, not just raw data
 - Acknowledge limitations when encountered
 """
-    
+
     return guide
 
 @mcp.tool()
