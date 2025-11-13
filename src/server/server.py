@@ -16,6 +16,7 @@ from src.server.tools_internal import (
     find_candidate_entities_internal,
     get_entity_details_internal,
     search_musical_works_internal,
+    get_ontology_internal,
 )
 from src.server.utils import execute_sparql_query, logger
 
@@ -116,6 +117,46 @@ def find_paths(start_entity: str, end_entity: str, k: int = 5) -> str:
         res += "\n"
         
     return res
+
+@mcp.tool()
+def get_ontology(path: str) -> str:
+    """
+    Explore the DOREMUS ontology graph schema hierarchically.
+    
+    This tool helps you understand the structure of the knowledge graph by providing
+    a hierarchical view of node types (classes) and their relationships (edges).
+    
+    Use this tool to:
+    - Get an overview of the most important node types and connections (path='/')
+    - Explore a specific class and its direct relationships
+    
+    Args:
+        path: Navigation path for exploration:
+            - '/' - Get a high-level summary of the top 15 most important node types
+                   and their top 20 most common relationships
+            - '/{ClassName}' - Explore a specific class (e.g., '/efrbroo:F28_Expression_Creation')
+                   Use the exact node type name as shown in get_nodes_list tool
+    
+    Returns:
+        Markdown-formatted visualization of the ontology subgraph, showing:
+        - Node types (classes) in the knowledge graph
+        - Edge types (predicates/relationships) connecting them
+        - Hierarchical structure for easy understanding
+    
+    Examples:
+        - get_ontology('/') 
+          Returns overview of the most important 15 nodes and their relationships
+        
+        - get_ontology('/efrbroo:F22_Self-Contained_Expression', depth=1)
+          Shows what properties and relationships a musical work has
+        
+        - get_ontology('/ecrm:E21_Person', depth=2)
+          Shows person connections and what those connected entities relate to
+    
+    Note:
+        Use get_nodes_list() first to see all available node types you can explore.
+    """
+    return get_ontology_internal(path=path, depth=1)
 
 # @mcp.tool()
 # async def search_musical_works(

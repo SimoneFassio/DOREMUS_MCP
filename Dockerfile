@@ -17,7 +17,7 @@ RUN poetry install --only main,server --no-interaction --no-ansi --no-root
 
 # Copy application files
 COPY src/server ./src/server
-COPY data/graph.csv ./data/graph.csv
+COPY data/ ./data/
 
 # Copy tests if needed for validation
 COPY tests ./tests

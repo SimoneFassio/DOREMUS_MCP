@@ -2,6 +2,7 @@ import pathlib
 from typing import Any, Optional
 from src.server.query_builder import build_works_query
 from src.server.find_paths import load_graph
+from src.server.graph_schema_explorer import GraphSchemaExplorer
 from src.server.utils import (
     execute_sparql_query,
     contract_uri,
@@ -14,6 +15,9 @@ from src.server.utils import (
 project_root = pathlib.Path(__file__).parent.parent.parent
 graph_path = project_root / "data" / "graph.csv"
 graph = load_graph(str(graph_path))
+
+#load graph schema explorer for ontology exploration
+explorer = GraphSchemaExplorer.load_from_csv()
 
 def find_candidate_entities_internal(
     name: str,
@@ -205,3 +209,21 @@ def search_musical_works_internal(
             "success": False,
             "error": f"Query building error: {str(e)}"
         }
+
+
+def get_ontology_internal(path: str, depth: int = 1) -> str:
+    """
+    Explore the DOREMUS ontology graph schema hierarchically.
+    
+    Args:
+        path: Navigation path - use '/' for summary, or '/{ClassName}' for class details
+        depth: Exploration depth (1 or 2) for class neighborhoods
+        
+    Returns:
+        Markdown-formatted ontology subgraph
+    """
+    try:
+        return explorer.explore_graph_schema(path=path, depth=depth)
+    except Exception as e:
+        logger.error(f"Error exploring ontology: {str(e)}")
+        return f"Error exploring ontology: {str(e)}"
