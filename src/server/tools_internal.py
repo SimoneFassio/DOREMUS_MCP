@@ -21,44 +21,56 @@ explorer = GraphSchemaExplorer.load_from_csv()
 
 def find_candidate_entities_internal(
     name: str,
-    entity_type: str = "any"
+    entity_type: str = "others"
 ) -> dict[str, Any]:
-    # Build type filter (all use prefixes)
-    type_filter = ""
-    if entity_type == "artist":
-        type_filter = "{ ?entity a foaf:Person } UNION { ?entity a ecrm:E21_Person }"
-    elif entity_type == "work":
-        type_filter = "?entity a efrbroo:F22_Self-Contained_Expression ."
-    elif entity_type == "place":
-        type_filter = "?entity a ecrm:E53_Place ."
-    elif entity_type == "performance":
-        type_filter = "?entity a efrbroo:F31_Performance ."
-    elif entity_type == "track":
-        type_filter = "?entity a mus:M24_Track ."
+    normalized_type = (entity_type or "").strip().lower()
+    if normalized_type not in {"artist", "vocabulary", "others"}:
+        normalized_type = "others"
+
+    label_predicates = {
+        "artist": "foaf:name",
+        "vocabulary": "skos:prefLabel",
+        "others": "rdfs:label",
+    }
+
+    label_predicate = label_predicates[normalized_type]
+
+    search_term = (name or "").strip()
+    if not search_term:
+        return {
+            "success": False,
+            "error": "Name is required to search for entities."
+        }
+
+    search_term_escaped = search_term.replace("'", "''").replace('"', '\\"')
+    search_literal = f"'{search_term_escaped}'"
 
     query = f"""
     SELECT DISTINCT ?entity ?label ?type
     WHERE {{
-        {type_filter}
-        ?entity rdfs:label ?label .
+        ?entity {label_predicate} ?label .
         ?entity a ?type .
-        FILTER (REGEX(?label, "{name}", "i"))
+        ?label bif:contains "{search_literal}" .
     }}
-    LIMIT 50
+    ORDER BY STRLEN(?label)
     """
 
-    result = execute_sparql_query(query, limit=50)
-
-    def prefixify_entity(ent):
-        ent = ent.copy()
-        if "entity" in ent:
-            ent["entity"] = contract_uri(ent["entity"])
-        if "type" in ent:
-            ent["type"] = contract_uri(ent["type"])
-        return ent
+    result = execute_sparql_query(query, limit=10)
+    
+    # Eliminate duplicates based on entity URI and type
+    unique_entities = {}
+    for e in result.get("results", []):
+        ent_uri = e.get("entity")
+        ent_type = e.get("type")
+        key = (ent_uri, ent_type)
+        if key not in unique_entities:
+            unique_entities[key] = e
 
     if result.get("success"):
-        entities = [prefixify_entity(e) for e in result.get("results", [])]
+        entities = []
+        for e in unique_entities.values():
+            e["type"] = contract_uri(e["type"])
+            entities.append(e)
         return {
             "query": name,
             "entity_type": entity_type,

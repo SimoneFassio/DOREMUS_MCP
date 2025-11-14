@@ -29,32 +29,27 @@ async def health_check(request: Request) -> PlainTextResponse:
 
 
 @mcp.tool()
-async def find_candidate_entities(name: str, entity_type: str = "any") -> dict[str, Any]:
+async def find_candidate_entities(name: str, entity_type: str = "others") -> dict[str, Any]:
     """
-    Find entities by name using case-insensitive search.
-    
+    Find entities by name using the Virtuoso full-text index.
+
     Use this tool to discover the unique URI identifier for an entity before retrieving
     detailed information or using it in other queries.
-    
+
     Args:
-        name: The name to search for (e.g., "Mozart", "Symphony No. 5", "Vienna", "Radio France")
-        entity_type: Type of entity to search for. Options:
-            - "artist": Composers, performers, conductors (foaf:Person or ecrm:E21_Person)
-            - "work": Musical works/expressions (efrbroo:F22_Self-Contained_Expression)
-            - "place": Geographic locations/venues (ecrm:E53_Place)
-            - "performance": Live performances (efrbroo:F31_Performance)
-            - "track": Individual tracks on albums (mus:M24_Track)
-            - "any": Search across all entity types (default)
-        
+        name: The name or keyword to search for (e.g., "Wolfgang Amadeus Mozart", "violin", "Radio France")
+        entity_type: Search scope. Options:
+            - "artist": Broad artist bucket covering people, ensembles, broadcasters, etc. (foaf:Person, ecrm:E21_Person, efrbroo:F11_Corporate_Body, ecrm:E74_Group, ecrm:E39_Actor). Use COMPLETE names
+            - "vocabulary": SKOS concepts such as genres, media of performance, keys (skos:Concept)
+            - "others": Everything else; falls back to rdfs:label search (default)
+
     Returns:
-        Dictionary with matching entities, including their URIs, labels, and types
-        
+        Dictionary with matching entities, including their URIs, labels, and reported RDF types
+
     Examples:
         - find_candidate_entities("Beethoven", "artist")
-        - find_candidate_entities("Don Giovanni", "work")
-        - find_candidate_entities("Royal Albert Hall", "place")
-        - find_candidate_entities("Radio France", "organization")
-        - find_candidate_entities("violin", "any")
+        - find_candidate_entities("string quartet", "vocabulary")
+        - find_candidate_entities("Berlin", "others")
     """
     return find_candidate_entities_internal(name, entity_type)
 
@@ -543,97 +538,97 @@ User: "Tell me about Mozart"
 
     return guide
 
-@mcp.tool()
-def get_nodes_list() ->str:
-    """
-    Get the list of all node types, use this to identify useful nodes before find_path tool
-    """
-    nodes = """
-    time:Instant
-    mus:M28_Individual_Performance
-    ecrm:E52_Time-Span
-    time:Interval
-    ecrm:E7_Activity
-    efrbroo:F28_Expression_Creation
-    mus:M156_Title_Statement
-    ecrm:E13_Attribute_Assignment
-    efrbroo:F22_Self-Contained_Expression
-    mus:M46_Set_of_Tracks
-    mus:M44_Performed_Work
-    mus:M43_Performed_Expression
-    mus:M42_Performed_Expression_Creation
-    efrbroo:F14_Individual_Work
-    efrbroo:F15_Complex_Work
-    mus:M19_Categorization
-    mus:M23_Casting_Detail
-    efrbroo:F26_Recording
-    efrbroo:F21_Recording_Work
-    ecrm:E21_Person
-    mus:M157_Statement_of_Responsibility
-    efrbroo:F24_Publication_Expression
-    efrbroo:F20_Performance_Work
-    efrbroo:F30_Publication_Event
-    efrbroo:F25_Performance_Plan
-    mus:M160_Publication_Statement
-    mus:M161_Distribution_Statement
-    efrbroo:F31_Performance
-    efrbroo:F3_Manifestation_Product_Type
-    mus:M6_Casting
-    efrbroo:F19_Publication_Work
-    mus:M158_Title_and_Statement_of_Responsibility
-    ecrm:E42_Identifier
-    mus:M155_Cast_Statement
-    efrbroo:F29_Recording_Event
-    efrbroo:F42_Representative_Expression_Assignment
-    ecrm:E54_Dimension
-    ecrm:E67_Birth
-    mus:M31_Actor_Function
-    mus:M29_Editing
-    efrbroo:F38_Character
-    mus:M24_Track
-    mus:M171_Container
-    ecrm:E69_Death
-    efrbroo:F11_Corporate_Body
-    mus:M2_Opus_Statement
-    mus:M1_Catalogue_Statement
-    ecrm:E53_Place
-    efrbroo:F25_PerformancePlan
-    mus:M27_Foreseen_Individual_Performance
-    mus:M167_Publication_Expression_Fragment
-    efrbroo:F4_Manifestation_Singleton
-    mus:M39_Derivation_Type_Assignment
-    skos:Concept
-    mus:M15_Dedication_Statement
-    mus:M33_Set_of_Characters
-    mus:M45_Descriptive_Expression_Assignment
-    mus:M15_Dedication
-    mus:M14_Medium_Of_Performance
-    efrbroo:F19_Publication_Expression
-    ecrm:E1_CRM_Entity
-    mus:M154_Label_Name
-    mus:M26_Foreseen_Performance
-    geonames:Feature
-    foaf:Document
-    efrbroo:F32_Carrier_Production_Event
-    ecrm:E39_Actor
-    mus:M40_Context
-    mus:M159_Edition_Statement
-    ecrm:E66_Formation
-    mus:M50_Creation_or_Performance_Mode
-    mus:M4_Key
-    mus:M25_Foreseen_Activity
-    mus:M5_Genre
-    mus:M36_Award
-    modsrdf:NoteGroup
-    modsrdf:ModsResource
-    rdfs:Class
-    ecrm:E22_Man-Made_Object
-    ecrm:E68_Dissolution
-    skos:ConceptScheme
-    rdfs:Datatype
-    ecrm:E4_Period
-    """
-    return nodes
+# @mcp.tool()
+# def get_nodes_list() ->str:
+#     """
+#     Get the list of all node types, use this to identify useful nodes before find_path tool
+#     """
+#     nodes = """
+#     time:Instant
+#     mus:M28_Individual_Performance
+#     ecrm:E52_Time-Span
+#     time:Interval
+#     ecrm:E7_Activity
+#     efrbroo:F28_Expression_Creation
+#     mus:M156_Title_Statement
+#     ecrm:E13_Attribute_Assignment
+#     efrbroo:F22_Self-Contained_Expression
+#     mus:M46_Set_of_Tracks
+#     mus:M44_Performed_Work
+#     mus:M43_Performed_Expression
+#     mus:M42_Performed_Expression_Creation
+#     efrbroo:F14_Individual_Work
+#     efrbroo:F15_Complex_Work
+#     mus:M19_Categorization
+#     mus:M23_Casting_Detail
+#     efrbroo:F26_Recording
+#     efrbroo:F21_Recording_Work
+#     ecrm:E21_Person
+#     mus:M157_Statement_of_Responsibility
+#     efrbroo:F24_Publication_Expression
+#     efrbroo:F20_Performance_Work
+#     efrbroo:F30_Publication_Event
+#     efrbroo:F25_Performance_Plan
+#     mus:M160_Publication_Statement
+#     mus:M161_Distribution_Statement
+#     efrbroo:F31_Performance
+#     efrbroo:F3_Manifestation_Product_Type
+#     mus:M6_Casting
+#     efrbroo:F19_Publication_Work
+#     mus:M158_Title_and_Statement_of_Responsibility
+#     ecrm:E42_Identifier
+#     mus:M155_Cast_Statement
+#     efrbroo:F29_Recording_Event
+#     efrbroo:F42_Representative_Expression_Assignment
+#     ecrm:E54_Dimension
+#     ecrm:E67_Birth
+#     mus:M31_Actor_Function
+#     mus:M29_Editing
+#     efrbroo:F38_Character
+#     mus:M24_Track
+#     mus:M171_Container
+#     ecrm:E69_Death
+#     efrbroo:F11_Corporate_Body
+#     mus:M2_Opus_Statement
+#     mus:M1_Catalogue_Statement
+#     ecrm:E53_Place
+#     efrbroo:F25_PerformancePlan
+#     mus:M27_Foreseen_Individual_Performance
+#     mus:M167_Publication_Expression_Fragment
+#     efrbroo:F4_Manifestation_Singleton
+#     mus:M39_Derivation_Type_Assignment
+#     skos:Concept
+#     mus:M15_Dedication_Statement
+#     mus:M33_Set_of_Characters
+#     mus:M45_Descriptive_Expression_Assignment
+#     mus:M15_Dedication
+#     mus:M14_Medium_Of_Performance
+#     efrbroo:F19_Publication_Expression
+#     ecrm:E1_CRM_Entity
+#     mus:M154_Label_Name
+#     mus:M26_Foreseen_Performance
+#     geonames:Feature
+#     foaf:Document
+#     efrbroo:F32_Carrier_Production_Event
+#     ecrm:E39_Actor
+#     mus:M40_Context
+#     mus:M159_Edition_Statement
+#     ecrm:E66_Formation
+#     mus:M50_Creation_or_Performance_Mode
+#     mus:M4_Key
+#     mus:M25_Foreseen_Activity
+#     mus:M5_Genre
+#     mus:M36_Award
+#     modsrdf:NoteGroup
+#     modsrdf:ModsResource
+#     rdfs:Class
+#     ecrm:E22_Man-Made_Object
+#     ecrm:E68_Dissolution
+#     skos:ConceptScheme
+#     rdfs:Datatype
+#     ecrm:E4_Period
+#     """
+#     return nodes
 
 if __name__ == "__main__":
     # Run the MCP server

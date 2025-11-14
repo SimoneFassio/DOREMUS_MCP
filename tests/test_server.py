@@ -41,7 +41,7 @@ def test_find_entities():
     print_result("Find Mozart (composer)", result)
     
     # Test 2: Find any entity named "Symphony"
-    result = find_candidate_entities_internal("Symphony", "work")
+    result = find_candidate_entities_internal("Symphony", "vocabulary")
     if result.get("matches_found", 0) == 0:
         print("⚠️ Could not find Symphony entity")
         return False
