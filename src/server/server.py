@@ -54,7 +54,7 @@ async def find_candidate_entities(name: str, entity_type: str = "others") -> dic
     return find_candidate_entities_internal(name, entity_type)
 
 @mcp.tool()
-async def get_entity_details(entity_uri: str, depth: int = 1) -> dict[str, Any]:
+async def get_entity_details(entity_uri: str) -> dict[str, Any]:
     """
     Retrieve detailed information about a specific entity with optional recursive resolution.
     
@@ -63,26 +63,19 @@ async def get_entity_details(entity_uri: str, depth: int = 1) -> dict[str, Any]:
     
     Args:
         entity_uri: The full URI of the entity (e.g., "http://data.doremus.org/artist/...")
-        depth: How deep to fetch related entity details:
-               - 1 (default): Only this entity's properties, with labels for linked entities
-               - 2 or more: Also fetch full details of linked entities (slower but more complete)
         
     Returns:
         Dictionary with:
         - entity_uri: The requested entity
         - entity_label: Human-readable name
-        - properties: All properties as key-value pairs (property name → list of values)
-        - linked_entities: Dict mapping entity URIs to their labels
-        - related_entity_details: Full details of linked entities (if depth >= 2)
+        - entity_type: Class of the entity
+        - properties: All properties as key-value pairs
         
     Examples:
         # Basic usage - get entity properties with labels
         get_entity_details("http://data.doremus.org/artist/123")
-        
-        # Deep dive - get composer details from a work in one call
-        get_entity_details("http://data.doremus.org/expression/456", depth=2)
     """
-    return get_entity_details_internal(entity_uri, depth)
+    return get_entity_details_internal(entity_uri)
 
 @mcp.tool()
 def find_paths(start_entity: str, end_entity: str, k: int = 5) -> str:

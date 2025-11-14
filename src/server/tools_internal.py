@@ -8,7 +8,8 @@ from src.server.utils import (
     contract_uri,
     contract_uri_restrict,
     expand_prefixed_uri,
-    logger
+    logger,
+    get_entity_label
 )
 
 #load graph for find_path
@@ -82,90 +83,69 @@ def find_candidate_entities_internal(
     
     
 def get_entity_details_internal(
-    entity_uri: str,
-    depth: int = 1
+    entity_uri: str
 ) -> dict[str, Any]:
     """
-    Internal function to retrieve entity details with recursion support.
+    Internal function to retrieve entity details
     """
-    # Expand input URI if prefixed
-    entity_uri_expanded = expand_prefixed_uri(entity_uri)
     query = f"""
     SELECT DISTINCT ?property ?value
     WHERE {{
-           <{entity_uri_expanded}> ?property ?value .
+           <{entity_uri}> ?property ?value .
            FILTER (
               !(?property = rdfs:comment) || lang(?value) = "en"
            )
     }}
     """
-    result = execute_sparql_query(query, limit=200)
+    result = execute_sparql_query(query, limit=50)
+    
     if not result["success"]:
         return result
+    
     # Organize all properties
     properties = {}
     entity_label = None
-    linked_entity_uris = set()
+    entity_type = None
     for binding in result["results"]:
         prop = binding.get("property", "")
         value = binding.get("value", "")
         # Contract URIs to prefixes
-        prop_prefixed = contract_uri_restrict(prop)
-        # If uri not present in PREFIXES ignore the property
+        prop_prefixed = contract_uri_restrict(prop) # If uri not present in PREFIXES ignore the property
+        
         if prop_prefixed is None:
             continue
-        value_prefixed = contract_uri(value) if value.startswith("http://") or value.startswith("https://") else value
-        
         if prop_prefixed.endswith(":label") and not entity_label:
             entity_label = value
-        # Track URIs for linked entities
+            continue
+        if prop_prefixed.endswith("type") and not entity_type:
+            entity_type = contract_uri_restrict(value)
+            continue
+        
+        # Get label for linked URIs
         if value.startswith("http://") or value.startswith("https://"): 
-            linked_entity_uris.add(value) #TODO not always works
+            label = get_entity_label(value)
+            if label:
+                value += f"  ({label})"
+                
         # Store property
         if prop_prefixed not in properties:
             properties[prop_prefixed] = []
-        properties[prop_prefixed].append(value_prefixed)
-    # Build basic response
+        properties[prop_prefixed].append(value)
+    
+    for key, prop in properties.items():
+        if len(prop)==1:
+            properties[key] = prop[0]
+        else:
+            properties[key] = ""
+            for p in prop:
+                properties[key] += f"{p}, "
+        
     response = {
-        "entity_uri": contract_uri(entity_uri_expanded),
+        "entity_uri": entity_uri,
         "entity_label": entity_label,
+        "entity_type": entity_type,
         "properties": properties
     }
-    # Optionally resolve labels for linked entities
-    if linked_entity_uris:
-        linked_entities = {}
-        uris_str = " ".join([f"<{uri}>" for uri in list(linked_entity_uris)[:50]])  # Limit to 50
-        label_query = f"""
-        SELECT DISTINCT ?entity ?label
-        WHERE {{
-            VALUES ?entity {{ {uris_str} }}
-            OPTIONAL {{ ?entity rdfs:label ?label }}
-        }}
-        """
-        label_result = execute_sparql_query(label_query, limit=100)
-        if label_result["success"]:
-            for binding in label_result["results"]:
-                uri = binding.get("entity", "")
-                label = binding.get("label", "")
-                if label:
-                    linked_entities[contract_uri(uri)] = label
-        response["linked_entities"] = linked_entities
-    # Optionally fetch details of linked entities (depth >= 2)
-    if depth > 1 and linked_entity_uris:
-        related_details = {}
-        # Only fetch details for first 20 linked entities to avoid timeout
-        for linked_uri in list(linked_entity_uris)[:20]:
-            nested_result = get_entity_details_internal(
-                contract_uri(linked_uri),
-                depth=depth - 1
-            )
-            if nested_result.get("entity_label"):
-                related_details[contract_uri(linked_uri)] = {
-                    "label": nested_result.get("entity_label"),
-                    "properties": nested_result.get("properties", {})
-                }
-        if related_details:
-            response["related_entity_details"] = related_details
     return response
     
     

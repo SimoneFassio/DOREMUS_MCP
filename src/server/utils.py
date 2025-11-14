@@ -37,6 +37,23 @@ def contract_uri_restrict(uri: str) -> str:
             return f"{prefix}:{uri[len(base):]}"
     return None
 
+def get_entity_label(uri: str) -> str:
+    """
+    Given a uri return the label, if present
+    """
+    query = f"""
+    SELECT ?label
+    WHERE {{
+        <{uri}> rdfs:label | skos:prefLabel | foaf:name ?label .
+    }}
+    """
+    result = execute_sparql_query(query, 1)
+    
+    if result["success"] and len(result["results"])>0:
+        return result["results"][0].get("label", None)
+    else:
+        return None
+    
 def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
     """
     Execute a SPARQL query against the DOREMUS endpoint.
