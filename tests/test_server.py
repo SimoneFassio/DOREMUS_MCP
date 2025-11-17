@@ -9,7 +9,7 @@ import sys
 import json
 from src.server.tools_internal import (
     find_candidate_entities_internal,
-    get_entity_details_internal,
+    get_entity_properties_internal,
     search_musical_works_internal
 )
 from src.server.utils import execute_sparql_query
@@ -105,9 +105,9 @@ def test_custom_sparql():
     return False
 
 
-def test_entity_details():
-    """Test entity details retrieval."""
-    print("\n📖 Testing Entity Details...")
+def test_entity_properties():
+    """Test entity properties retrieval."""
+    print("\n📖 Testing Entity properties...")
     
     # First find Mozart's URI
     search_result = find_candidate_entities_internal("Mozart", "artist")
@@ -118,11 +118,11 @@ def test_entity_details():
         if entities:
             mozart_uri = entities[0].get("entity")
             if mozart_uri:
-                result = get_entity_details_internal(mozart_uri)
-                print_result(f"Details for {mozart_uri}", result)
+                result = get_entity_properties_internal(mozart_uri)
+                print_result(f"properties for {mozart_uri}", result)
                 return True
     
-    print("⚠️ Could not find Mozart to test entity details")
+    print("⚠️ Could not find Mozart to test entity properties")
     return False
 
 
@@ -138,7 +138,7 @@ def main():
         ("Entity Search", test_find_entities),
         ("Works Search", test_search_works),
         ("Custom SPARQL", test_custom_sparql),
-        ("Entity Details", test_entity_details),
+        ("Entity properties", test_entity_properties),
     ]
     
     results = []

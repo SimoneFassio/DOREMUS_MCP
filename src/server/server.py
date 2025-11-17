@@ -14,7 +14,7 @@ from src.server.find_paths import find_k_shortest_paths
 from src.server.tools_internal import (
     graph,
     find_candidate_entities_internal,
-    get_entity_details_internal,
+    get_entity_properties_internal,
     search_musical_works_internal,
     get_ontology_internal,
 )
@@ -55,7 +55,7 @@ async def find_candidate_entities(name: str, entity_type: str = "others") -> dic
     return find_candidate_entities_internal(name, entity_type)
 
 @mcp.tool()
-async def get_entity_details(entity_uri: str) -> dict[str, Any]:
+async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     """
     Retrieve detailed information about a specific entity.
     
@@ -74,9 +74,9 @@ async def get_entity_details(entity_uri: str) -> dict[str, Any]:
         
     Examples:
         # Basic usage - get entity properties with labels
-        get_entity_details("http://data.doremus.org/artist/123")
+        get_entity_properties("http://data.doremus.org/artist/123")
     """
-    return get_entity_details_internal(entity_uri)
+    return get_entity_properties_internal(entity_uri)
 
 @mcp.tool()
 def find_paths(start_entity: str, end_entity: str, k: int = 5) -> str:
@@ -249,7 +249,7 @@ def get_kg_structure() -> str:
 
         ### 4. Instrumentation (Casting)
         - **mus:M6_Casting**: Instrumentation specification
-        - `mus:U23_has_casting_detail`: Details for each instrument
+        - `mus:U23_has_casting_detail`: properties for each instrument
 
         - **mus:M7_Casting_Detail**: Specific instrument detail
         - `mus:U2_foresees_use_of_medium_of_performance`: Instrument URI
@@ -331,7 +331,7 @@ def get_kg_structure() -> str:
         3. Add `LIMIT` clauses to prevent timeouts
         4. Use `FILTER` for text matching with `REGEX()` or `contains()`
         5. Use `OPTIONAL` blocks for properties that may not exist
-        6. COUNT grouped casting details with HAVING to filter by instrumentation size
+        6. COUNT grouped casting properties with HAVING to filter by instrumentation size
         """
     
     return guide
@@ -361,7 +361,7 @@ recordings, and instrumentation.
 ## Workflow
 1. get_ontology: explore the DOREMUS ontology graph schema
 2. find_candidate_entities: discover the unique URI identifier for an entity
-3. get_entity_details: retrieve detailed information about a specific entity (all property)
+3. get_entity_properties: retrieve detailed information about a specific entity (all property)
 4. find_paths: connect two nodes types exploring the best graph traversal to use in the query
 5. execute_custom_sparql: execute the query built using information collected
 6. Check the query result, refine and use again tool to explore more the graph if necessary
@@ -388,7 +388,7 @@ recordings, and instrumentation.
 
 3. **Combine tools strategically**:
    - Discovery: find_candidate_entities
-   - Deep dive: get_entity_details
+   - Deep dive: get_entity_properties
    - Analysis: execute_custom_sparql with aggregations
 
 ### Performance

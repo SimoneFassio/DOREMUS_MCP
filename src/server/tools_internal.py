@@ -82,11 +82,11 @@ def find_candidate_entities_internal(
         return result
     
     
-def get_entity_details_internal(
+def get_entity_properties_internal(
     entity_uri: str
 ) -> dict[str, Any]:
     """
-    Internal function to retrieve entity details
+    Internal function to retrieve entity properties
     """
     query = f"""
     SELECT DISTINCT ?property ?value
@@ -208,7 +208,7 @@ def get_ontology_internal(path: str, depth: int = 1) -> str:
     Explore the DOREMUS ontology graph schema hierarchically.
     
     Args:
-        path: Navigation path - use '/' for summary, or '/{ClassName}' for class details
+        path: Navigation path - use '/' for summary, or '/{ClassName}' for class properties
         depth: Exploration depth (1 or 2) for class neighborhoods
         
     Returns:
