@@ -148,7 +148,7 @@ def get_ontology(path: str) -> str:
     return get_ontology_internal(path=path, depth=1)
 
 @mcp.tool()
-async def execute_custom_sparql(query: str, limit: int = 100) -> dict[str, Any]:
+async def execute_sparql(query: str, limit: int = 100) -> dict[str, Any]:
     """
     Execute a custom SPARQL query against the DOREMUS knowledge graph.
     
@@ -363,7 +363,7 @@ recordings, and instrumentation.
 2. find_candidate_entities: discover the unique URI identifier for an entity
 3. get_entity_properties: retrieve detailed information about a specific entity (all property)
 4. find_paths: connect two nodes types exploring the best graph traversal to use in the query
-5. execute_custom_sparql: execute the query built using information collected
+5. execute_sparql: execute the query built using information collected
 6. Check the query result, refine and use again tool to explore more the graph if necessary
 7. Once the result is ok, format it in a proper manner and write the response
 
@@ -389,7 +389,7 @@ recordings, and instrumentation.
 3. **Combine tools strategically**:
    - Discovery: find_candidate_entities
    - Deep dive: get_entity_properties
-   - Analysis: execute_custom_sparql with aggregations
+   - Analysis: execute_sparql with aggregations
 
 ### Performance
 1. **Date ranges**: Narrower is faster

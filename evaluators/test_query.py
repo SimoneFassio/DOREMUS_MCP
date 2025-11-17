@@ -36,7 +36,7 @@ async def main():
             for message in messages:
                 messContent = message.content if hasattr(message, "content") else ""
                 print("Message: ", message, "\n->With role: ", hasattr(message, "name")," ",message.name,"\n")
-                if hasattr(message, "name") and message.name == "execute_custom_sparql":
+                if hasattr(message, "name") and message.name == "execute_sparql":
                     content_json = json.loads(messContent)
                     generated_query = content_json.get("generated_query", "")
                     print("\n\nGenerated_query from tool name:", generated_query)

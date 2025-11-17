@@ -274,7 +274,7 @@ WHERE {
 LIMIT 50
 """
 
-result = execute_custom_sparql(query)
+result = execute_sparql(query)
 ```
 
 ### Find Works with Duration Between 20-30 Minutes
@@ -311,7 +311,7 @@ ORDER BY ?catNum
 LIMIT 100
 """
 
-result = execute_custom_sparql(query)
+result = execute_sparql(query)
 ```
 
 ### Find Works by Composer's Nationality
@@ -340,7 +340,7 @@ WHERE {
 LIMIT 100
 """
 
-result = execute_custom_sparql(query)
+result = execute_sparql(query)
 # German composers
 ```
 
@@ -367,7 +367,7 @@ WHERE {
 LIMIT 100
 """
 
-result = execute_custom_sparql(query)
+result = execute_sparql(query)
 ```
 
 ### Composer Collaboration - Composer as Performer
@@ -397,7 +397,7 @@ WHERE {
 LIMIT 50
 """
 
-result = execute_custom_sparql(query)
+result = execute_sparql(query)
 ```
 
 ---
@@ -453,7 +453,7 @@ WHERE {
 LIMIT 50
 """
 
-result = execute_custom_sparql(query)
+result = execute_sparql(query)
 ```
 
 ---
