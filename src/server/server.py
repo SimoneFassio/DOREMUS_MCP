@@ -35,6 +35,7 @@ async def find_candidate_entities(name: str, entity_type: str = "others") -> dic
 
     Use this tool to discover the unique URI identifier for an entity before retrieving
     detailed information or using it in other queries.
+    Entity names may have variations, and you need the exact URI to query reliably.
 
     Args:
         name: The name or keyword to search for (e.g., "Wolfgang Amadeus Mozart", "violin", "Radio France")
@@ -56,7 +57,7 @@ async def find_candidate_entities(name: str, entity_type: str = "others") -> dic
 @mcp.tool()
 async def get_entity_details(entity_uri: str) -> dict[str, Any]:
     """
-    Retrieve detailed information about a specific entity with optional recursive resolution.
+    Retrieve detailed information about a specific entity.
     
     Use this as the first step after finding an entity with find_candidate_entities.
     It shows all direct properties of an entity.
@@ -146,59 +147,11 @@ def get_ontology(path: str) -> str:
     """
     return get_ontology_internal(path=path, depth=1)
 
-# @mcp.tool()
-# async def search_musical_works(
-#         composers: Optional[list[str]] = None,
-#         work_type: Optional[str] = None,
-#         date_start: Optional[int] = None,
-#         date_end: Optional[int] = None,
-#         instruments: Optional[list[dict[str, Any]]] = None,
-#         place_of_composition: Optional[str] = None,
-#         place_of_performance: Optional[str] = None,
-#         duration_min: Optional[int] = None,
-#         duration_max: Optional[int] = None,
-#         topic: Optional[str] = None,
-#         limit: int = 50
-#     ) -> dict[str, Any]:
-#     """
-#     Search for musical works with flexible filtering criteria.
-    
-#     This is the main tool for querying works in the DOREMUS knowledge graph with
-#     support for multiple filter combinations.
-    
-#     Args:
-#         composers: List of composer names or URIs (e.g., ["Mozart", "Beethoven"])
-#         work_type: Type/genre of work (e.g., "sonata", "symphony", "concerto")
-#         date_start: Start year for composition date range (e.g., 1800)
-#         date_end: End year for composition date range (e.g., 1850)
-#         instruments: List of instrument specifications, each with:
-#             - name: instrument name/URI (e.g., "violin", "piano")
-#             - quantity: exact number (optional)
-#             - min_quantity: minimum number (optional)
-#             - max_quantity: maximum number (optional)
-#         place_of_composition: Place where work was composed
-#         place_of_performance: Place where work was performed
-#         duration_min: Minimum duration in seconds
-#         duration_max: Maximum duration in seconds
-#         topic: Topic or subject matter of the work
-#         limit: Maximum number of results (default: 50, max: 200)
-        
-#     Returns:
-#         Dictionary with matching works and their details
-        
-#     Examples:
-#         - search_musical_works(composers=["Mozart"], work_type="sonata")
-#         - search_musical_works(instruments=[{"name": "violin", "quantity": 2}, {"name": "viola"}])
-#         - search_musical_works(date_start=1800, date_end=1850, place_of_composition="Vienna")
-#     """
-#     return search_musical_works_internal(composers, work_type, date_start, date_end, instruments, place_of_composition, place_of_performance, duration_min, duration_max, topic, limit)
-
 @mcp.tool()
 async def execute_custom_sparql(query: str, limit: int = 100) -> dict[str, Any]:
     """
     Execute a custom SPARQL query against the DOREMUS knowledge graph.
     
-    Use this tool when the pre-built tools don't cover your specific use case.
     You have full control over the SPARQL query, but should be familiar with
     the DOREMUS ontology structure.
     
@@ -220,7 +173,6 @@ async def execute_custom_sparql(query: str, limit: int = 100) -> dict[str, Any]:
             ?work a efrbroo:F22_Self-Contained_Expression ;
                   rdfs:label ?title .
         }
-        LIMIT 10
         ```
     """
     return execute_sparql_query(query, limit)
@@ -406,52 +358,19 @@ This MCP server provides access to the DOREMUS Knowledge Graph, a comprehensive
 database of classical music metadata including works, composers, performances,
 recordings, and instrumentation.
 
-## Available Tools
-
-### 1. find_candidate_entities
-**When to use**: As the first step when you need to reference a specific composer,
-work, or place by name.
-
-**Why**: Entity names may have variations, and you need the exact URI to query
-reliably.
-
-**Example workflow**:
-```
-User: "Find sonatas by Beethoven"
-1. find_candidate_entities("Beethoven", "composer")
-2. Note the composer URI from results
-3. search_musical_works(composers=[uri], work_type="sonata")
-```
-
-### 2. get_entity_details
-**When to use**: After finding an entity URI, to get comprehensive information
-about that entity.
-
-**Why**: Provides all available properties like birth/death dates, alternative
-names, relationships, etc.
-
-**Example workflow**:
-```
-User: "Tell me about Mozart"
-1. find_candidate_entities("Mozart", "composer")
-2. get_entity_details(mozart_uri)
-3. Present formatted information to user
-```
-
-### 3. execute_custom_sparql
-**When to use**: For execcuting queries
-
-**Before using**:
-1. Check the knowledge graph structure resource
-2. Look at example queries
-3. Test incrementally, starting simple
+## Workflow
+1. get_ontology: explore the DOREMUS ontology graph schema
+2. find_candidate_entities: discover the unique URI identifier for an entity
+3. get_entity_details: retrieve detailed information about a specific entity (all property)
+4. find_paths: connect two nodes types exploring the best graph traversal to use in the query
+5. execute_custom_sparql: execute the query built using information collected
+6. Check the query result, refine and use again tool to explore more the graph if necessary
+7. Once the result is ok, format it in a proper manner and write the response
 
 ## Best Practices
 
 ### Entity Resolution
 1. **Always search before assuming**: Don't assume you know the exact URI or name
-   - ❌ Bad: search_musical_works(composers=["Mozart"])
-   - ✅ Good: find_candidate_entities("Mozart") → use returned URI
 
 2. **Handle ambiguity**: If multiple matches, ask user to clarify
    ```
@@ -504,23 +423,6 @@ User: "Tell me about Mozart"
 - Violin vs. strings
 - Use skos:broader relationships or suggest alternatives
 
-## Formatting Results
-
-### For Lists
-- Group by logical categories (composer, date, type)
-- Include key identifying info (title, composer, date)
-- Limit long lists, offer to show more
-
-### For Details
-- Organize by topic (biographical, compositional, performance)
-- Format dates human-readably
-- Translate technical terms (genre codes, URIs) to readable labels
-
-### For Comparisons
-- Use tables when appropriate
-- Highlight similarities and differences
-- Provide context for numbers
-
 ## Remember
 - The database is authoritative but not complete
 - Always verify entity resolution before complex queries
@@ -531,97 +433,6 @@ User: "Tell me about Mozart"
 
     return guide
 
-# @mcp.tool()
-# def get_nodes_list() ->str:
-#     """
-#     Get the list of all node types, use this to identify useful nodes before find_path tool
-#     """
-#     nodes = """
-#     time:Instant
-#     mus:M28_Individual_Performance
-#     ecrm:E52_Time-Span
-#     time:Interval
-#     ecrm:E7_Activity
-#     efrbroo:F28_Expression_Creation
-#     mus:M156_Title_Statement
-#     ecrm:E13_Attribute_Assignment
-#     efrbroo:F22_Self-Contained_Expression
-#     mus:M46_Set_of_Tracks
-#     mus:M44_Performed_Work
-#     mus:M43_Performed_Expression
-#     mus:M42_Performed_Expression_Creation
-#     efrbroo:F14_Individual_Work
-#     efrbroo:F15_Complex_Work
-#     mus:M19_Categorization
-#     mus:M23_Casting_Detail
-#     efrbroo:F26_Recording
-#     efrbroo:F21_Recording_Work
-#     ecrm:E21_Person
-#     mus:M157_Statement_of_Responsibility
-#     efrbroo:F24_Publication_Expression
-#     efrbroo:F20_Performance_Work
-#     efrbroo:F30_Publication_Event
-#     efrbroo:F25_Performance_Plan
-#     mus:M160_Publication_Statement
-#     mus:M161_Distribution_Statement
-#     efrbroo:F31_Performance
-#     efrbroo:F3_Manifestation_Product_Type
-#     mus:M6_Casting
-#     efrbroo:F19_Publication_Work
-#     mus:M158_Title_and_Statement_of_Responsibility
-#     ecrm:E42_Identifier
-#     mus:M155_Cast_Statement
-#     efrbroo:F29_Recording_Event
-#     efrbroo:F42_Representative_Expression_Assignment
-#     ecrm:E54_Dimension
-#     ecrm:E67_Birth
-#     mus:M31_Actor_Function
-#     mus:M29_Editing
-#     efrbroo:F38_Character
-#     mus:M24_Track
-#     mus:M171_Container
-#     ecrm:E69_Death
-#     efrbroo:F11_Corporate_Body
-#     mus:M2_Opus_Statement
-#     mus:M1_Catalogue_Statement
-#     ecrm:E53_Place
-#     efrbroo:F25_PerformancePlan
-#     mus:M27_Foreseen_Individual_Performance
-#     mus:M167_Publication_Expression_Fragment
-#     efrbroo:F4_Manifestation_Singleton
-#     mus:M39_Derivation_Type_Assignment
-#     skos:Concept
-#     mus:M15_Dedication_Statement
-#     mus:M33_Set_of_Characters
-#     mus:M45_Descriptive_Expression_Assignment
-#     mus:M15_Dedication
-#     mus:M14_Medium_Of_Performance
-#     efrbroo:F19_Publication_Expression
-#     ecrm:E1_CRM_Entity
-#     mus:M154_Label_Name
-#     mus:M26_Foreseen_Performance
-#     geonames:Feature
-#     foaf:Document
-#     efrbroo:F32_Carrier_Production_Event
-#     ecrm:E39_Actor
-#     mus:M40_Context
-#     mus:M159_Edition_Statement
-#     ecrm:E66_Formation
-#     mus:M50_Creation_or_Performance_Mode
-#     mus:M4_Key
-#     mus:M25_Foreseen_Activity
-#     mus:M5_Genre
-#     mus:M36_Award
-#     modsrdf:NoteGroup
-#     modsrdf:ModsResource
-#     rdfs:Class
-#     ecrm:E22_Man-Made_Object
-#     ecrm:E68_Dissolution
-#     skos:ConceptScheme
-#     rdfs:Datatype
-#     ecrm:E4_Period
-#     """
-#     return nodes
 
 if __name__ == "__main__":
     # Run the MCP server
