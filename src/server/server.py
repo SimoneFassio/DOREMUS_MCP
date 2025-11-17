@@ -83,13 +83,13 @@ def find_paths(start_entity: str, end_entity: str, k: int = 5) -> str:
     """
     Find the top k shortest paths between two node types in the local graph.
     
-    Use this tool to explore the topology and connnecting two node types e.g. ecrm:E21_Person and mus:M42_Performed_Expression_Creation
+    Use this tool to explore the topology and connecting two node types e.g. ecrm:E21_Person and mus:M42_Performed_Expression_Creation
     Args:
         start_entity: Prefixed URI of the type start node
         end_entity: Prefixed URI of the type end node
         k: Number of shortest paths to return (5-10 works most of the times)
     Returns:
-        The formatted paths
+        The paths
     """
     paths = find_k_shortest_paths(graph, start_entity, end_entity, k)
     

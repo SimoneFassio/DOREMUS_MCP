@@ -26,7 +26,6 @@ pip-wheel-metadata/
 wheelhouse/
 
 # Poetry
-poetry.lock
 .poetry/
 
 # Testing / coverage
