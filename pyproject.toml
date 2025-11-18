@@ -9,6 +9,7 @@ authors = [
 readme = "README.md"
 
 [tool.poetry]
+package-mode = false
 packages = [
     { include = "server", from = "src" },
     { include = "rdf_assistant", from = "src" },

@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install Poetry
-RUN pip install poetry==1.8.3
+RUN pip install poetry==2.2.1
 #--no-cache-dir
 
 # Copy dependency files
