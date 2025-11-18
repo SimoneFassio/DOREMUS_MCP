@@ -1,12 +1,14 @@
-[tool.poetry]
+[project]
 name = "doremus-mcp-project"
 version = "0.1.0"
 description = "MCP Server and Evaluators for DOREMUS Knowledge Graph"
 authors = [
-    "Simone Fassio <simone.fassio@eurecom.fr>",
-    "Dario Gosmar <dario.gosmar@eurecom.fr>"
+    { name = "Simone Fassio", email = "simone.fassio@eurecom.fr" },
+    { name = "Dario Gosmar", email = "dario.gosmar@eurecom.fr" },
 ]
 readme = "README.md"
+
+[tool.poetry]
 packages = [
     { include = "server", from = "src" },
     { include = "rdf_assistant", from = "src" },
@@ -15,12 +17,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
-# Core dependencies needed by both server and evaluators
-langchain = "^0.3.0"
-langchain-openai = "^0.2.0"
-langchain-mcp-adapters = "^0.1.0"
 requests = "^2.31.0"
-python-dotenv = "^1.0.0"
 
 # --- Group for Server-Only Dependencies ---
 [tool.poetry.group.server]
@@ -41,6 +38,10 @@ pandas = "^2.3.3"
 optional = true
 
 [tool.poetry.group.eval.dependencies]
+python-dotenv = "^1.0.0"
+langchain = "^0.3.0"
+langchain-openai = "^0.2.0"
+langchain-mcp-adapters = "^0.1.0"
 langchain-groq = "^0.2.0"
 langchain-anthropic = "^0.3.0"
 langgraph = "^0.2.0"

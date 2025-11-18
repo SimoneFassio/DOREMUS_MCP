@@ -23,13 +23,16 @@ from src.server.utils import execute_sparql_query, logger
 # Initialize FastMCP server
 mcp = FastMCP("DOREMUS Knowledge Graph Server")
 
+
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request: Request) -> PlainTextResponse:
     return PlainTextResponse("OK")
 
 
 @mcp.tool()
-async def find_candidate_entities(name: str, entity_type: str = "others") -> dict[str, Any]:
+async def find_candidate_entities(
+    name: str, entity_type: str = "others"
+) -> dict[str, Any]:
     """
     Find entities by name using the Virtuoso full-text index.
 
@@ -54,35 +57,37 @@ async def find_candidate_entities(name: str, entity_type: str = "others") -> dic
     """
     return find_candidate_entities_internal(name, entity_type)
 
+
 @mcp.tool()
 async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     """
     Retrieve detailed information about a specific entity.
-    
+
     Use this as the first step after finding an entity with find_candidate_entities.
     It shows all direct properties of an entity.
-    
+
     Args:
         entity_uri: The full URI of the entity (e.g., "http://data.doremus.org/artist/...")
-        
+
     Returns:
         Dictionary with:
         - entity_uri: The requested entity
         - entity_label: Human-readable name
         - entity_type: Class of the entity
         - properties: All properties as key-value pairs
-        
+
     Examples:
         # Basic usage - get entity properties with labels
         get_entity_properties("http://data.doremus.org/artist/123")
     """
     return get_entity_properties_internal(entity_uri)
 
+
 @mcp.tool()
 def find_paths(start_entity: str, end_entity: str, k: int = 5) -> str:
     """
     Find the top k shortest paths between two node types in the local graph.
-    
+
     Use this tool to explore the topology and connecting two node types e.g. ecrm:E21_Person and mus:M42_Performed_Expression_Creation
     Args:
         start_entity: Prefixed URI of the type start node
@@ -92,80 +97,82 @@ def find_paths(start_entity: str, end_entity: str, k: int = 5) -> str:
         The paths
     """
     paths = find_k_shortest_paths(graph, start_entity, end_entity, k)
-    
+
     # format the output
     res = ""
     for i, path in enumerate(paths):
         res += f"{i+1}# "
         for idx, triplet in enumerate(path):
-            if idx==0:
+            if idx == 0:
                 res += f"{triplet[0]}->"
             else:
                 res += "->"
             res += f"{triplet[1]}->{triplet[2]}"
         res += "\n"
-        
+
     return res
+
 
 @mcp.tool()
 def get_ontology(path: str) -> str:
     """
     Explore the DOREMUS ontology graph schema hierarchically.
-    
+
     This tool helps you understand the structure of the knowledge graph by providing
     a hierarchical view of node types (classes) and their relationships (edges).
-    
+
     Use this tool to:
     - Get an overview of the most important node types and connections (path='/')
     - Explore a specific class and its direct relationships
-    
+
     Args:
         path: Navigation path for exploration:
             - '/' - Get a high-level summary of the top 15 most important node types
                    and their top 20 most common relationships
             - '/{ClassName}' - Explore a specific class (e.g., '/efrbroo:F28_Expression_Creation')
                    Use the exact node type name as shown in get_nodes_list tool
-    
+
     Returns:
         Markdown-formatted visualization of the ontology subgraph, showing:
         - Node types (classes) in the knowledge graph
         - Edge types (predicates/relationships) connecting them
         - Hierarchical structure for easy understanding
-    
+
     Examples:
-        - get_ontology('/') 
+        - get_ontology('/')
           Returns overview of the most important 15 nodes and their relationships
-        
+
         - get_ontology('/efrbroo:F22_Self-Contained_Expression', depth=1)
           Shows what properties and relationships a musical work has
-        
+
         - get_ontology('/ecrm:E21_Person', depth=2)
           Shows person connections and what those connected entities relate to
-    
+
     Note:
         Use get_nodes_list() first to see all available node types you can explore.
     """
     return get_ontology_internal(path=path, depth=1)
 
+
 @mcp.tool()
 async def execute_sparql(query: str, limit: int = 100) -> dict[str, Any]:
     """
     Execute a custom SPARQL query against the DOREMUS knowledge graph.
-    
+
     You have full control over the SPARQL query, but should be familiar with
     the DOREMUS ontology structure.
-    
+
     Args:
         query: Complete SPARQL query string (SELECT, CONSTRUCT, or ASK)
         limit: Maximum number of results to return (default: 100, max: 500)
-        
+
     Returns:
         Raw query results from the SPARQL endpoint
-        
+
     Note:
         For complex queries, consider checking the knowledge graph structure
         resource first to understand available classes and properties.
-        
+
     Example:
         ```sparql
         SELECT ?work ?title
@@ -180,19 +187,20 @@ async def execute_sparql(query: str, limit: int = 100) -> dict[str, Any]:
 
 # Documentation tools
 
+
 @mcp.tool()
 def get_kg_structure() -> str:
     """
     Get a comprehensive description of the DOREMUS Knowledge Graph structure.
-    
+
     This tool provides essential information about the ontology, including:
     - Main entity types (classes)
     - Key properties and relationships
     - Common URI patterns
     - Ontology prefixes
-    
+
     Essential for understanding how to write custom SPARQL queries.
-    
+
     Returns:
         Detailed documentation of the DOREMUS ontology structure
     """
@@ -215,7 +223,7 @@ def get_kg_structure() -> str:
             - `mus:U11_has_key`: Musical key
             - `mus:U78_estimated_duration`: Duration in seconds
             - `mus:U16_has_catalogue_statement`: Catalogue number (BWV, K., Op., etc.)
-            
+
         - **efrbroo:F14_Individual_Work**: Abstract work concept
         - `efrbroo:R9_is_realised_in`: Links to expressions
         - `ecrm:P148_has_component`: Links to movements/parts
@@ -242,7 +250,7 @@ def get_kg_structure() -> str:
 
         - **efrbroo:F29_Recording_Event**: Audio/video recording
         - `efrbroo:R20_recorded`: Links to performance
-        
+
         - **mus:M24_Track**: Individual track on an album
         - `mus:U51_is_partial_or_full_recording_of`: Links to performed expression
         - `mus:U10_has_order_number`: Track number
@@ -333,23 +341,24 @@ def get_kg_structure() -> str:
         5. Use `OPTIONAL` blocks for properties that may not exist
         6. COUNT grouped casting properties with HAVING to filter by instrumentation size
         """
-    
+
     return guide
+
 
 @mcp.tool()
 def get_usage_guide() -> str:
     """
     Get a comprehensive usage guide and prompt for LLMs interacting with DOREMUS.
-    
+
     This tool provides guidance on:
     - How to effectively use the available tools
     - Best practices for entity resolution
     - Tips for handling ambiguous requests
-    
+
     Returns:
         Detailed guide for effectively querying the DOREMUS knowledge graph
     """
-    
+
     guide = """
 # DOREMUS MCP Server - LLM Usage Guide
 
@@ -376,7 +385,7 @@ recordings, and instrumentation.
    ```
    Found 3 composers named "Bach":
    - Johann Sebastian Bach
-   - Carl Philipp Emanuel Bach  
+   - Carl Philipp Emanuel Bach
    - Johann Christian Bach
    Which one did you mean?
    ```
@@ -438,5 +447,5 @@ if __name__ == "__main__":
     # Run the MCP server
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    
+
     mcp.run(transport="sse", host=host, port=port)
