@@ -348,6 +348,8 @@ def get_kg_structure() -> str:
 @mcp.tool()
 def get_usage_guide() -> str:
     """
+    USE THIS TOOL FIRST TO RETRIEVE GUIDANCE ON QUERYING DOREMUS
+    
     Get a comprehensive usage guide and prompt for LLMs interacting with DOREMUS.
 
     This tool provides guidance on:

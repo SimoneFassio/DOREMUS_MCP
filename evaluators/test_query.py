@@ -56,8 +56,8 @@ async def main():
             if hasattr(message, "name") and message.name == "execute_sparql":
                 content_json = json.loads(messContent)
                 generated_query = content_json.get("generated_query", "")
-                if generated_query:
-                    return {"generated_query": generated_query or ""}
+        if generated_query:
+            return {"generated_query": generated_query or ""}
 
     def query_evaluator(outputs: dict, reference_outputs: dict) -> float:
         """Check the percentage of correct values returned by the query."""
