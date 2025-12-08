@@ -1,16 +1,21 @@
 import pathlib
-from typing import Any, Optional
-from src.server.query_builder import build_works_query
+import logging
+import os
+from nanoid import generate
+from typing import Any, Optional, Dict, List
 from src.server.find_paths import load_graph
 from src.server.graph_schema_explorer import GraphSchemaExplorer
+from src.server.query_container import QueryContainer
+from src.server.query_builder import query_works, query_performance, query_artist
 from src.server.utils import (
     execute_sparql_query,
     contract_uri,
     contract_uri_restrict,
     expand_prefixed_uri,
-    logger,
     get_entity_label
 )
+
+logger = logging.getLogger("doremus-mcp")
 
 #load graph for find_path
 project_root = pathlib.Path(__file__).parent.parent.parent
@@ -20,10 +25,14 @@ graph = load_graph(str(graph_path))
 #load graph schema explorer for ontology exploration
 explorer = GraphSchemaExplorer.load_from_csv()
 
+# Storage for generated queries
+QUERY_STORAGE: Dict[str, QueryContainer] = {}
+
+
 def find_candidate_entities_internal(
     name: str,
     entity_type: str = "others"
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     normalized_type = (entity_type or "").strip().lower()
     if normalized_type not in {"artist", "vocabulary", "others"}:
         normalized_type = "others"
@@ -51,9 +60,9 @@ def find_candidate_entities_internal(
     WHERE {{
         ?entity {label_predicate} ?label .
         ?entity a ?type .
-        ?label bif:contains "{search_literal}" .
+        ?label bif:contains "{search_literal}" option (score ?sc) .
     }}
-    ORDER BY STRLEN(?label)
+    ORDER BY DESC(?sc)
     """
 
     result = execute_sparql_query(query, limit=10)
@@ -84,10 +93,7 @@ def find_candidate_entities_internal(
     
 def get_entity_properties_internal(
     entity_uri: str
-) -> dict[str, Any]:
-    """
-    Internal function to retrieve entity properties
-    """
+) -> Dict[str, Any]:
     query = f"""
     SELECT DISTINCT ?property ?value
     WHERE {{
@@ -148,74 +154,79 @@ def get_entity_properties_internal(
     }
     return response
     
-    
-def search_musical_works_internal(
-    composers: Optional[list[str]] = None,
-    work_type: Optional[str] = None,
-    date_start: Optional[int] = None,
-    date_end: Optional[int] = None,
-    instruments: Optional[list[dict[str, Any]]] = None,
-    place_of_composition: Optional[str] = None,
-    place_of_performance: Optional[str] = None,
-    duration_min: Optional[int] = None,
-    duration_max: Optional[int] = None,
-    topic: Optional[str] = None,
-    limit: int = 50
-) -> dict[str, Any]:
-    
-    try:
-        query = build_works_query(
-            composers=composers,
-            work_type=work_type,
-            date_start=date_start,
-            date_end=date_end,
-            instruments=instruments,
-            place_of_composition=place_of_composition,
-            place_of_performance=place_of_performance,
-            duration_min=duration_min,
-            duration_max=duration_max,
-            topic=topic,
-            limit=min(limit, 200)
-        )
-        
-        result = execute_sparql_query(query, limit=limit)
-
-        if result.get("success"):
-            return {
-                "filters_applied": {
-                    "composers": composers,
-                    "work_type": work_type,
-                    "date_range": f"{date_start}-{date_end}" if date_start or date_end else None,
-                    "instruments": instruments,
-                    "duration_range": f"{duration_min}-{duration_max}s" if duration_min or duration_max else None
-                },
-                "total_results": result.get("count", 0),
-                "works": result.get("results", [])
-            }
-        else:
-            return result
-            
-    except Exception as e:
-        logger.error(f"Error building works query: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Query building error: {str(e)}"
-        }
-
 
 def get_ontology_internal(path: str, depth: int = 1) -> str:
-    """
-    Explore the DOREMUS ontology graph schema hierarchically.
-    
-    Args:
-        path: Navigation path - use '/' for summary, or '/{ClassName}' for class properties
-        depth: Exploration depth (1 or 2) for class neighborhoods
-        
-    Returns:
-        Markdown-formatted ontology subgraph
-    """
     try:
         return explorer.explore_graph_schema(path=path, depth=depth)
     except Exception as e:
         logger.error(f"Error exploring ontology: {str(e)}")
         return f"Error exploring ontology: {str(e)}"
+
+def build_query_internal(
+    question: str,
+    template: str,
+    filters: Dict[str, Any]
+) -> Dict[str, Any]:
+    try:
+        # Standardize template name
+        template = template.lower().strip()
+
+        # Generate ID and Store
+        query_id = generate(size=10)
+        
+        if template == "works":
+            qc = query_works(
+                query_id=query_id,
+                **filters
+            )
+        elif template == "performances":
+            qc = query_performance(
+                query_id=query_id,
+                **filters
+            )
+        elif template == "artists":
+            qc = query_artist(
+                query_id=query_id,
+                **filters
+            )
+        else:
+            return {
+                "success": False,
+                "error": f"Unknown template: {template}. Supported templates: Works, Performances, Artists"
+            }
+
+        sparql_query = qc.to_string()
+        qc.set_question(question)
+        
+        QUERY_STORAGE[query_id] = qc
+        
+        return {
+            "success": True,
+            "query_id": query_id,
+            "generated_sparql": sparql_query,
+            "message": "Query built successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
+        }
+        
+    except Exception as e:
+        logger.error(f"Error building query: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+def execute_query_from_id_internal(query_id: str) -> Dict[str, Any]:
+    qc = QUERY_STORAGE.get(query_id)
+    if not qc:
+        return {
+            "success": False,
+            "error": f"Query ID {query_id} not found or expired."
+        }
+    
+    # Write query and ID to file, create directory if it doesn't exist
+    os.makedirs("queries", exist_ok=True)
+    with open(f"queries/{query_id}.txt", "w") as f:
+        f.write("Question: \n" + qc.get_question())
+        f.write("\n\n")
+        f.write("SPARQL Query: \n" + qc.to_string())
+        
+    return execute_sparql_query(qc.to_string())

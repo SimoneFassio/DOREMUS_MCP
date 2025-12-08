@@ -62,3 +62,6 @@ db.sqlite3-journal
 
 #langgraph
 .langgraph_api
+
+#queries
+queries/

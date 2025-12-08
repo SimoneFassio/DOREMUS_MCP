@@ -33,6 +33,7 @@ pytest = "^8.0.0"
 pytest-xdist = "^3.5.0"
 mcp-use = "^1.0.0"
 pandas = "^2.3.3"
+nanoid = "^2.0.0"
 
 # --- Group for Evaluator/Client-Only Dependencies ---
 [tool.poetry.group.eval]

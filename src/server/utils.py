@@ -1,14 +1,12 @@
 import logging
 import requests
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from src.server.config import (
     SPARQL_ENDPOINT,
     REQUEST_TIMEOUT,
     PREFIXES
 )
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("doremus-mcp")
 
 # Helper: expand prefixed URI to full URI
@@ -54,7 +52,7 @@ def get_entity_label(uri: str) -> str:
     else:
         return None
     
-def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
+def execute_sparql_query(query: str, limit: int = 100) -> Dict[str, Any]:
     """
     Execute a SPARQL query against the DOREMUS endpoint.
     
