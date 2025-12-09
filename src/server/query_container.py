@@ -110,6 +110,9 @@ class QueryContainer:
 
     def set_limit(self, limit: int) -> None:
         self.limit = limit
+    
+    def get_limit(self) -> int:
+        return self.limit
 
     def set_question(self, question: str) -> None:
         self.question = question
@@ -139,10 +142,12 @@ class QueryContainer:
         """
         Combine the internal variables and return the complete SPARQL query string.
         """
-        
+        query = ""
+
         # Build Select string
         select_mod = "DISTINCT " if getattr(self, "distinct_select", True) else ""
         select_str = f"SELECT {select_mod}" + " ".join(self.select)
+        query += select_str + "\n"
         
         # Build Where string
         where_body = []
@@ -157,23 +162,24 @@ class QueryContainer:
                     where_body.append(str(triple))
             
         where_str = "WHERE {\n" + "\n".join(where_body) + "\n}"
+        query += where_str + "\n"
         
         # Build Group By
         group_str = ""
         if self.group_by:
             group_str = "GROUP BY " + " ".join(self.group_by)
+            query += group_str + "\n"
 
         # Build Having
         having_str = ""
         if self.having:
-             having_str = "HAVING ( " + " && ".join(self.having) + " )"
+            having_str = "HAVING ( " + " && ".join(self.having) + " )"
+            query += having_str + "\n"
 
         # Build Order By
         order_str = ""
         if self.order_by:
             order_str = "ORDER BY " + " ".join(self.order_by)
-
-        # Build Limit
-        limit_str = f"LIMIT {self.limit}"
+            query += order_str + "\n"
         
-        return f"{select_str}\n{where_str}\n{group_str}\n{having_str}\n{order_str}\n{limit_str}"
+        return query

@@ -1,5 +1,6 @@
 import json
 import pathlib
+import numpy as np
 
 # Read cq json file from data directory
 project_root = pathlib.Path(__file__).parent.parent.parent.parent
@@ -18,11 +19,14 @@ examples_queries = [
         } 
     for data in cq_data]
 
+# Shuffle the examples
+np.random.shuffle(examples_queries)
+
 def test_print_examples():
     """Prints the examples in the evaluation dataset."""
     for example in examples_queries:
         print("Input Question:", example["inputs"]["query_input"])
-        print("Expected SPARQL Query:", example["outputs"]["rdf_response"])
+        print("Expected SPARQL Query:", example["outputs"]["rdf_query"])
         print("-----")
 
 if __name__ == "__main__":

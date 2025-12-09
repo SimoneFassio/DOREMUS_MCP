@@ -372,8 +372,9 @@ def execute_query_from_id_internal(query_id: str) -> Dict[str, Any]:
         f.write("Question: \n" + qc.get_question())
         f.write("\n\n")
         f.write("SPARQL Query: \n" + qc.to_string())
+        f.write("LIMIT: " + str(qc.get_limit()))
         
-    return execute_sparql_query(qc.to_string())
+    return execute_sparql_query(qc.to_string(), qc.get_limit())
 
 
 if __name__ == "__main__":

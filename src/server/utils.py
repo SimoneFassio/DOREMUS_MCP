@@ -65,8 +65,8 @@ def execute_sparql_query(query: str, limit: int = 100) -> Dict[str, Any]:
     """
     try:
         logger.info(f"Executing SPARQL query with limit {limit}")
-        prefix_lines = ""#.join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
-        query = prefix_lines + "\n" + query
+        # prefix_lines.join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
+        # query = prefix_lines + "\n" + query
         if "LIMIT" not in query.upper():
             query = f"{query}\nLIMIT {limit}"
 
