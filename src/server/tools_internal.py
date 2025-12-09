@@ -1,12 +1,15 @@
 import pathlib
 import logging
 import os
+import re 
 from nanoid import generate
 from typing import Any, Optional, Dict, List
+from difflib import get_close_matches
 from src.server.find_paths import load_graph
 from src.server.graph_schema_explorer import GraphSchemaExplorer
 from src.server.query_container import QueryContainer
 from src.server.query_builder import query_works, query_performance, query_artist
+from src.server.find_paths import find_k_shortest_paths
 from src.server.utils import (
     execute_sparql_query,
     contract_uri,
@@ -54,7 +57,7 @@ def find_candidate_entities_internal(
 
     search_term_escaped = search_term.replace("'", "''").replace('"', '\\"')
     search_literal = f"'{search_term_escaped}'"
-
+    
     query = f"""
     SELECT DISTINCT ?entity ?label ?type
     WHERE {{
@@ -89,6 +92,12 @@ def find_candidate_entities_internal(
         }
     else:
         return result
+
+def find_linked_entities(subject: str, obj: str) -> List[str] | None:
+    object_entity = find_candidate_entities_internal(obj, "vocabulary")
+    if not object_entity.get("success"):
+        return None
+    return [obj for obj in object_entity.get("entities", [])]
     
     
 def get_entity_properties_internal(
@@ -213,6 +222,141 @@ def build_query_internal(
             "success": False,
             "error": str(e)
         }
+    
+# helper that searches in the provided graph for a match with the term
+def find_term_in_graph_internal(term: str, graph, node=True) -> List[str]:
+    if node:
+        # use the nodes of the graph
+        vals = graph.keys()
+    else:
+        # use the predicates of the graph
+        vals = set()
+        for edges in graph.values():
+            for pred, neighbor in edges:
+                vals.add(pred)
+    
+    # 1. Regex-based substring match (case-insensitive)
+    regex = re.compile(re.escape(term), re.IGNORECASE)  # Create a case-insensitive regex pattern
+    regex_matches = [node for node in vals if regex.search(node)]
+    
+    if regex_matches:
+        return regex_matches  # Return matches in their original form (un-lowered)
+
+    # 2. Raise an error if no matches are found
+    raise ValueError(f"No matches found in graph for term: {term} in nodes {list(vals)}")
+    
+def associate_to_N_entities_internal(subject: str, obj: str, query_id: str, N: int | None) -> List[dict]:
+    # Check for query existance
+    qc = QUERY_STORAGE.get(query_id)
+    if not qc:
+        return {
+            "success": False,
+            "error": f"Query ID {query_id} not found or expired."
+        }
+    
+    # Find object entity URI
+    object_ents = find_candidate_entities_internal(obj, "vocabulary")
+    object_names = [obj.get("label") for obj in object_ents.get("entities", [])]
+    # Compute edit distance to find best match
+    object_entity_uri = ""
+    best_match = get_close_matches(obj, object_names, n=1)
+    for o in object_ents.get("entities", []):
+        if o.get("label") == best_match[0]:
+            object_entity_uri = o.get("entity")
+            break
+    
+    # Find inverse arcs
+    query_inverse = f"""
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+        SELECT ?incoming_property (SAMPLE(?item_pointing_at_me) AS ?single_example)
+        WHERE {{
+        # 1. FIX THE TARGET
+        VALUES ?my_entity {{ <{object_entity_uri}> }} .
+
+        # 2. Get basic info
+        ?my_entity skos:prefLabel ?label .
+        ?my_entity a ?type .
+
+        # 3. Find incoming links
+        ?item_pointing_at_me ?incoming_property ?my_entity .
+
+        }} 
+        # Group by the "Keys" (The things that should be unique per row)
+        GROUP BY ?incoming_property
+    """
+    result_inverse = execute_sparql_query(query_inverse, limit=50)
+    
+    # Build subpath from subject to object
+    subgraphs = [res for res in result_inverse.get("results", [])]
+    subpath = []
+    full_path = []
+    for subgraph in subgraphs:
+        incoming_property = subgraph.get("incoming_property").split("#")[-1]
+        path = [elem for elem in subgraph.get("single_example").split("/") if elem]
+        #TODO: fix to better generalize
+        if subject.lower() in path:
+            subpath = path
+            full_path.append(obj)
+            actual_incoming_property = find_term_in_graph_internal(incoming_property, graph, False)[0]
+            full_path.append(actual_incoming_property)
+            break
+    #TODO: fix to better generalize    
+    entities = subpath[2::2]
+    if len(entities) < 2:
+        raise ValueError("The entities list must contain at least 2 elements to compute paths.")
+    for k in range(len(entities)-1, 0, -1):
+        current_entity = entities[k]
+        full_path.append(entities[k])
+        previous_entity = entities[k-1]
+        current_entity_uris = find_term_in_graph_internal(current_entity, graph)
+        if not current_entity_uris:
+            raise ValueError(f"No matches found in graph for entity: {current_entity} with entity list {entities}")
+        current_entity_uri = current_entity_uris[0]
+        previous_entity_uris = find_term_in_graph_internal(previous_entity, graph)
+        if not previous_entity_uris:
+            raise ValueError(f"No matches found in graph for entity: {previous_entity} with entity list {entities}")
+        previous_entity_uri = previous_entity_uris[0]
+        logger.debug(f"Entities: {entities}")
+        logger.debug(f"Current entity: {current_entity}")
+        logger.debug(f"Previous entity URI: {previous_entity_uri}")
+        logger.debug(f"Current entity URI: {current_entity_uri}")
+        path = find_k_shortest_paths(graph, previous_entity_uri, current_entity_uri, 1)[0]
+        # First triplet + second element (the predicate)
+        #TODO: check path consistency
+        """
+        # CHECK IF COMPLETE PATH IS FOUND
+        tentative_best_paths = find_k_shortest_paths(graph, previous_entity_uri, last_entity_uri, len(entities)-k)
+        #find the best path that includes the path computed so far
+        for tentative_path in tentative_best_paths:
+            if tentative_path[2:] == full_path:
+                path = tentative_path
+                break
+        """
+        full_path.append(path[0][1])
+    full_path.append(subject)
+    full_path.reverse()
+    pattern_list = [(f"?{full_path[i]} {full_path[i+1]} ?{full_path[i+2]} .", f"Link from {full_path[i]} to {full_path[i+2]}") for i in range(0, len(full_path)-2, 2)]
+    #TODO: Find occurrency in a dynamic way
+    if N is not None:
+        pattern_list.append((f"?{full_path[-3]} mus:U30_foresees_quantity_of_mop {str(N)} .", "Get the number of medium of performances"))
+    pattern_list.append((f"VALUES (?{obj}) {{ (<{object_entity_uri}>) }} .", "Save the variable for the object entity"))
+    qc.add_module({
+        "id": f"associate_N_entities_module_{full_path[-1]}",
+        "triples": pattern_list,
+        "type": "associate_N_entities_pattern",
+        "required_vars": [f"?{subject}"],
+        "defined_vars": [f"?{ent}" for ent in entities]
+    })
+    sparql_query = qc.to_string()
+    return {
+            "success": True,
+            "query_id": query_id,
+            "generated_sparql": sparql_query,
+            "message": "Query pattern added successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
+        }
+
+
 
 def execute_query_from_id_internal(query_id: str) -> Dict[str, Any]:
     qc = QUERY_STORAGE.get(query_id)
@@ -230,3 +374,10 @@ def execute_query_from_id_internal(query_id: str) -> Dict[str, Any]:
         f.write("SPARQL Query: \n" + qc.to_string())
         
     return execute_sparql_query(qc.to_string())
+
+
+if __name__ == "__main__":
+    # Example usage
+    test_entity = "violin"
+    result = find_linked_entities("Casting", test_entity)
+    print(f"Linked entities for '{test_entity}': {result}")
