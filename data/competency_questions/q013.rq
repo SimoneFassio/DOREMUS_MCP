@@ -1,0 +1,27 @@
+# category: "Works and Expressions"
+# question: "Give me all the sacred vocal music for choir written in England since 1945"
+# query:
+SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?end as ?composed, ?place, SAMPLE(?genre) AS ?genre
+WHERE {
+  ?expression a efrbroo:F22_Self-Contained_Expression ;
+          rdfs:label ?title ;
+          mus:U13_has_casting / mus:U23_has_casting_detail ?castingDet ;
+          mus:U12_has_genre / skos:prefLabel ?genre.
+  FILTER regex(str(?genre), "sacr(a|è|ed)") .
+  
+  {
+    ?castingDet mus:U2_foresees_use_of_medium_of_performance <http://data.doremus.org/vocabulary/iaml/mop/c> .
+  } UNION {
+    ?castingDet mus:U2_foresees_use_of_medium_of_performance / skos:broader <http://data.doremus.org/vocabulary/iaml/mop/c> .
+  }
+  
+  ?expCreation efrbroo:R17_created ?expression ;
+          ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end .
+          
+  OPTIONAL { ?expCreation ecrm:P7_took_place_at ?place }
+
+  FILTER ( ?end > "1945"^^xsd:gYear )
+
+} ORDER BY ?end
+
+# Note: we have not the information about the composition place

@@ -1,0 +1,9 @@
+# category: "Artists"
+# question: "Find artists with 'Von' in their name."
+# query:
+SELECT DISTINCT ?artist ?name
+WHERE {
+  ?artist a ecrm:E21_Person ;
+          foaf:name ?name .
+  FILTER (CONTAINS(?name, "Von "))
+}

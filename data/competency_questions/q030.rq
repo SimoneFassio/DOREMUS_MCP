@@ -1,0 +1,12 @@
+# category: "Performances"
+# question: "Give me the list of concerts performed at the Abbaye aux Dames de Saintes outside the festival period of Saintes"
+# query:
+SELECT DISTINCT ?concert ?label ?in_festival
+WHERE {
+?concert a efrbroo:F31_Performance;
+rdfs:label ?label;
+ecrm:P7_took_place_at <http://sws.geonames.org/11185639/> .
+OPTIONAL {
+?concert rdfs:comment ?comment .
+FILTER(bif:contains(?comment, "'dans le cadre du Festival de Saintes'")) .
+BIND("true" AS ?in_festival)}}

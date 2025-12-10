@@ -1,0 +1,7 @@
+# category: "Works and Expressions"
+# question: "Give me all the works related to popular music"
+# query:
+SELECT * WHERE {
+   ?expression rdfs:label ?label ;
+        mus:U65_has_geographical_context []
+}

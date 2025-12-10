@@ -15,11 +15,9 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 # Set to True to reload the dataset and update it
 RELOAD = False
 
-ClientEvalList = ["openai", "groq", "anthropic", "mistral"]
-
 async def main():
     # DATASET CREATION
-    dataset_name = "Competency Query Evaluation Dataset - 2.1"
+    dataset_name = "Competency Query Evaluation Dataset - 2.2"
     if RELOAD:
         if client.has_dataset(dataset_name=dataset_name):
             print("Reloading Dataset")

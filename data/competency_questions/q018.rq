@@ -1,0 +1,16 @@
+# category: "Works and Expressions"
+# question: "Give me the list of all symphonies that include 5 movements"
+# query:
+SELECT DISTINCT ?work, SAMPLE(?title) as ?title
+WHERE {
+  ?work a efrbroo:F14_Individual_Work;
+        ecrm:P148_has_component ?movements;
+        efrbroo:R9_is_realised_in ?expression.
+  
+  ?expression rdfs:label ?title ;
+            mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/sy> .
+
+} GROUP BY ?work
+HAVING ( COUNT(DISTINCT ?movements) >= 5 )
+
+# Note: they are not exactly movements

@@ -1,0 +1,9 @@
+# category: "Works and Expressions"
+# question: "Find works with 'Moonlight' in the title."
+# query:
+SELECT DISTINCT ?expression ?title
+WHERE {
+  ?expression a efrbroo:F22_Self-Contained_Expression ;
+          rdfs:label ?title .
+  FILTER (CONTAINS(LCASE(?title), "moonlight"))
+}

@@ -1,0 +1,13 @@
+# category: "Publications"
+# question: "Give me all the recordings of opera aria whose library has no score"
+# query:
+SELECT DISTINCT ?t ?work
+WHERE {
+  ?t mus:U51_is_partial_or_full_recording_of / mus:U54_is_performed_expression_of ?work.
+  ?work mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/op> .
+
+  ?score ecrm:P2_has_type "score".
+
+  FILTER
+    NOT EXISTS {?score ecrm:P128_carries ?work }
+}
