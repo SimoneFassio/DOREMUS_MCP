@@ -26,7 +26,7 @@ class QueryContainer:
         
         # State management
         self.readiness_flag = False
-        self.variable_registry: Dict[str, int] = {}  # Map of var_name -> count
+        self.variable_registry: Dict[str, Dict[str, Any]] = {}  # Map of var_name -> {uri: var_uri_graph, count: int}
 
     def add_module(self, module: Dict[str, Any]) -> None:
         """
@@ -85,19 +85,28 @@ class QueryContainer:
         
         # For now, we mock the logic:
         new_module = module.copy()
-        
-        # Example logic for upgrading variable counts
-        if "defined_vars" in module:
-            for var in module["defined_vars"]:
-                base_name = var
-                if base_name in self.variable_registry:
-                    count = self.variable_registry[base_name] + 1
-                    self.variable_registry[base_name] = count
-                    # Here we would renaming logic in triples
-                else:
-                    self.variable_registry[base_name] = 0
+
+        introd_vars = module.get("defined_vars", [])
+        for var in introd_vars:
+            if var[0] not in self.variable_registry.keys():
+                self.variable_registry[str(var[0])] = {"uri": str(var[1]), "count": 1}
+            else:
+                """
+                What to do:
+                - Variable already exists so we need to check if we need to rename it or not
+                   - Use sampling to the LLM to decide if we need to rename or not by passing
+                      - Full query with the addition of the module highlighted with a plus sign
+                      - The variable that is causing the conflict highlighted with a star
+                      - The question being asked 
+                """
                     
         return new_module
+    
+    def get_variable_uri(self, var_name: str) -> Optional[str]:
+        """Retrieve variable info from the registry."""
+        if var_name in self.variable_registry.keys():
+            return self.variable_registry[var_name]["uri"]
+        return None
 
     def set_select(self, variables: List[str], distinct: bool = True) -> None:
         """Set the SELECT variables."""

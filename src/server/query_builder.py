@@ -89,7 +89,7 @@ def query_works(
             "?expression a efrbroo:F22_Self-Contained_Expression ;",
             "    rdfs:label ?title ."
         ],
-        "defined_vars": ["?expression", "?title"]
+        "defined_vars": [("expression", "efrbroo:F22_Self-Contained_Expression"), ("title", "")]
     }
     qc.add_module(core_module)
     
@@ -103,7 +103,7 @@ def query_works(
             "triples": [
                 f'FILTER (REGEX(?title, "{title}", "i"))'
             ],
-            "required_vars": ["?expression"]
+            "required_vars": [("expression", "efrbroo:F22_Self-Contained_Expression")]
         }
         qc.add_module(title_filter_module)
     
@@ -144,7 +144,7 @@ def query_works(
             "type": "filter",
             "triples": triples,
             "required_vars": ["?expression"],
-            "defined_vars": ["?expCreation", "?compositionActivity", "?composer", "?composerName"]
+            "defined_vars": [("expCreation", "efrbroo:F28_Expression_Creation"), ("compositionActivity", "ecrm:E7_Activity"), ("composer", "ecrm:E21_Person"), ("composerName", "")]
         }
         qc.add_module(composer_module)
 
@@ -166,7 +166,7 @@ def query_works(
             "type": "filter",
             "triples": triples,
             "required_vars": ["?expression"],
-            "defined_vars": ["?genre"]
+            "defined_vars": [("genre", resolved_genre if resolved_genre else "")]
         }
         qc.add_module(genre_module)
         
@@ -198,7 +198,7 @@ def query_works(
             "type": "filter",
             "triples": triples,
             "required_vars": ["?expression"],
-            "defined_vars": ["?expCreation", "?placeComp"]
+            "defined_vars": [("expCreation", "efrbroo:F28_Expression_Creation"), ("placeComp", resolved_place if resolved_place else "")]
         }
         qc.add_module(place_module)
 
@@ -218,7 +218,7 @@ def query_works(
             "type": "filter",
             "triples": triples,
             "required_vars": ["?expression"],
-            "defined_vars": ["?key"]
+            "defined_vars": [("key", resolved_key if resolved_key else "")]
         }
         qc.add_module(key_module)
         
@@ -248,7 +248,7 @@ def query_performance(
             "?performance a efrbroo:F31_Performance ;",
             "    rdfs:label ?title ."
         ],
-        "defined_vars": ["?performance", "?title"]
+        "defined_vars": [("performance", "efrbroo:F31_Performance"), ("title", "")]
     }
     qc.add_module(core_module)
     
@@ -260,7 +260,7 @@ def query_performance(
             "triples": [
                 f'FILTER (REGEX(?title, "{title}", "i"))'
             ],
-            "required_vars": ["?title"]
+            "required_vars": [("title", "")]
         }
         qc.add_module(title_filter_module)
 
@@ -279,7 +279,7 @@ def query_performance(
             "type": "filter",
             "triples": triples,
             "required_vars": ["?performance"],
-            "defined_vars": ["?place", "?locationName"]
+            "defined_vars": [("place", "ecrm:E53_Place"), ("locationName", "")]
         }
         qc.add_module(loc_module)
     else:
@@ -290,7 +290,7 @@ def query_performance(
             "triples": [
                 "OPTIONAL { ?performance ecrm:P7_took_place_at ?place . ?place rdfs:label ?locationName }"
             ],
-            "defined_vars": ["?locationName"]
+            "defined_vars": [("locationName", "")]
          }
          qc.add_module(loc_opt_module)
 
@@ -323,7 +323,7 @@ def query_performance(
                 "id": f"performance_artist_{idx}",
                 "type": "filter",
                 "triples": triples,
-                "required_vars": ["?performance"]
+                "required_vars": ["performance"]
             }
             qc.add_module(perf_module)
         
@@ -355,7 +355,7 @@ def query_artist(
             "?artist a ecrm:E21_Person ;",
             "    rdfs:label ?name ."
         ],
-        "defined_vars": ["?artist", "?name"]
+        "defined_vars": [("artist", "ecrm:E21_Person"), ("name", "")]
     }
     qc.add_module(core_module)
     

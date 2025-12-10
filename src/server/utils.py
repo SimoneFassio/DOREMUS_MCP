@@ -1,5 +1,6 @@
 import logging
 import requests
+import re
 from typing import Any, Optional, Dict
 from src.server.config import (
     SPARQL_ENDPOINT,
@@ -124,3 +125,30 @@ def execute_sparql_query(query: str, limit: int = 100) -> Dict[str, Any]:
             "error": f"Unexpected error: {str(e)}",
             "generated_query": query
         }
+
+# helper that recieves the link to a property and retuns the label version of it
+def extract_label(full_uri: str) -> str | None:
+    name = re.split(r'[#/]', full_uri)[-1]
+    pref = ""
+    prefixes = {"doremus": "mus", "iaml": "iaml", "frbroo": "efrbroo", "erlangen": "ecrm", "rdf": "rdf", "rdfs": "rdfs", "skos": "skos", "foaf": "foaf"}
+    for prefix in prefixes.keys():
+        if prefix in full_uri:
+            pref = prefixes[prefix]
+            break
+    if pref and pref != "efrbroo":
+        return f"{pref}:{name}"
+    else:
+        return name
+
+# helper that converts a name to a variable name
+def convert_to_variable_name(name: str) -> str:
+    label = name.split(":")[-1]
+    # Use camel case for variable names
+    parts = re.split(r'[_\s-]+', label)
+    if len(parts) == 1:
+        return label.lower()
+    camel_case_name = parts[1].lower()
+    if len(parts) > 2:
+        for part in parts[2:]:
+            camel_case_name += part.capitalize()
+    return camel_case_name

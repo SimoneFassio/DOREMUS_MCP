@@ -6,7 +6,7 @@ via SPARQL endpoint at https://data.doremus.org/sparql/
 """
 
 from typing import Any, Optional, Dict
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import os
@@ -64,15 +64,15 @@ async def build_query(question: str, template: str, filters: Dict[str, Any]) -> 
     return build_query_internal(question, template, filters)
 
 @mcp.tool()
-async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int | None) -> Dict[str, Any]:
+async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int | None, ctx: Context) -> Dict[str, Any]:
     """
     Tool that receives as input the subject entity (i.e. “Casting”) and the object to apply the pattern to 
     (i.e. “Violin”) and n (the number of entities) and returns a filter that checks that the subject has a 
     number of n associated object entities.
 
     Args:
-        subject: The subject entity for which we want to find a subgraph connected to object
-        obj: The object entity to which the subject is connected
+        subject: The subject entity URI for which we want to find a subgraph connected to object
+        obj: The object entity URI to which the subject is connected
         n (Optional): The attribute specifying the number of objects to be associated with the subject (if not provided, defaults to 1)
         query_id: The ID of the query being built onto which this pattern will be applied.
     
@@ -83,14 +83,16 @@ async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int 
             - "generated_sparql": The generated SPARQL string for review
     
     Example:
-        Input: subject="expression", object="violin", query_id="d75H8V9AWH", N=3
+        Suppose that we receive as input prompt from the user to select all the musical works that were written for 3 violins.
+        In this case, the tool will be called with:
+        Input: subject="efrbroo:F22_Self-Contained_Expression", object="http://data.doremus.org/vocabulary/iaml/mop/svl", query_id="d75H8V9AWH", N=3
         Output: generated_sparql="... ?expression mus:U13_has_casting ?casting .
                                  ?casting mus:U23_has_casting_detail ?castingDet .
                                  ?castingDet mus:U2_foresees_use_of_medium_of_performance ?Violin ;
                                  mus:U30_foresees_quantity_of_mop 3 . ..."
     """
     
-    return associate_to_N_entities_internal(subject, obj, query_id, n)
+    return await associate_to_N_entities_internal(subject, obj, query_id, n, ctx)
 
 @mcp.tool()
 async def execute_query(query_id: str) -> Dict[str, Any]:
