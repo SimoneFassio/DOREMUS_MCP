@@ -177,7 +177,7 @@ def get_ontology_internal(path: str, depth: int = 1) -> str:
 def build_query_internal(
     question: str,
     template: str,
-    filters: Dict[str, Any]
+    filters: Dict[str, Any] | None
 ) -> Dict[str, Any]:
     try:
         # Standardize template name
@@ -185,6 +185,9 @@ def build_query_internal(
 
         # Generate ID and Store
         query_id = generate(size=10)
+
+        if filters is None:
+            filters = {}
         
         if template == "works":
             qc = query_works(

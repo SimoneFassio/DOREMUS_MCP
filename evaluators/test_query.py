@@ -60,7 +60,7 @@ async def main():
     async def results_evaluator(outputs: dict, reference_outputs: dict) -> float:
         """Check the percentage of correct values returned by the query."""
         if not outputs.get("generated_query"):
-            print("Error: 'generated_query' is missing or empty in outputs.")
+            print("Error: The LLM couldn't generate the query.")
             return 0.0
         
         loop = asyncio.get_running_loop()
@@ -209,7 +209,7 @@ async def main():
             data=dataset_name,
             evaluators=[results_evaluator, llm_evaluator],
             # Name of the experiment
-            experiment_prefix="Doremus Competency Query Evaluation", 
+            experiment_prefix="Base + Competency - Query Builder 2.0", 
             max_concurrency=2
         )
 

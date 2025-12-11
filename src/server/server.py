@@ -36,7 +36,7 @@ async def health_check(request: Request) -> PlainTextResponse:
 
 
 @mcp.tool()
-async def build_query(question: str, template: str, filters: Dict[str, Any]) -> Dict[str, Any]:
+async def build_query(question: str, template: str, filters: Dict[str, Any] | None) -> Dict[str, Any]:
     """
     Build a SPARQL query safely using a predefined template.
 
@@ -63,36 +63,36 @@ async def build_query(question: str, template: str, filters: Dict[str, Any]) -> 
     """
     return build_query_internal(question, template, filters)
 
-@mcp.tool()
-async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int | None, ctx: Context) -> Dict[str, Any]:
-    """
-    Tool that receives as input the subject entity (i.e. “Casting”) and the object to apply the pattern to 
-    (i.e. “Violin”) and n (the number of entities) and returns a filter that checks that the subject has a 
-    number of n associated object entities.
+# @mcp.tool()
+# async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int | None, ctx: Context) -> Dict[str, Any]:
+#     """
+#     Tool that receives as input the subject entity (i.e. “Casting”) and the object to apply the pattern to 
+#     (i.e. “Violin”) and n (the number of entities) and returns a filter that checks that the subject has a 
+#     number of n associated object entities.
 
-    Args:
-        subject: The subject entity URI for which we want to find a subgraph connected to object
-        obj: The object entity URI to which the subject is connected
-        n (Optional): The attribute specifying the number of objects to be associated with the subject (if not provided, defaults to 1)
-        query_id: The ID of the query being built onto which this pattern will be applied.
+#     Args:
+#         subject: The subject entity URI for which we want to find a subgraph connected to object
+#         obj: The object entity URI to which the subject is connected
+#         n (Optional): The attribute specifying the number of objects to be associated with the subject (if not provided, defaults to 1)
+#         query_id: The ID of the query being built onto which this pattern will be applied.
     
-    Returns:
-        Dict containing:
-            - "success": boolean
-            - "query_id": The ID to use with `execute_query`
-            - "generated_sparql": The generated SPARQL string for review
+#     Returns:
+#         Dict containing:
+#             - "success": boolean
+#             - "query_id": The ID to use with `execute_query`
+#             - "generated_sparql": The generated SPARQL string for review
     
-    Example:
-        Suppose that we receive as input prompt from the user to select all the musical works that were written for 3 violins.
-        In this case, the tool will be called with:
-        Input: subject="efrbroo:F22_Self-Contained_Expression", object="http://data.doremus.org/vocabulary/iaml/mop/svl", query_id="d75H8V9AWH", N=3
-        Output: generated_sparql="... ?expression mus:U13_has_casting ?casting .
-                                 ?casting mus:U23_has_casting_detail ?castingDet .
-                                 ?castingDet mus:U2_foresees_use_of_medium_of_performance ?Violin ;
-                                 mus:U30_foresees_quantity_of_mop 3 . ..."
-    """
+#     Example:
+#         Suppose that we receive as input prompt from the user to select all the musical works that were written for 3 violins.
+#         In this case, the tool will be called with:
+#         Input: subject="efrbroo:F22_Self-Contained_Expression", object="http://data.doremus.org/vocabulary/iaml/mop/svl", query_id="d75H8V9AWH", N=3
+#         Output: generated_sparql="... ?expression mus:U13_has_casting ?casting .
+#                                  ?casting mus:U23_has_casting_detail ?castingDet .
+#                                  ?castingDet mus:U2_foresees_use_of_medium_of_performance ?Violin ;
+#                                  mus:U30_foresees_quantity_of_mop 3 . ..."
+#     """
     
-    return await associate_to_N_entities_internal(subject, obj, query_id, n, ctx)
+#     return await associate_to_N_entities_internal(subject, obj, query_id, n, ctx)
 
 @mcp.tool()
 async def execute_query(query_id: str) -> Dict[str, Any]:
@@ -110,33 +110,33 @@ async def execute_query(query_id: str) -> Dict[str, Any]:
     return execute_query_from_id_internal(query_id)
 
 
-@mcp.tool()
-async def find_candidate_entities(
-    name: str, entity_type: str = "others"
-) -> dict[str, Any]:
-    """
-    Find entities by name using the Virtuoso full-text index.
+# @mcp.tool()
+# async def find_candidate_entities(
+#     name: str, entity_type: str = "others"
+# ) -> dict[str, Any]:
+#     """
+#     Find entities by name using the Virtuoso full-text index.
 
-    Use this tool to discover the unique URI identifier for an entity before retrieving
-    detailed information or using it in other queries.
-    Entity names may have variations, and you need the exact URI to query reliably.
+#     Use this tool to discover the unique URI identifier for an entity before retrieving
+#     detailed information or using it in other queries.
+#     Entity names may have variations, and you need the exact URI to query reliably.
 
-    Args:
-        name: The name or keyword to search for (e.g., "Wolfgang Amadeus Mozart", "violin", "Radio France")
-        entity_type: Search scope. Options:
-            - "artist": Broad artist bucket covering people, ensembles, broadcasters, etc. (foaf:Person, ecrm:E21_Person, efrbroo:F11_Corporate_Body, ecrm:E74_Group, ecrm:E39_Actor). Use COMPLETE names
-            - "vocabulary": SKOS concepts such as genres, media of performance, keys (skos:Concept)
-            - "others": Everything else; falls back to rdfs:label search (default)
+#     Args:
+#         name: The name or keyword to search for (e.g., "Wolfgang Amadeus Mozart", "violin", "Radio France")
+#         entity_type: Search scope. Options:
+#             - "artist": Broad artist bucket covering people, ensembles, broadcasters, etc. (foaf:Person, ecrm:E21_Person, efrbroo:F11_Corporate_Body, ecrm:E74_Group, ecrm:E39_Actor). Use COMPLETE names
+#             - "vocabulary": SKOS concepts such as genres, media of performance, keys (skos:Concept)
+#             - "others": Everything else; falls back to rdfs:label search (default)
 
-    Returns:
-        Dictionary with matching entities, including their URIs, labels, and reported RDF types
+#     Returns:
+#         Dictionary with matching entities, including their URIs, labels, and reported RDF types
 
-    Examples:
-        - find_candidate_entities("Beethoven", "artist")
-        - find_candidate_entities("string quartet", "vocabulary")
-        - find_candidate_entities("Berlin", "others")
-    """
-    return find_candidate_entities_internal(name, entity_type)
+#     Examples:
+#         - find_candidate_entities("Beethoven", "artist")
+#         - find_candidate_entities("string quartet", "vocabulary")
+#         - find_candidate_entities("Berlin", "others")
+#     """
+#     return find_candidate_entities_internal(name, entity_type)
 
 
 # @mcp.tool()

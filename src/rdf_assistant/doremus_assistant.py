@@ -30,7 +30,7 @@ evaluation_models = {
 }
 
 # Choose which provider to use
-provider = "ollama"
+provider = "openai"
 
 connections = {
         "DOREMUS_MCP": {
@@ -60,7 +60,7 @@ def create_model(provider: str, model_name: str):
         return ChatOllama(
             base_url=os.getenv("OLLAMA_API_URL"),
             model=model_name,
-            client_kwargs={"headers": {"Authorization": f"Basic {os.getenv("OLLAMA_API_KEY")}"}},
+            client_kwargs={"headers": {"Authorization": f"Basic {os.getenv('OLLAMA_API_KEY')}"}},
             temperature=0)
     else:
         raise ValueError(f"Unknown provider: {provider}")

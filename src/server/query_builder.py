@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict, Any, Union
 import logging
-from src.server.query_container import QueryContainer
+from src.server.query_container import QueryContainer, create_triple_element, create_select_element
 
 logger = logging.getLogger("doremus-mcp")
 
@@ -68,9 +68,9 @@ def query_works(
     # User example: SELECT DISTINCT ?expression SAMPLE(?title) as ?title
     # We will use the user's preferred robust pattern.
     
-    select_vars = ["?expression", "SAMPLE(?title) as ?title"]
+    select_vars = [create_select_element("expression", "efrbroo:F22_Self-Contained_Expression", False), create_select_element("title", "", True)]
     if composer_name or composer_nationality:
-        select_vars.append("SAMPLE(?composerName) as ?composer")
+        select_vars.append(create_select_element("composer", "ecrm:E21_Person", True))
         
     qc.set_select(select_vars)
     
@@ -84,12 +84,16 @@ def query_works(
     # Use simple label for display as requested
     core_module = {
         "id": "work_core",
-        "type": "pattern",
+        "type": "where",
+        "scope": "main",
         "triples": [
-            "?expression a efrbroo:F22_Self-Contained_Expression ;",
-            "    rdfs:label ?title ."
-        ],
-        "defined_vars": [("expression", "efrbroo:F22_Self-Contained_Expression"), ("title", "")]
+            {"subj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var"), 
+             "pred": create_triple_element("a", "a", "uri"),
+             "obj": create_triple_element("expression_type", "efrbroo:F22_Self-Contained_Expression", "uri")},
+            {"subj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var"),
+             "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+             "obj": create_triple_element("title", "", "var")}
+        ]
     }
     qc.add_module(core_module)
     
@@ -100,10 +104,10 @@ def query_works(
         title_filter_module = {
             "id": "work_title_filter",
             "type": "filter",
-            "triples": [
-                f'FILTER (REGEX(?title, "{title}", "i"))'
+            "scope": "main",
+            "filter_st": [
+                {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
             ],
-            "required_vars": [("expression", "efrbroo:F22_Self-Contained_Expression")]
         }
         qc.add_module(title_filter_module)
     
@@ -114,59 +118,109 @@ def query_works(
         #            ?compositionActivity -> ?composer (carried_out_by)
         
         triples = [
-            "?expCreation efrbroo:R17_created ?expression ;",
-            "    ecrm:P9_consists_of ?compositionActivity .",
-            "?compositionActivity ecrm:P14_carried_out_by ?composer ;",
-            "    mus:U31_had_function <http://data.doremus.org/vocabulary/function/composer> .",
-            "?composer foaf:name ?composerName ."
+            {
+            "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
+            "pred": create_triple_element("efrbroo:R17_created", "efrbroo:R17_created", "uri"),
+            "obj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var")
+        },
+        {
+            "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
+            "pred": create_triple_element("ecrm:P9_consists_of", "ecrm:P9_consists_of", "uri"),
+            "obj": create_triple_element("compositionActivity", "ecrm:E7_Activity", "var")
+        },
+        {
+            "subj": create_triple_element("compositionActivity", "ecrm:E7_Activity", "var"),
+            "pred": create_triple_element("ecrm:P14_carried_out_by", "ecrm:P14_carried_out_by", "uri"),
+            "obj": create_triple_element("composer", "ecrm:E21_Person", "var")
+        },
+        {
+            "subj": create_triple_element("compositionActivity", "ecrm:E7_Activity", "var"),
+            "pred": create_triple_element("mus:U31_had_function", "mus:U31_had_function", "uri"),
+            "obj": create_triple_element("composerFunction", "http://data.doremus.org/vocabulary/function/composer", "uri")
+        },
+        {
+            "subj": create_triple_element("composer", "ecrm:E21_Person", "var"),
+            "pred": create_triple_element("foaf:name", "foaf:name", "uri"),
+            "obj": create_triple_element("composerName", "", "var")
+        }
         ]
+        filter_st = []
         
         if resolved_composer:
             # Add VALUES clause with comment
-            triples.append((f"VALUES ?composer {{ <{resolved_composer}> }}", f"{composer_name}"))
+            triples.append({
+            "subj": create_triple_element("composer", "ecrm:E21_Person", "var"),
+            "pred": create_triple_element("VALUES", "VALUES", "uri"),
+            "obj": create_triple_element(resolved_composer, resolved_composer, "uri")
+        })
         elif composer_name:
             # Fallback to regex if resolution failed? 
             # User explicitly said "take the first URI... then add the URI to the query".
             # If resolution fails, maybe we should still try regex or just fail?
             # I'll add regex fallback for robustness.
-            triples.append(f'FILTER (REGEX(?composerName, "{composer_name}", "i"))')
+            filter_st.append({'function': 'REGEX', 'args': ['?composerName', f"\'{composer_name}\'", "\'i\'"]})
 
         if composer_nationality:
             code = COUNTRY_CODES.get(composer_nationality.lower())
             if code:
-                triples.append(f'?composer schema:birthPlace / geonames:countryCode "{code}" .')
+                triples.append({
+                    "subj": create_triple_element("composer", "ecrm:E21_Person", "var"),
+                    "pred": create_triple_element("schema:birthPlace / geonames:countryCode", "schema:birthPlace / geonames:countryCode", "uri"),
+                    "obj": create_triple_element(code, composer_nationality, "literal")
+                })
             else:
                 # Fallback if unknown code?
                 logger.warning(f"Unknown nationality code for: {composer_nationality}")
         
+        new_vars = []
+        for t in triples:
+            if t["type"] == "var":
+                if t["var_name"] not in new_vars:
+                    new_vars.append({"var_name": t["var_name"], "var_label": t["var_label"]})
         composer_module = {
             "id": "work_composer_filter",
-            "type": "filter",
+            "type": "pattern",
+            "scope": "main",
             "triples": triples,
-            "required_vars": ["?expression"],
-            "defined_vars": [("expCreation", "efrbroo:F28_Expression_Creation"), ("compositionActivity", "ecrm:E7_Activity"), ("composer", "ecrm:E21_Person"), ("composerName", "")]
+            "filter_st": filter_st,
+            "defined_vars": [{"var_name": var["var_name"], "var_label": var["var_label"]} for var in new_vars]
         }
         qc.add_module(composer_module)
 
     # Genre Filter
     if genre:
         triples = [
-             "?expression mus:U12_has_genre ?genre .",
+                {
+                "subj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var"),
+                "pred": create_triple_element("mus:U12_has_genre", "mus:U12_has_genre", "uri"),
+                "obj": create_triple_element("genre", "", "var")
+            }
         ]
+        filter_st = []
         
         if resolved_genre:
-             triples.append((f"VALUES ?genre {{ <{resolved_genre}> }}", f"{genre}"))
+            triples.append({
+                "subj": create_triple_element("genre", "", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_genre, resolved_genre, "uri")
+            })
         else:
-             # Fallback
-             triples.append("?genre skos:prefLabel ?genreLabel .")
-             triples.append(f'FILTER (REGEX(?genreLabel, "{genre}", "i"))')
+            # Fallback
+            triples.append({
+                "subj": create_triple_element("genre", "", "var"),
+                "pred": create_triple_element("skos:prefLabel", "skos:prefLabel", "uri"),
+                "obj": create_triple_element("genreLabel", "", "var")
+            })
+            triples.append({'function': 'REGEX', 'args': ['?genreLabel', f"\'{genre}\'", "\'i\'"]})
              
         genre_module = {
             "id": "work_genre_filter",
-            "type": "filter",
+            "type": "pattern",
+            "scope": "main",
             "triples": triples,
-            "required_vars": ["?expression"],
-            "defined_vars": [("genre", resolved_genre if resolved_genre else "")]
+            "filter_st": filter_st,
+            "required_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"}],
+            "defined_vars": [{"var_name": "genre", "var_label": resolved_genre if resolved_genre else ""}]
         }
         qc.add_module(genre_module)
         
@@ -184,41 +238,79 @@ def query_works(
         # so we must be careful. Ideally, we define a "Creation Event" module if needed.
         # But for now, we can just re-state or use OPTIONAL/UNION if we were advanced.
         # Safest is to restate the link:
-        triples.append("?expCreation efrbroo:R17_created ?expression .")
-        triples.append("?expCreation ecrm:P7_took_place_at ?placeComp .")
-        
+        triples.append({
+                "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
+                "pred": create_triple_element("efrbroo:R17_created", "efrbroo:R17_created", "uri"),
+                "obj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var")
+            }
+        )
+        triples.append({
+                "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
+                "pred": create_triple_element("ecrm:P7_took_place_at", "ecrm:P7_took_place_at", "uri"),
+                "obj": create_triple_element("placeComp", "", "var")
+            }
+        )
+        filter_st = []
+
         if resolved_place:
-             triples.append((f"VALUES ?placeComp {{ <{resolved_place}> }}", f"{place_of_composition}"))
+            triples.append({
+                "subj": create_triple_element("placeComp", "", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_place, resolved_place, "uri")
+            })
         else:
-             triples.append("?placeComp rdfs:label ?placeCompLabel .")
-             triples.append(f'FILTER (REGEX(?placeCompLabel, "{place_of_composition}", "i"))')
+            triples.append({
+                "subj": create_triple_element("placeComp", "", "var"),
+                "pred": create_triple_element("rdfs:label", "rdfs:label", "uri"),
+                "obj": create_triple_element("placeCompLabel", "", "var")
+            })
+            filter_st.append({'function': 'REGEX', 'args': ['?placeCompLabel', f"\'{place_of_composition}\'", "\'i\'"]})
 
         place_module = {
             "id": "work_place_filter",
-            "type": "filter",
+            "type": "pattern",
+            "scope": "main",
             "triples": triples,
-            "required_vars": ["?expression"],
-            "defined_vars": [("expCreation", "efrbroo:F28_Expression_Creation"), ("placeComp", resolved_place if resolved_place else "")]
+            "filter_st": filter_st,
+            "required_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"}],
+            "defined_vars": [
+                {"var_name": "expCreation", "var_label": "efrbroo:F28_Expression_Creation"},
+                {"var_name": "placeComp", "var_label": resolved_place if resolved_place else ""}
+            ]
         }
         qc.add_module(place_module)
 
     # Key Filter
     if musical_key:
-        triples = [
-            "?expression mus:U11_has_key ?key ."
+        triples = [{
+                "subj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var"),
+                "pred": create_triple_element("mus:U11_has_key", "mus:U11_has_key", "uri"),
+                "obj": create_triple_element("key", "", "var")
+            }
         ]
+        filter_st = []
         if resolved_key:
-             triples.append((f"VALUES ?key {{ <{resolved_key}> }}", f"{musical_key}"))
+            triples.append({
+                "subj": create_triple_element("key", "", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_key, resolved_key, "uri")
+            })
         else:
-             triples.append("?key skos:prefLabel ?keyLabel .")
-             triples.append(f'FILTER (REGEX(?keyLabel, "{musical_key}", "i"))')
+            triples.append({
+                "subj": create_triple_element("key", "", "var"),
+                "pred": create_triple_element("skos:prefLabel", "skos:prefLabel", "uri"),
+                "obj": create_triple_element("keyLabel", "", "var")
+            })
+            filter_st.append({'function': 'REGEX', 'args': ['?keyLabel', f"\'{musical_key}\'", "\'i\'"]})
              
         key_module = {
             "id": "work_key_filter",
-            "type": "filter",
+            "type": "pattern",
+            "scope": "main",
             "triples": triples,
-            "required_vars": ["?expression"],
-            "defined_vars": [("key", resolved_key if resolved_key else "")]
+            "filter_st": filter_st,
+            "required_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"}],
+            "defined_vars": [{"var_name": "key", "var_label": resolved_key if resolved_key else ""}]
         }
         qc.add_module(key_module)
         
@@ -238,17 +330,31 @@ def query_performance(
     qc.set_limit(limit)
     
     # Select variables
-    qc.set_select(["?performance", "SAMPLE(?title) as ?title", "SAMPLE(?locationName) as ?locationName"])
+    select_vars = [
+        create_select_element("performance", "efrbroo:F31_Performance", False),
+        create_select_element("title", "", True),
+        create_select_element("locationName", "", True)
+    ]
+    
+    qc.set_select(select_vars)
     
     # Core Module: Performance Entity
     core_module = {
         "id": "performance_core",
-        "type": "pattern",
+        "type": "where",
+        "scope": "main",
         "triples": [
-            "?performance a efrbroo:F31_Performance ;",
-            "    rdfs:label ?title ."
-        ],
-        "defined_vars": [("performance", "efrbroo:F31_Performance"), ("title", "")]
+            {
+                "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
+                "pred": create_triple_element("a", "a", "uri"),
+                "obj": create_triple_element("performance_type", "efrbroo:F31_Performance", "uri")
+            },
+            {
+                "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
+                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "obj": create_triple_element("title", "", "var")
+            }
+        ]
     }
     qc.add_module(core_module)
     
@@ -257,42 +363,65 @@ def query_performance(
         title_filter_module = {
             "id": "performance_title_filter",
             "type": "filter",
-            "triples": [
-                f'FILTER (REGEX(?title, "{title}", "i"))'
+            "scope": "main",
+            "filter_st": [
+                {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
             ],
-            "required_vars": [("title", "")]
         }
         qc.add_module(title_filter_module)
 
+    location_triples = []
+    location_filters = []
+
+    location_triples.append({
+        "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
+        "pred": create_triple_element("ecrm:P7_took_place_at", "ecrm:P7_took_place_at", "uri"),
+        "obj": create_triple_element("place", "ecrm:E53_Place", "var")
+    })
     
     # Location Filter
     if location:
-        triples = [
-            "?performance ecrm:P7_took_place_at ?place ."
-        ]
         
-        triples.append("?place rdfs:label ?locationName .")
-        triples.append(f'FILTER (REGEX(?locationName, "{location}", "i"))')
-        
+        # Filter by String
+        location_triples.append({
+            "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
+            "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+            "obj": create_triple_element("locationName", "", "var")
+        })
+        location_filters.append({'function': 'REGEX', 'args': ['?locationName', f"\'{location}\'", "\'i\'"]})
+
         loc_module = {
-            "id": "performance_location",
-            "type": "filter",
-            "triples": triples,
-            "required_vars": ["?performance"],
-            "defined_vars": [("place", "ecrm:E53_Place"), ("locationName", "")]
+            "id": "performance_location_filter",
+            "type": "pattern",
+            "scope": "main",
+            "triples": location_triples,
+            "filter_st": location_filters,
+            "required_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}],
+            "defined_vars": [
+                {"var_name": "place", "var_label": "ecrm:E53_Place"},
+                {"var_name": "locationName", "var_label": ""}
+            ]
         }
         qc.add_module(loc_module)
     else:
-         # Optional location for SELECT
-         loc_opt_module = {
+        # Optional location for SELECT
+        location_triples.append({
+            "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
+            "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+            "obj": create_triple_element("locationName", "", "var")
+        })
+        loc_opt_module = {
             "id": "performance_location_optional",
             "type": "optional",
-            "triples": [
-                "OPTIONAL { ?performance ecrm:P7_took_place_at ?place . ?place rdfs:label ?locationName }"
-            ],
-            "defined_vars": [("locationName", "")]
-         }
-         qc.add_module(loc_opt_module)
+            "scope": "optional",
+            "triples": location_triples,
+            "required_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}],
+            "defined_vars": [
+                {"var_name": "place", "var_label": "ecrm:E53_Place"},
+                {"var_name": "locationName", "var_label": ""}
+            ]
+        }
+        qc.add_module(loc_opt_module)
 
     # Performer Filter (carried_out_by)
     if carried_out_by:
@@ -303,27 +432,50 @@ def query_performance(
             # The pattern is recursive/deep: ?performance -> consists_of* -> activity -> carried_out_by -> artist
             # We use a path that covers both conductors and musicians
             
-            triples = []
-            var_suffix = f"_{idx}"
-            artist_var = f"?artist{var_suffix}"
-            name_var = f"?artistName{var_suffix}"
+            # Dynamic variable names based on index to avoid collisions
+            activity_var = f"activity_{idx}"
+            artist_var = f"artist_{idx}"
+            artist_name_var = f"artistName_{idx}"
+
+            performer_triples = []
+            performer_filters = []
             
             # Use property path for flexibility
-            # ecrm:P9_consists_of* means O or more, effectively finding sub-activities
-            triples.append(f"?performance ecrm:P9_consists_of+ ?activity{var_suffix} .")
-            triples.append(f"?activity{var_suffix} ecrm:P14_carried_out_by {artist_var} .")
+            # 1. Performance -> Activity (Recursive Path)
+            performer_triples.append({
+                "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
+                "pred": create_triple_element("ecrm:P9_consists_of_plus", "ecrm:P9_consists_of+", "uri"),
+                "obj": create_triple_element(activity_var, "ecrm:E7_Activity", "var")
+            })
+            
+            # 2. Activity -> Artist
+            performer_triples.append({
+                "subj": create_triple_element(activity_var, "ecrm:E7_Activity", "var"),
+                "pred": create_triple_element("ecrm:P14_carried_out_by", "ecrm:P14_carried_out_by", "uri"),
+                "obj": create_triple_element(artist_var, "ecrm:E21_Person", "var")
+            })
             
             if resolved_uri:
-                triples.append((f"VALUES {artist_var} {{ <{resolved_uri}> }}", f"{person_name}"))
+                performer_triples.append({
+                    "subj": create_triple_element(artist_var, "ecrm:E21_Person", "var"),
+                    "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                    "obj": create_triple_element(resolved_uri, resolved_uri, "uri")
+                })
             else:
-                 triples.append(f"{artist_var} foaf:name {name_var} .")
-                 triples.append(f'FILTER (REGEX({name_var}, "{person_name}", "i"))')
+                performer_triples.append({
+                    "subj": create_triple_element(artist_var, "ecrm:E21_Person", "var"),
+                    "pred": create_triple_element("foaf:name", "foaf:name", "uri"),
+                    "obj": create_triple_element(artist_name_var, "", "var")
+                })
+                performer_filters.append({'function': 'REGEX', 'args': [f'?{artist_name_var}', f"\'{person_name}\'", "\'i\'"]})
 
             perf_module = {
                 "id": f"performance_artist_{idx}",
-                "type": "filter",
-                "triples": triples,
-                "required_vars": ["performance"]
+                "type": "pattern",
+                "scope": "main",
+                "triples": performer_triples,
+                "filter_st": performer_filters,
+                "required_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}],
             }
             qc.add_module(perf_module)
         
@@ -345,17 +497,29 @@ def query_artist(
     qc.set_limit(limit)
     
     # Select variables
-    qc.set_select(["?artist", "SAMPLE(?name) as ?name"])
+    select_vars = [
+        {"var_name": "artist", "var_label": "ecrm:E21_Person", "is_sample": False},
+        {"var_name": "name", "var_label": "", "is_sample": True}
+    ]
+    qc.set_select(select_vars)
     
     # Core Module: Artist Entity
     core_module = {
         "id": "artist_core",
-        "type": "pattern",
+        "type": "where",
+        "scope": "main",
         "triples": [
-            "?artist a ecrm:E21_Person ;",
-            "    rdfs:label ?name ."
-        ],
-        "defined_vars": [("artist", "ecrm:E21_Person"), ("name", "")]
+            {
+                "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
+                "pred": create_triple_element("a", "a", "uri"),
+                "obj": create_triple_element("artist_type", "ecrm:E21_Person", "uri")
+            },
+            {
+                "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
+                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "obj": create_triple_element("name", "", "var")
+            }
+        ]
     }
     qc.add_module(core_module)
     
@@ -363,81 +527,141 @@ def query_artist(
     if name:
         resolved_artist = _resolve_entity(name, "composer")
         triples = []
+        filter_st = []
+
         if resolved_artist:
-            triples.append((f"VALUES ?artist {{ <{resolved_artist}> }}", f"{name}"))
+            triples.append({
+                "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_artist, resolved_artist, "uri")
+            })
         else:
-            triples.append(f'FILTER (REGEX(?name, "{name}", "i"))')
+            filter_st.append({'function': 'REGEX', 'args': ['?name', f"\'{name}\'", "\'i\'"]})
         
         name_module = {
             "id": "artist_name_filter",
-            "type": "filter",
+            "type": "pattern",
+            "scope": "main",
             "triples": triples,
-            "required_vars": ["?artist"]
+            "filter_st": filter_st,
+            "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}]
         }
         qc.add_module(name_module)
 
     # Nationality Filter
     if nationality:
          country_code = COUNTRY_CODES.get(nationality.lower())
-         triples = []
          if country_code:
-             triples.append(f'?artist schema:birthPlace / geonames:countryCode "{country_code}" .')
-         else:
-             logger.warning(f"Unknown nationality code for: {nationality}")
-             pass
-         
-         if triples:
              nat_module = {
                 "id": "artist_nationality_filter",
                 "type": "filter",
-                "triples": triples,
-                "required_vars": ["?artist"]
+                "scope": "main",
+                "triples": [
+                    {
+                        "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
+                        "pred": create_triple_element("birthPlaceCountry", "schema:birthPlace / geonames:countryCode", "uri"),
+                        "obj": create_triple_element(country_code, nationality, "literal")
+                    }
+                ],
+                "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}]
              }
              qc.add_module(nat_module)
+         else:
+             logger.warning(f"Unknown nationality code for: {nationality}")
 
     # Birth Place: ?artist schema:birthPlace ?bp . ?bp rdfs:label ?bpLabel
     if birth_place:
-        triples = []
-        triples.append("?artist schema:birthPlace ?bp .")
-        triples.append("?bp rdfs:label ?bpLabel .")
-        triples.append(f'FILTER (REGEX(?bpLabel, "{birth_place}", "i"))')
+        triples = [
+            {
+            "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
+            "pred": create_triple_element("schema:birthPlace", "schema:birthPlace", "uri"),
+            "obj": create_triple_element("bp", "", "var")
+            },
+            {
+            "subj": create_triple_element("bp", "", "var"),
+            "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+            "obj": create_triple_element("bpLabel", "", "var")
+            }
+        ]
+        filter_st = [{'function': 'REGEX', 'args': ['?bpLabel', f"\'{birth_place}\'", "\'i\'"]}]
         
         bp_module = {
             "id": "artist_birth_place_filter",
-            "type": "filter",
+            "type": "pattern",
+            "scope": "main",
             "triples": triples,
-            "required_vars": ["?artist"]
+            "filter_st": filter_st,
+            "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}],
+            "defined_vars": [
+                {"var_name": "bp", "var_label": ""},
+                {"var_name": "bpLabel", "var_label": ""}
+            ]
         }
         qc.add_module(bp_module)
 
     # Death Place: ?artist schema:deathPlace ?dp . ?dp rdfs:label ?dpLabel
     if death_place:
-        triples = []
-        triples.append("?artist schema:deathPlace ?dp .")
-        triples.append("?dp rdfs:label ?dpLabel .")
-        triples.append(f'FILTER (REGEX(?dpLabel, "{death_place}", "i"))')
+        triples = [
+            {
+            "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
+            "pred": create_triple_element("schema:deathPlace", "schema:deathPlace", "uri"),
+            "obj": create_triple_element("dp", "", "var")
+            },
+            {
+            "subj": create_triple_element("dp", "", "var"),
+            "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+            "obj": create_triple_element("dpLabel", "", "var")
+            }
+        ]
+        filter_st = [{'function': 'REGEX', 'args': ['?dpLabel', f"\'{death_place}\'", "\'i\'"]}]
         
         dp_module = {
             "id": "artist_death_place_filter",
             "type": "filter",
+            "scope": "main",
             "triples": triples,
-            "required_vars": ["?artist"]
+            "filter_st": filter_st,
+            "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}],
+            "defined_vars": [
+                {"var_name": "dp", "var_label": ""},
+                {"var_name": "dpLabel", "var_label": ""}
+            ]
         }
         qc.add_module(dp_module)
 
     # Work Name Filter
     if work_name:
-        triples = []
-        triples.append("?performanceWork ecrm:P9_consists_of / ecrm:P14_carried_out_by ?artist .")
-        triples.append("?performanceWork efrbroo:R17_created ?expression .")
-        triples.append("?expression rdfs:label ?workTitle .")
-        triples.append(f'FILTER (REGEX(?workTitle, "{work_name}", "i"))')
+        triples = [
+            {
+            "subj": create_triple_element("performanceWork", "efrbroo:F28_Expression_Creation", "var"),
+            "pred": create_triple_element("ecrm:P9_consists_of / ecrm:P14_carried_out_by", "ecrm:P9_consists_of / ecrm:P14_carried_out_by", "uri"),
+            "obj": create_triple_element("artist", "ecrm:E21_Person", "var")
+            },
+            {
+            "subj": create_triple_element("performanceWork", "efrbroo:F28_Expression_Creation", "var"),
+            "pred": create_triple_element("efrbroo:R17_created", "efrbroo:R17_created", "uri"),
+            "obj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var")
+            },
+            {
+            "subj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var"),
+            "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+            "obj": create_triple_element("workTitle", "", "var")
+            }
+        ]
+        filter_st = [{'function': 'REGEX', 'args': ['?workTitle', f"\'{work_name}\'", "\'i\'"]}]
         
         work_module = {
             "id": "artist_work_filter",
-            "type": "filter",
+            "type": "pattern",
+            "scope": "main",
             "triples": triples,
-            "required_vars": ["?artist"]
+            "filter_st": filter_st,
+            "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}],
+            "defined_vars": [
+                {"var_name": "performanceWork", "var_label": "efrbroo:F28_Expression_Creation"},
+                {"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"},
+                {"var_name": "workTitle", "var_label": ""}
+            ]
         }
         qc.add_module(work_module)
 
