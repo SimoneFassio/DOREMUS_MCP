@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict, Any, Union
 import logging
-from src.server.query_container import QueryContainer, create_triple_element, create_select_element
-from src.server.utils import find_candidate_entities_utils
+from server.query_container import QueryContainer, create_triple_element, create_select_element
+from server.utils import find_candidate_entities_utils
 from fastmcp import Context
 
 logger = logging.getLogger("doremus-mcp")

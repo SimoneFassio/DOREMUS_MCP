@@ -7,7 +7,7 @@ import mcp.types as types
 from fastmcp.server.dependencies import get_context
 from openai import OpenAI
 from groq import Groq
-from src.server.utils import (
+from server.utils import (
     convert_to_variable_name,
     extract_label
 )

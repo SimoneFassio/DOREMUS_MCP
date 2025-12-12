@@ -12,8 +12,8 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import os
 import logging
-from src.server.find_paths import find_k_shortest_paths
-from src.server.tools_internal import (
+from server.find_paths import find_k_shortest_paths
+from server.tools_internal import (
     graph,
     find_candidate_entities_internal,
     get_entity_properties_internal,

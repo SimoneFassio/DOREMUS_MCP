@@ -6,12 +6,12 @@ from nanoid import generate
 from fastmcp import Context
 from typing import Any, Optional, Dict, List
 from difflib import get_close_matches
-from src.server.find_paths import load_graph
-from src.server.graph_schema_explorer import GraphSchemaExplorer
-from src.server.query_container import QueryContainer, create_triple_element
-from src.server.query_builder import query_works, query_performance, query_artist
-from src.server.find_paths import find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
-from src.server.utils import (
+from server.find_paths import load_graph
+from server.graph_schema_explorer import GraphSchemaExplorer
+from server.query_container import QueryContainer, create_triple_element
+from server.query_builder import query_works, query_performance, query_artist
+from server.find_paths import find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
+from server.utils import (
     execute_sparql_query,
     contract_uri,
     contract_uri_restrict,
@@ -20,8 +20,8 @@ from src.server.utils import (
     find_candidate_entities_utils,
     remove_redundant_paths
 )
-from src.server.utils import extract_label, convert_to_variable_name
-from src.server.tool_sampling import format_paths_for_llm, tool_sampling_request
+from server.utils import extract_label, convert_to_variable_name
+from server.tool_sampling import format_paths_for_llm, tool_sampling_request
 
 logger = logging.getLogger("doremus-mcp")
 

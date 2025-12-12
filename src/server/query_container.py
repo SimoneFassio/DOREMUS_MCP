@@ -1,7 +1,7 @@
 from typing import Any, Optional, List, Dict
 import logging
 import re
-from src.server.tool_sampling import tool_sampling_request
+from server.tool_sampling import tool_sampling_request
 
 logger = logging.getLogger("doremus-mcp")
 
