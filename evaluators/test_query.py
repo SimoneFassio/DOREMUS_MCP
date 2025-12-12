@@ -1,25 +1,23 @@
 import asyncio
 import json
-import numpy as np
-
-from src.rdf_assistant.doremus_assistant import doremus_assistant, client
-from src.rdf_assistant.eval.doremus_dataset import examples_queries
-
-from src.server.utils import execute_sparql_query
-
+import os
 import logging
+from dotenv import load_dotenv
+from src.rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider
+from src.rdf_assistant.eval.doremus_dataset import examples_queries
+from src.server.utils import execute_sparql_query
 
 # Suppress httpx INFO logs
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+load_dotenv(".env")
+
 # Set to True to reload the dataset and update it
 RELOAD = False
 
-ClientEvalList = ["openai", "groq", "anthropic", "mistral"]
-
 async def main():
     # DATASET CREATION
-    dataset_name = "Competency Query Evaluation Dataset - 2.0"
+    dataset_name = os.getenv( "EVALUATION_DATASET_NAME","Default Dataset")
     if RELOAD:
         if client.has_dataset(dataset_name=dataset_name):
             print("Reloading Dataset")
@@ -53,59 +51,155 @@ async def main():
         generated_query = ""
         for message in messages:
             messContent = message.content if hasattr(message, "content") else ""
-            if hasattr(message, "name") and message.name == "execute_sparql":
+            if hasattr(message, "name") and message.name == "execute_query":
                 content_json = json.loads(messContent)
                 generated_query = content_json.get("generated_query", "")
         if generated_query:
             return {"generated_query": generated_query or ""}
 
-    def query_evaluator(outputs: dict, reference_outputs: dict) -> float:
+    async def results_evaluator(outputs: dict, reference_outputs: dict) -> float:
         """Check the percentage of correct values returned by the query."""
         if not outputs.get("generated_query"):
-            print("Error: 'generated_query' is missing or empty in outputs.")
+            print("Error: The LLM couldn't generate the query.")
             return 0.0
         
-        reference_output_dict = execute_sparql_query(reference_outputs["rdf_query"], limit=10000)
+        loop = asyncio.get_running_loop()
+        
+        # Run blocking reference query in executor
+        reference_output_dict = await loop.run_in_executor(
+            None, 
+            lambda: execute_sparql_query(reference_outputs["rdf_query"], limit=10000)
+        )
+        
         if not reference_output_dict["success"] or reference_output_dict is None:
             print("Error: Failed to execute reference SPARQL query.")
             return 0.0
         reference_output = reference_output_dict["results"]
 
-        query_output_dict = execute_sparql_query(outputs["generated_query"], limit=100)
+        # Run blocking generated query in executor
+        query_output_dict = await loop.run_in_executor(
+            None,
+            lambda: execute_sparql_query(outputs["generated_query"], limit=100)
+        )
+        
         if not query_output_dict["success"] or query_output_dict is None:
             print("Error: Failed to execute generated SPARQL query.")
             return 0.0
         query_output = query_output_dict["results"]
-
+        
         # Ensure both outputs are lists for comparison
         if not isinstance(reference_output, list) or not isinstance(query_output, list):
             print("Error: Outputs are not lists.")
             return 0.0
         
-        reference_array = np.array(reference_output)
-        query_array = np.array(query_output)
+        # Helper to extract URI values from list of dicts
+        def extract_uri_values(results):
+            uri_values = set()
+            if not results:
+                return uri_values
+            
+            # Find columns that look like URIs (check first row as heuristic, or all rows)
+            # Checking all rows to be safe, or iterate over keys of first row and check values
+            keys = results[0].keys()
+            
+            for key in keys:
+                # collecting all values for this key
+                col_values = [r.get(key) for r in results if r.get(key)]
+                # Check if majority or any starts with http. Let's assume if it looks like a URI column
+                if any(isinstance(v, str) and v.startswith("http") for v in col_values):
+                     uri_values.update(col_values)
+            return uri_values
 
-        correct_matches = np.isin(query_array, reference_array)
-
-        # Percentage of correct values
-        if len(reference_array) == 0:
-            if len(query_array) == 0:
+        ref_uris = extract_uri_values(reference_output)
+        output_uris = extract_uri_values(query_output)
+        
+        query_total_uris = 0
+        query_correct_uris = 0
+        
+        if not output_uris:
+            # If empty query results
+            if len(reference_output) == 0:
                 percentage_correct = 100.0
             else:
                 percentage_correct = 0.0
         else:
-            if len(query_array) != 0:
-                percentage_correct = (np.sum(correct_matches) / len(query_array)) * 100 if len(reference_array) > 0 else 100.0
+            for uri in output_uris:
+                query_total_uris += 1
+                if uri in ref_uris:
+                    query_correct_uris += 1
+            
+            if query_total_uris > 0:
+                percentage_correct = (query_correct_uris / query_total_uris) * 100.0
             else:
-                percentage_correct = 0.0
+                # No URIs returned, but maybe expected? 
+                # If reference also has no URIs, then it's a match (100%), otherwise 0%
+                if len(ref_uris) == 0:
+                    percentage_correct = 100.0
+                else:
+                    percentage_correct = 0.0
         
         ending_ref = "...]" if len(reference_output) > 2 else ""
         ending_que = "...]" if len(query_output) > 2 else ""
-        print(f"\nThe reference Output is: {reference_output[:2]}", ending_ref)
-        print(f"\nThe query Output is: {query_output[:2]}", ending_que)
-        print(f"\nPercentage of correct values: {percentage_correct:.2f}%")
+        # print(f"\nThe reference Output is: {reference_output[:2]}", ending_ref)
+        # print(f"\nThe query Output is: {query_output[:2]}", ending_que)
+        print(f" Percentage of correct values: {percentage_correct:.2f}%")
         
         return percentage_correct
+
+    async def llm_evaluator(outputs: dict, reference_outputs: dict) -> dict:
+        """Use an LLM to evaluate the semantic correctness of the generated query."""
+        
+        # Instantiate the judge model (using same config as agent)
+        llm = create_model(provider)
+        
+        generated_query = outputs.get("generated_query", "")
+        reference_query = reference_outputs["rdf_query"] # ground truth query
+        
+        if not generated_query:
+            return {"score": 0, "comment": "No query generated"}
+
+        # Define the prompt for the judge
+        prompt = f"""
+        You are an expert SPARQL query evaluator. Compare the GENERATED SPARQL query with the REFERENCE SPARQL query.
+        
+        REFERENCE QUERY:
+        ```sparql
+        {reference_query}
+        ```
+        
+        GENERATED QUERY:
+        ```sparql
+        {generated_query}
+        ```
+        
+        Task:
+        1. Ignore minor whitespace or limit differences (e.g. LIMIT 100 vs LIMIT 50).
+        2. Check if the intent filters and selection variables are semantically equivalent.
+        3. Check if the graph patterns (triples) match the same logic.
+        
+        Output a JSON object with:
+        - "score": A number between 0 and 1 (1 means semantically equivalent, 0 means completely wrong).
+        - "reasoning": A brief explanation of the score.
+        
+        Only output the JSON.
+        """
+        
+        try:
+            response = await llm.ainvoke(prompt)
+            content = response.content
+            
+            # extract json
+            clean_content = content.strip()
+            if clean_content.startswith("```json"):
+                clean_content = clean_content[7:]
+            if clean_content.endswith("```"):
+                clean_content = clean_content[:-3]
+            
+            data = json.loads(clean_content.strip())
+            return {"score": data.get("score", 0), "comment": data.get("reasoning", "")}
+        except Exception as e:
+            print(f"LLM Evaluator Error: {e}")
+            return {"score": 0, "comment": f"Evaluation failed: {e}"}
 
     # RUN EVALUATION
     run_expt = True
@@ -113,9 +207,9 @@ async def main():
         evaluation = await client.aevaluate(
             target_doremus_assistant,
             data=dataset_name,
-            evaluators=[query_evaluator],
+            evaluators=[results_evaluator, llm_evaluator],
             # Name of the experiment
-            experiment_prefix="Doremus Competency Query Evaluation", 
+            experiment_prefix="Base + Competency - QB + ANE", 
             max_concurrency=2
         )
 

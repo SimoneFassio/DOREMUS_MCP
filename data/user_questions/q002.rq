@@ -1,0 +1,9 @@
+# category: "Works and Expressions"
+# question: "What works have been written specifically for the Oboe?"
+# query:
+SELECT DISTINCT ?expression ?title
+WHERE {
+  ?expression a efrbroo:F22_Self-Contained_Expression ;
+          rdfs:label ?title ;
+          mus:U13_has_casting / mus:U23_has_casting_detail / mus:U2_foresees_use_of_medium_of_performance <http://data.doremus.org/vocabulary/iaml/mop/wob> .
+}

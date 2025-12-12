@@ -9,8 +9,7 @@ import sys
 import json
 from src.server.tools_internal import (
     find_candidate_entities_internal,
-    get_entity_properties_internal,
-    search_musical_works_internal
+    get_entity_properties_internal
 )
 from src.server.utils import execute_sparql_query
 

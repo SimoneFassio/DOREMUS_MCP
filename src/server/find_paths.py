@@ -1,6 +1,8 @@
 import csv
 import sys
 import heapq
+import re
+from typing import Any, Optional, Dict, List
 from collections import defaultdict
 
 # Usage: python find_paths.py start_node end_node k
@@ -62,6 +64,45 @@ def find_k_shortest_paths(graph, start, end, k):
         B.sort(key=len)
         A.append(B.pop(0))
     return A
+
+# Helper that searches in the provided graph for a match with the term
+def find_term_in_graph_internal(term: str, graph, node=True) -> List[str]:
+    if node:
+        # use the nodes of the graph
+        vals = graph.keys()
+    else:
+        # use the predicates of the graph
+        vals = set()
+        for edges in graph.values():
+            for pred, neighbor in edges:
+                vals.add(pred)
+    
+    # 1. Regex-based substring match (case-insensitive)
+    regex = re.compile(re.escape(term), re.IGNORECASE)  # Create a case-insensitive regex pattern
+    regex_matches = [node for node in vals if regex.search(node)]
+    
+    if regex_matches:
+        return regex_matches  # Return matches in their original form (un-lowered)
+
+    # 2. Raise an error if no matches are found
+    raise ValueError(f"No matches found in graph for term: {term} in nodes {list(vals)}")
+
+# Helper to find for an entity the parent entities and their relative arcs to it
+def find_inverse_arcs_internal(entity_uri: str, graph) -> Dict[str, Any]:
+    parents = []
+    for subj, edges in graph.items():
+        for pred, obj in edges:
+            if obj == entity_uri and (subj, pred) not in parents:
+                parents.append((subj, pred))
+    if parents:
+        return {
+            "success": True,
+            "parents": parents
+        }
+    return {
+        "success": False,
+        "error": f"No incoming arcs found for entity: {entity_uri}"
+    }
 
 if __name__ == "__main__":
     if len(sys.argv) != 5:

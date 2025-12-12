@@ -1,0 +1,11 @@
+# category: "Artists"
+# question: "Who is 'Maria Callas'?"
+# query:
+SELECT DISTINCT ?artist ?name ?birthDate ?note
+WHERE {
+  ?artist a ecrm:E21_Person ;
+          foaf:name "Maria Callas" ;
+          foaf:name ?name ;
+          ecrm:P3_has_note ?note .
+  OPTIONAL { ?artist schema:birthDate ?birthDate }
+}

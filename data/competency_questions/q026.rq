@@ -1,0 +1,13 @@
+# category: "Artists"
+# question: "Give me the name and the birth date of artists that played the oboe"
+# query:
+SELECT DISTINCT ?artist ?name ?birthDate
+WHERE {
+  ?performance ecrm:P9_consists_of ?part .
+
+  ?part ecrm:P14_carried_out_by ?artist ;
+      mus:U1_used_medium_of_performance / skos:exactMatch* <http://www.mimo-db.eu/InstrumentsKeywords/4232> .
+
+  ?artist rdfs:label ?name .
+  OPTIONAL { ?artist schema:birthDate ?birthDate }
+} ORDER BY ?artist

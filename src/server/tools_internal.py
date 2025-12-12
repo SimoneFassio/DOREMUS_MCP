@@ -1,16 +1,29 @@
 import pathlib
-from typing import Any, Optional
-from server.query_builder import build_works_query
-from server.find_paths import load_graph
-from server.graph_schema_explorer import GraphSchemaExplorer
-from server.utils import (
+import logging
+import os
+import re 
+from nanoid import generate
+from fastmcp import Context
+from typing import Any, Optional, Dict, List
+from difflib import get_close_matches
+from src.server.find_paths import load_graph
+from src.server.graph_schema_explorer import GraphSchemaExplorer
+from src.server.query_container import QueryContainer, create_triple_element
+from src.server.query_builder import query_works, query_performance, query_artist
+from src.server.find_paths import find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
+from src.server.utils import (
     execute_sparql_query,
     contract_uri,
     contract_uri_restrict,
     expand_prefixed_uri,
-    logger,
-    get_entity_label
+    get_entity_label,
+    find_candidate_entities_utils,
+    remove_redundant_paths
 )
+from src.server.utils import extract_label, convert_to_variable_name
+from src.server.tool_sampling import format_paths_for_llm, tool_sampling_request
+
+logger = logging.getLogger("doremus-mcp")
 
 #load graph for find_path
 project_root = pathlib.Path(__file__).parent
@@ -20,74 +33,27 @@ graph = load_graph(str(graph_path))
 #load graph schema explorer for ontology exploration
 explorer = GraphSchemaExplorer.load_from_csv()
 
+# Storage for generated queries
+QUERY_STORAGE: Dict[str, QueryContainer] = {}
+
+
 def find_candidate_entities_internal(
     name: str,
     entity_type: str = "others"
-) -> dict[str, Any]:
-    normalized_type = (entity_type or "").strip().lower()
-    if normalized_type not in {"artist", "vocabulary", "others"}:
-        normalized_type = "others"
+) -> Dict[str, Any]:
+    return find_candidate_entities_utils(name, entity_type)
 
-    label_predicates = {
-        "artist": "foaf:name",
-        "vocabulary": "skos:prefLabel",
-        "others": "rdfs:label",
-    }
 
-    label_predicate = label_predicates[normalized_type]
-
-    search_term = (name or "").strip()
-    if not search_term:
-        return {
-            "success": False,
-            "error": "Name is required to search for entities."
-        }
-
-    search_term_escaped = search_term.replace("'", "''").replace('"', '\\"')
-    search_literal = f"'{search_term_escaped}'"
-
-    query = f"""
-    SELECT DISTINCT ?entity ?label ?type
-    WHERE {{
-        ?entity {label_predicate} ?label .
-        ?entity a ?type .
-        ?label bif:contains "{search_literal}" .
-    }}
-    ORDER BY STRLEN(?label)
-    """
-
-    result = execute_sparql_query(query, limit=10)
-    
-    # Eliminate duplicates based on entity URI and type
-    unique_entities = {}
-    for e in result.get("results", []):
-        ent_uri = e.get("entity")
-        ent_type = e.get("type")
-        key = (ent_uri, ent_type)
-        if key not in unique_entities:
-            unique_entities[key] = e
-
-    if result.get("success"):
-        entities = []
-        for e in unique_entities.values():
-            e["type"] = contract_uri(e["type"])
-            entities.append(e)
-        return {
-            "query": name,
-            "entity_type": entity_type,
-            "matches_found": len(entities),
-            "entities": entities
-        }
-    else:
-        return result
+def find_linked_entities(subject: str, obj: str) -> List[str] | None:
+    object_entity = find_candidate_entities_internal(obj, "vocabulary")
+    if not object_entity.get("success"):
+        return None
+    return [obj for obj in object_entity.get("entities", [])]
     
     
 def get_entity_properties_internal(
     entity_uri: str
-) -> dict[str, Any]:
-    """
-    Internal function to retrieve entity properties
-    """
+) -> Dict[str, Any]:
     query = f"""
     SELECT DISTINCT ?property ?value
     WHERE {{
@@ -148,74 +114,371 @@ def get_entity_properties_internal(
     }
     return response
     
-    
-def search_musical_works_internal(
-    composers: Optional[list[str]] = None,
-    work_type: Optional[str] = None,
-    date_start: Optional[int] = None,
-    date_end: Optional[int] = None,
-    instruments: Optional[list[dict[str, Any]]] = None,
-    place_of_composition: Optional[str] = None,
-    place_of_performance: Optional[str] = None,
-    duration_min: Optional[int] = None,
-    duration_max: Optional[int] = None,
-    topic: Optional[str] = None,
-    limit: int = 50
-) -> dict[str, Any]:
-    
-    try:
-        query = build_works_query(
-            composers=composers,
-            work_type=work_type,
-            date_start=date_start,
-            date_end=date_end,
-            instruments=instruments,
-            place_of_composition=place_of_composition,
-            place_of_performance=place_of_performance,
-            duration_min=duration_min,
-            duration_max=duration_max,
-            topic=topic,
-            limit=min(limit, 200)
-        )
-        
-        result = execute_sparql_query(query, limit=limit)
-
-        if result.get("success"):
-            return {
-                "filters_applied": {
-                    "composers": composers,
-                    "work_type": work_type,
-                    "date_range": f"{date_start}-{date_end}" if date_start or date_end else None,
-                    "instruments": instruments,
-                    "duration_range": f"{duration_min}-{duration_max}s" if duration_min or duration_max else None
-                },
-                "total_results": result.get("count", 0),
-                "works": result.get("results", [])
-            }
-        else:
-            return result
-            
-    except Exception as e:
-        logger.error(f"Error building works query: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Query building error: {str(e)}"
-        }
-
 
 def get_ontology_internal(path: str, depth: int = 1) -> str:
-    """
-    Explore the DOREMUS ontology graph schema hierarchically.
-    
-    Args:
-        path: Navigation path - use '/' for summary, or '/{ClassName}' for class properties
-        depth: Exploration depth (1 or 2) for class neighborhoods
-        
-    Returns:
-        Markdown-formatted ontology subgraph
-    """
     try:
         return explorer.explore_graph_schema(path=path, depth=depth)
     except Exception as e:
         logger.error(f"Error exploring ontology: {str(e)}")
         return f"Error exploring ontology: {str(e)}"
+
+#-------------------------------
+# QUERY BUILDER INTERNALS
+#-------------------------------
+
+async def build_query_internal(
+    question: str,
+    template: str,
+    filters: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    try:
+        # Standardize template name
+        template = template.lower().strip()
+
+        # Generate ID and Store
+        query_id = generate(size=10)
+
+        if filters is None:
+            filters = {}
+        
+        if template == "works":
+            logger.info(f"Building 'Works' query for question: {question} with filters: {filters}")
+            qc = await query_works(
+                query_id=query_id,
+                question=question,
+                **filters
+            )
+        elif template == "performances":
+            qc = await query_performance(
+                query_id=query_id,
+                question=question,
+                **filters
+            )
+        elif template == "artists":
+            qc = await query_artist(
+                query_id=query_id,
+                question=question,
+                **filters
+            )
+        else:
+            return {
+                "success": False,
+                "error": f"Unknown template: {template}. Supported templates: Works, Performances, Artists"
+            }
+
+        if not qc.dry_run_test():
+            return {
+                "success": False,
+                "error": "Malformed query generated. Please check the provided filters -> query is: " + qc.to_string()
+            }
+        sparql_query = qc.to_string()
+        qc.set_question(question)
+        
+        QUERY_STORAGE[query_id] = qc
+        
+        return {
+            "success": True,
+            "query_id": query_id,
+            "generated_sparql": sparql_query,
+            "message": "Query built successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
+        }
+        
+    except Exception as e:
+        logger.error(f"Error building query: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+#-------------------------------
+# ASSOCIATE N ENTITIES INTERNALS
+#-------------------------------
+
+# helper that finds the property to filter based on number of entities
+def get_quantity_property(entity_uri: str) -> str | None:
+    for node, edges in graph.items():
+        for pred, _ in edges:
+            if node == entity_uri and "quantity" in pred.lower():
+                return pred
+            
+#-------------------------------
+# RECURSIVE PATHFINDER
+#-------------------------------
+def recur_domain(current_entity: str, target_entity: str, graph, depth: int, path: List[str]) -> List[str]:
+    # 1. PRUNING: Depth Limit
+    if depth > 6 or current_entity not in graph:
+        return []
+    # 2. SUCCESS: Target Found
+    if current_entity == target_entity:
+        return [path]
+    
+    # RECURSION: Explore Parents
+    res = find_inverse_arcs_internal(current_entity, graph)
+    if not res.get("success"):
+        # We reached a dead end
+        return []
+    
+    parents = res.get("parents", [])
+    results = []
+    for neighbor, predicate in parents:
+        neighbor_var = convert_to_variable_name(neighbor)
+        predicate_var = convert_to_variable_name(predicate)
+
+        # avoid cycles
+        if any(neighbor == uri for _, uri in path):
+            continue
+
+        new_path = [(neighbor_var, neighbor), (predicate_var, predicate)] + path
+        child_paths = recur_domain(neighbor, target_entity, graph, depth + 1, new_path)
+        
+        # Collect valid paths
+        results.extend(child_paths)
+    
+    return results
+        
+    
+async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str, N: int | None) -> List[dict]:
+    #-------------------------------
+    # CHECK IF QUERY EXISTS
+    #-------------------------------
+    qc = QUERY_STORAGE.get(query_id)
+    # FAILSAFE: debug
+    if not qc:
+        return {
+            "success": False,
+            "error": f"Query ID {query_id} not found or expired."
+        }
+    
+    # RETRIEVE SUBJECT URI
+    subject = subject.strip().lower()
+    subject_uri = qc.get_variable_uri(subject)
+    # FAILSAFE: debug
+    if not subject_uri:
+        return {
+            "success": False,
+            "error": f"Subject variable ?{subject} not found in query."
+        }
+    
+    # RETRIEVE OBJECT URI
+    if obj.startswith("http://") or obj.startswith("https://"):
+        obj_uri = obj
+        obj = obj.split("/")[-1]
+    else:
+        obj = obj.strip().lower()
+        res_obj = find_candidate_entities_internal(obj, "vocabulary")
+        if res_obj['matches_found']==0:
+            res_obj = find_candidate_entities_internal(obj, "others")
+            if res_obj['matches_found']>0:
+                obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
+                obj_uri = extract_label(obj_uri_complete)
+            else:
+                return {
+                    "success": False,
+                    "error": f"Object entity '{obj}' not found in the knowledge base."
+                }
+        else:
+            obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
+            obj_uri = obj_uri_complete
+    
+    #-------------------------------
+    # VOCAB/ONTOLOGY SWITCH
+    #-------------------------------
+    if obj_uri.startswith("http://"):
+        # Find inverse arcs
+        query_inverse = f"""
+            SELECT ?incoming_property (SAMPLE(?item_pointing_at_me) AS ?single_example)
+            WHERE {{
+            # 1. FIX THE TARGET
+            VALUES ?my_entity {{ <{obj_uri}> }} .
+
+            # 2. Find incoming links
+            ?item_pointing_at_me ?incoming_property ?my_entity .
+
+            }} 
+            # Group by the "Keys" (The things that should be unique per row)
+            GROUP BY ?incoming_property
+        """
+        inverse_arcs = execute_sparql_query(query_inverse, limit=50)
+        # FAILSAFE: debug
+        if len(inverse_arcs.get("results", []))==0:
+            return {
+                "success": False,
+                "error": f"No incoming arcs found for vocabulary entity: {obj}"
+            }
+        parents = []
+        for arc_val in inverse_arcs.get("results", []):
+            arc = arc_val.get("incoming_property")
+            arc_label = extract_label(arc)
+            for subj, edges in graph.items():
+                for pred, _ in edges:
+                    if pred == arc_label:
+                        parents.append((subj, pred))
+        # FAILSAFE: debug
+        if not parents:
+            return {
+                "success": False,
+                "error": f"No parent entities found while incoming arcs are {[extract_label(arc_val.get('incoming_property')) for arc_val in inverse_arcs.get('results', [])]} for vocabulary entity: {obj}"
+            }
+    else:
+        # Onthology term provided as label -> use Graph
+        res = find_inverse_arcs_internal(obj_uri, graph)
+        if not res.get("success"):
+            return res
+        parents = res.get("parents", [])
+
+    #-------------------------------
+    # CALL RECURSIVE PATHFINDER
+    #-------------------------------
+    possible_paths = []
+    properties_paths = {str(extract_label(arc_uri)): [] for _, arc_uri in parents}
+    selected_path = None
+    logger.info(f"Found parents: {parents} for object {obj}")
+    try:
+        for parent_entity_uri, arc_uri in parents:
+            # #TODO: handle the noise introduced by the many skos properties
+            # if "skos" in arc_uri:
+            #     # Skip skos:broader/narrower relations
+            #     continue
+            logger.info(f"Finding paths from parent entity {parent_entity_uri} to subject {subject_uri}...")
+            possible_subpaths = recur_domain(parent_entity_uri, subject_uri, graph, 1, [(convert_to_variable_name(parent_entity_uri), parent_entity_uri)])
+            # FAILSAFE: debug
+            if not possible_subpaths:
+                # Do not consider paths with no results
+                logger.info(f"No paths found from {convert_to_variable_name(parent_entity_uri)} -> {extract_label(arc_uri)} to subject {obj}.")
+                continue
+            
+            for subpath in possible_subpaths:
+                full_path = subpath + [(convert_to_variable_name(extract_label(arc_uri)), extract_label(arc_uri)), (obj, obj_uri)]
+                possible_paths.append(full_path)
+                properties_paths[str(extract_label(arc_uri))].append(full_path)
+    # FAILSAFE: debug
+    except ValueError as ve:
+        return {
+            "success": False,
+            "error": str(ve)
+        }
+    
+    # ---------------------------------------------------------
+    # DECISION LOGIC FOR SAMPLING
+    # ---------------------------------------------------------
+    # FAILSAFE: debug
+    if not possible_paths:
+         return {"success": False, "error": "No paths found."}
+         
+    elif len(possible_paths) == 1:
+        selected_path = possible_paths[0]
+        
+    else:
+        # MULTIPLE PATHS FOUND: Use MCP Sampling to decide: reduce the number of paths by length (keep shortest 5 for each property)
+        reduced_paths = []
+        for prop, paths in properties_paths.items():
+            pruned_paths = remove_redundant_paths(paths)
+            sorted_paths = sorted(pruned_paths, key=len)
+            reduced_paths.extend(sorted_paths[:5])
+        possible_paths = sorted(reduced_paths, key=len)[:5]
+        
+        path_options_text = format_paths_for_llm(possible_paths)
+        
+        # Create the prompt for the LLM
+        system_prompt = "You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query."
+        pattern_intent = f"""which of these paths is the best for associating '{subject}' to {N} '{obj}'/s, 
+given that the current question being asked is: '{qc.get_question()}'.
+        
+The opions available are:
+{path_options_text}
+        """
+        # Send Sampling request to LLM
+        llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
+        try:
+            # simple extraction of the number
+            match = re.search(r'\d+', llm_answer)
+            if match:
+                # CASE 1: valid index returned
+                index = int(match.group())
+                selected_path = possible_paths[index]
+            else:
+                # CASE 2: Fallback to shortest if LLM output is weird
+                selected_path = sorted(possible_paths, key=len)[0]
+        except (IndexError, ValueError):
+            # CASE 3: Error in sampling process
+            return {
+                "success": False,
+                "error": "Failed sampling selection, an error occurred"
+            }
+    # FAILSAFE: debug
+    if not selected_path:
+        return {
+            "success": False,
+            "error": "Failed to select a path."
+        }
+    
+    # Impose subject at the beginning of the path
+    selected_path[0] = (subject, subject_uri)
+    triples = []
+    for i in range(0, len(selected_path)-2, 2):
+        triples.append({
+            "subj": create_triple_element(selected_path[i][0], selected_path[i][1], "var"),
+            "pred": create_triple_element(selected_path[i+1][0], selected_path[i+1][1], "uri"),
+            "obj": create_triple_element(selected_path[i+2][0], selected_path[i+2][1], "var")
+        })
+    logger.info(f"Selected path for associating {subject} to {obj} is: {triples}")
+    if N is not None:
+        quantity_property = get_quantity_property(selected_path[-3][1])
+        logger.info(f"Quantity property for entity {selected_path[-3][1]} is {quantity_property}")
+        if quantity_property:
+            triples.append({
+                "subj": create_triple_element(selected_path[-3][0], selected_path[-3][1], "var"),
+                "pred": create_triple_element(convert_to_variable_name(quantity_property), quantity_property, "uri"),
+                "obj": create_triple_element(N, "", "literal")
+            })
+    def_vars = qc.extract_defined_variables(triples)
+    logger.info(f"Defined vars after adding triples: {def_vars}")
+    triples.append({
+        "subj": create_triple_element(obj, obj_uri, "var"),
+        "pred": create_triple_element("VALUES", "VALUES", "uri"),
+        "obj": create_triple_element(obj_uri, obj_uri, "uri")
+    })
+    await qc.add_module({
+            "id": f"associate_N_entities_module_{selected_path[-1][0]}",
+            "type": "associate_N_entities_pattern",
+            "scope": "main",
+            "triples": triples,
+            "required_vars": [create_triple_element(subject, subject_uri, "var")],
+            "defined_vars": def_vars[1:] # Exclude subject from defined vars
+    })
+    sparql_query = qc.to_string()
+    return {
+            "success": True,
+            "query_id": query_id,
+            "generated_sparql": sparql_query,
+            "message": "Query pattern added successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
+        }
+
+#-------------------------------
+# EXECUTE QUERY INTERNALS
+#-------------------------------
+
+def execute_query_from_id_internal(query_id: str) -> Dict[str, Any]:
+    qc = QUERY_STORAGE.get(query_id)
+    if not qc:
+        return {
+            "success": False,
+            "error": f"Query ID {query_id} not found or expired."
+        }
+    
+    # Write query and ID to file, create directory if it doesn't exist
+    os.makedirs("queries", exist_ok=True)
+    with open(f"queries/{query_id}.txt", "w") as f:
+        f.write("Question: \n" + qc.get_question())
+        f.write("\n\n")
+        f.write("SPARQL Query: \n" + qc.to_string())
+        f.write("LIMIT: " + str(qc.get_limit()))
+        
+    return execute_sparql_query(qc.to_string(), qc.get_limit())
+
+
+if __name__ == "__main__":
+    # Example usage
+    test_entity = "violin"
+    result = find_linked_entities("Casting", test_entity)
+    print(f"Linked entities for '{test_entity}': {result}")

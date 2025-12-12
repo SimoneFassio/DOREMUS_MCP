@@ -1847,7 +1847,7 @@ version = "0.12.0"
 description = "Fast iterable JSON parser."
 optional = false
 python-versions = ">=3.9"
-groups = ["eval"]
+groups = ["eval", "server"]
 files = [
     {file = "jiter-0.12.0-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:e7acbaba9703d5de82a2c98ae6a0f59ab9770ab5af5fa35e43a303aee962cf65"},
     {file = "jiter-0.12.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:364f1a7294c91281260364222f535bc427f56d4de1d8ffd718162d21fbbd602e"},
@@ -2597,6 +2597,22 @@ mcp = ">=1.9.2"
 typing-extensions = ">=4.14.0"
 
 [[package]]
+name = "langchain-ollama"
+version = "0.3.3"
+description = "An integration package connecting Ollama and LangChain"
+optional = false
+python-versions = ">=3.9"
+groups = ["eval"]
+files = [
+    {file = "langchain_ollama-0.3.3-py3-none-any.whl", hash = "sha256:f1c745a4b59d36bb51995c23c6b0fbc20f71956715659425ab88639a14b213cd"},
+    {file = "langchain_ollama-0.3.3.tar.gz", hash = "sha256:7d6ed75bfb706751b83173fe886b72ae25bb0b1bd7f3eb2622821c4149f7807b"},
+]
+
+[package.dependencies]
+langchain-core = ">=0.3.60,<1.0.0"
+ollama = ">=0.4.8,<1.0.0"
+
+[[package]]
 name = "langchain-openai"
 version = "0.2.14"
 description = "An integration package connecting OpenAI and LangChain"
@@ -3299,6 +3315,18 @@ files = [
 ]
 
 [[package]]
+name = "nanoid"
+version = "2.0.0"
+description = "A tiny, secure, URL-friendly, unique string ID generator for Python"
+optional = false
+python-versions = "*"
+groups = ["server"]
+files = [
+    {file = "nanoid-2.0.0-py3-none-any.whl", hash = "sha256:90aefa650e328cffb0893bbd4c236cfd44c48bc1f2d0b525ecc53c3187b653bb"},
+    {file = "nanoid-2.0.0.tar.gz", hash = "sha256:5a80cad5e9c6e9ae3a41fa2fb34ae189f7cb420b2a5d8f82bd9d23466e4efa68"},
+]
+
+[[package]]
 name = "nbclient"
 version = "0.10.2"
 description = "A client library for executing notebooks. Formerly nbconvert's ExecutePreprocessor."
@@ -3519,12 +3547,28 @@ files = [
 ]
 
 [[package]]
+name = "ollama"
+version = "0.6.1"
+description = "The official Python client for Ollama."
+optional = false
+python-versions = ">=3.8"
+groups = ["eval"]
+files = [
+    {file = "ollama-0.6.1-py3-none-any.whl", hash = "sha256:fc4c984b345735c5486faeee67d8a265214a31cbb828167782dc642ce0a2bf8c"},
+    {file = "ollama-0.6.1.tar.gz", hash = "sha256:478c67546836430034b415ed64fa890fd3d1ff91781a9d548b3325274e69d7c6"},
+]
+
+[package.dependencies]
+httpx = ">=0.27"
+pydantic = ">=2.9"
+
+[[package]]
 name = "openai"
 version = "1.109.1"
 description = "The official Python library for the openai API"
 optional = false
 python-versions = ">=3.8"
-groups = ["eval"]
+groups = ["eval", "server"]
 files = [
     {file = "openai-1.109.1-py3-none-any.whl", hash = "sha256:6bcaf57086cf59159b8e27447e4e7dd019db5d29a438072fbd49c290c7e65315"},
     {file = "openai-1.109.1.tar.gz", hash = "sha256:d173ed8dbca665892a6db099b4a2dfac624f94d20a93f46eb0b56aae940ed869"},
@@ -5781,7 +5825,7 @@ version = "4.67.1"
 description = "Fast, Extensible Progress Meter"
 optional = false
 python-versions = ">=3.7"
-groups = ["eval"]
+groups = ["eval", "server"]
 files = [
     {file = "tqdm-4.67.1-py3-none-any.whl", hash = "sha256:26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2"},
     {file = "tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2"},

@@ -1,0 +1,11 @@
+# category: "Works and Expressions"
+# question: "Which works were composed between 1800 and 1801?"
+# query:
+SELECT DISTINCT ?expression ?title ?date
+WHERE {
+  ?expression a efrbroo:F22_Self-Contained_Expression ;
+          rdfs:label ?title .
+  ?expCreation efrbroo:R17_created ?expression ;
+          ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?date .
+  FILTER (?date >= "1800-01-01"^^xsd:date && ?date <= "1801-12-31"^^xsd:date)
+}

@@ -1,14 +1,13 @@
 import logging
 import requests
-from typing import Any, Optional
-from server.config import (
+import re
+from typing import Any, Optional, Dict, List
+from src.server.config import (
     SPARQL_ENDPOINT,
     REQUEST_TIMEOUT,
     PREFIXES
 )
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("doremus-mcp")
 
 # Helper: expand prefixed URI to full URI
@@ -54,7 +53,7 @@ def get_entity_label(uri: str) -> str:
     else:
         return None
     
-def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
+def execute_sparql_query(query: str, limit: int = 100) -> Dict[str, Any]:
     """
     Execute a SPARQL query against the DOREMUS endpoint.
     
@@ -67,8 +66,8 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
     """
     try:
         logger.info(f"Executing SPARQL query with limit {limit}")
-        prefix_lines = ""#.join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
-        query = prefix_lines + "\n" + query
+        # prefix_lines.join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
+        # query = prefix_lines + "\n" + query
         if "LIMIT" not in query.upper():
             query = f"{query}\nLIMIT {limit}"
 
@@ -126,3 +125,116 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
             "error": f"Unexpected error: {str(e)}",
             "generated_query": query
         }
+    
+def find_candidate_entities_utils(
+    name: str,
+    entity_type: str = "others"
+) -> Dict[str, Any]:
+    normalized_type = (entity_type or "").strip().lower()
+    if normalized_type not in {"artist", "vocabulary", "others"}:
+        normalized_type = "others"
+
+    label_predicates = {
+        "artist": "foaf:name",
+        "vocabulary": "skos:prefLabel",
+        "others": "rdfs:label",
+    }
+
+    label_predicate = label_predicates[normalized_type]
+
+    search_term = (name or "").strip()
+    if not search_term:
+        return {
+            "success": False,
+            "error": "Name is required to search for entities."
+        }
+
+    search_term_escaped = search_term.replace("'", "''").replace('"', '\\"')
+    search_literal = f"'{search_term_escaped}'"
+
+    query = f"""
+    SELECT DISTINCT ?entity ?label ?type
+    WHERE {{
+        ?entity {label_predicate} ?label .
+        ?entity a ?type .
+        ?label bif:contains "{search_literal}" .
+    }}
+    ORDER BY STRLEN(?label)
+    """
+
+    result = execute_sparql_query(query, limit=10)
+    
+    # Eliminate duplicates based on entity URI and type
+    unique_entities = {}
+    for e in result.get("results", []):
+        ent_uri = e.get("entity")
+        ent_type = e.get("type")
+        key = (ent_uri, ent_type)
+        if key not in unique_entities:
+            unique_entities[key] = e
+
+    if result.get("success"):
+        entities = []
+        for e in unique_entities.values():
+            e["type"] = contract_uri(e["type"])
+            entities.append(e)
+        return {
+            "query": name,
+            "entity_type": entity_type,
+            "matches_found": len(entities),
+            "entities": entities
+        }
+    else:
+        return result
+
+# helper that recieves the link to a property and retuns the label version of it
+def extract_label(full_uri: str) -> str | None:
+    name = re.split(r'[#/]', full_uri)[-1]
+    pref = ""
+    prefixes = {"doremus": "mus", "iaml": "iaml", "frbroo": "efrbroo", "erlangen": "ecrm", "rdf": "rdf", "rdfs": "rdfs", "skos": "skos", "foaf": "foaf"}
+    for prefix in prefixes.keys():
+        if prefix in full_uri:
+            pref = prefixes[prefix]
+            break
+    if pref and pref != "efrbroo":
+        return f"{pref}:{name}"
+    else:
+        return name
+
+# helper that converts a name to a variable name
+def convert_to_variable_name(name: str) -> str:
+    label = name.split(":")[-1]
+    # Use camel case for variable names
+    parts = re.split(r'[_\s-]+', label)
+    if len(parts) == 1:
+        return label.lower()
+    camel_case_name = parts[1].lower()
+    if len(parts) > 2:
+        for part in parts[2:]:
+            camel_case_name += part.capitalize()
+    return camel_case_name
+
+# helper to remove the redundant paths
+def remove_redundant_paths(paths: List[List[tuple]]) -> List[List[tuple]]:
+    """
+    Removes redundant paths by ensuring each path is unique based on var_name for nodes and var_label for edges.
+    
+    Args:
+        paths (List[List[tuple]]): A list of paths, where each path is a list of (var_name, var_label) tuples.
+    
+    Returns:
+        List[List[tuple]]: A list of unique paths in the same format as the input.
+    """
+    unique_paths = set()  # Use a set to store normalized paths
+    result = []  # Store the final list of unique paths
+
+    for path in paths:
+        # Normalize the path by extracting var_name for nodes and var_label for edges
+        normalized_path = tuple((var_name, var_label) for var_name, var_label in path)
+        
+        # Check if the normalized path is already in the set
+        if normalized_path not in unique_paths:
+            unique_paths.add(normalized_path)  # Add to the set
+            result.append(path)  # Add the original path to the result
+
+    return result

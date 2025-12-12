@@ -1,0 +1,31 @@
+# category: "Works and Expressions"
+# question: "List works that require exactly 4 instruments (Quartets)."
+# query:
+SELECT DISTINCT ?expression ?title
+WHERE {
+  ?expression a efrbroo:F22_Self-Contained_Expression ;
+          rdfs:label ?title ;
+          mus:U13_has_casting ?casting .
+
+  # Calculate total number of instruments
+  {
+      SELECT ?casting
+      WHERE {
+          ?casting mus:U23_has_casting_detail ?detail .
+          OPTIONAL { ?detail mus:U30_foresees_quantity_of_mop ?q }
+          BIND(COALESCE(?q, 1) as ?qty)
+      }
+      GROUP BY ?casting
+      HAVING (SUM(?qty) = 4)
+  }
+
+  # Exclude broader concepts like Orchestra and Chorus
+  FILTER NOT EXISTS {
+    ?casting mus:U23_has_casting_detail / mus:U2_foresees_use_of_medium_of_performance / skos:broader* ?ensemble .
+    VALUES ?ensemble { 
+        <http://data.doremus.org/vocabulary/iaml/mop/o> 
+        <http://data.doremus.org/vocabulary/iaml/mop/c> 
+    }
+  }
+}
+ORDER BY ?title

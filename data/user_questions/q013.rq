@@ -1,0 +1,18 @@
+# category: "Artists"
+# question: "Give me name and birth date of artists that played a piano in 21th century"
+# query:
+SELECT DISTINCT ?artist ?name ?birthDate
+WHERE {
+  ?artist a ecrm:E21_Person ;
+          foaf:name ?name ;
+          schema:birthDate ?birthDate .
+
+  ?performance ecrm:P9_consists_of ?activity ;
+          ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?date .
+
+  ?activity ecrm:P14_carried_out_by ?artist ;
+          mus:U1_used_medium_of_performance <http://data.doremus.org/vocabulary/iaml/mop/kpf> .
+
+  # 21st Century (>= 2001)
+  FILTER (?date >= "2001-01-01"^^xsd:date)
+}

@@ -1,0 +1,13 @@
+# category: "Artists"
+# question: "List composers who died after the year 2000."
+# query:
+SELECT DISTINCT ?artist ?name ?deathDate
+WHERE {
+  ?artist a ecrm:E21_Person ;
+          foaf:name ?name ;
+          schema:deathDate ?deathDate .
+  ?compositionActivity a ecrm:E7_Activity ;
+    ecrm:P14_carried_out_by ?artist ;
+    mus:U31_had_function <http://data.doremus.org/vocabulary/function/composer> .
+  FILTER (?deathDate > "2000-01-01"^^xsd:date)
+}
