@@ -176,25 +176,14 @@ async def query_works(
                 # Fallback if unknown code?
                 logger.warning(f"Unknown nationality code for: {composer_nationality}")
         
-        new_vars = []
-        for t in triples:
-            subj = t["subj"]
-            #logger.info(f"Triple subject: {subj}")
-            if subj["type"] == "var":
-                if subj["var_name"] not in [new_var["var_name"] for new_var in new_vars]:
-                    new_vars.append({"var_name": subj["var_name"], "var_label": subj["var_label"]})
-            obj = t["obj"]
-            #logger.info(f"Triple object: {obj}")
-            if obj["type"] == "var":
-                if obj["var_name"] not in [new_var["var_name"] for new_var in new_vars]:
-                    new_vars.append({"var_name": obj["var_name"], "var_label": obj["var_label"]})
+        def_vars = qc.extract_defined_variables(triples)
         composer_module = {
             "id": "work_composer_filter",
             "type": "pattern",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,
-            "defined_vars": new_vars,
+            "defined_vars": def_vars,
         }
         # Does not arrive here
         #logger.info(f"Adding composer module with triples: {triples} and filters: {filter_st}")

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 import mcp.types as types
-from fastmcp import Context
+from fastmcp.server.dependencies import get_context
 from openai import OpenAI
 from groq import Groq
 from src.server.utils import (
@@ -30,10 +30,10 @@ def format_paths_for_llm(paths):
         if not p:
             raise ValueError(f"No elements found in path {p}")
         readable_chain = " -> ".join([elem[0] for elem in p]) + "\n"
-        options.append(f"Option {i}: {readable_chain}")
+        options.append(f"- Option {i}: {readable_chain}")
     return "\n".join(options)
 
-async def tool_sampling_request(system_prompt: str, pattern_intent: str, ctx: Context):
+async def tool_sampling_request(system_prompt: str, pattern_intent: str) -> str:
     """
     Sends a sampling request to the client (LLM) to resolve ambiguity.
     This function will handle fallback to server-side LLM if client sampling fails.
@@ -41,6 +41,12 @@ async def tool_sampling_request(system_prompt: str, pattern_intent: str, ctx: Co
     2. If fails, use server-side LLM (OpenAI or Groq)
     3. Return the selected option index as string
     """
+
+    try:
+        ctx = get_context()
+    except Exception as e:
+        logger.error(f"Failed to get MCP context for tool sampling: {e}")
+        return "0"  # Fallback to first option
 
     user_message = f"""
 The user is asking about {pattern_intent}

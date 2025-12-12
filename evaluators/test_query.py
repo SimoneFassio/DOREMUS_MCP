@@ -17,7 +17,7 @@ RELOAD = False
 
 async def main():
     # DATASET CREATION
-    dataset_name = "Competency Query Evaluation Dataset - 2.2"
+    dataset_name = "Competency Query Evaluation Dataset - 2.3"
     if RELOAD:
         if client.has_dataset(dataset_name=dataset_name):
             print("Reloading Dataset")
@@ -209,7 +209,7 @@ async def main():
             data=dataset_name,
             evaluators=[results_evaluator, llm_evaluator],
             # Name of the experiment
-            experiment_prefix="Base + Competency - Query Builder 2.1", 
+            experiment_prefix="Base + Competency - QB + ANE", 
             max_concurrency=2
         )
 

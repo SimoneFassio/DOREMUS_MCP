@@ -30,7 +30,7 @@ evaluation_models = {
 }
 
 # Choose which provider to use
-provider = "openai"
+provider = "ollama"
 
 connections = {
         "DOREMUS_MCP": {

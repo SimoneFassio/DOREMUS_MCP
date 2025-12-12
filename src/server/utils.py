@@ -1,7 +1,7 @@
 import logging
 import requests
 import re
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List
 from src.server.config import (
     SPARQL_ENDPOINT,
     REQUEST_TIMEOUT,
@@ -151,15 +151,15 @@ def find_candidate_entities_utils(
 
     search_term_escaped = search_term.replace("'", "''").replace('"', '\\"')
     search_literal = f"'{search_term_escaped}'"
-    
+
     query = f"""
     SELECT DISTINCT ?entity ?label ?type
     WHERE {{
         ?entity {label_predicate} ?label .
         ?entity a ?type .
-        ?label bif:contains "{search_literal}" option (score ?sc) .
+        ?label bif:contains "{search_literal}" .
     }}
-    ORDER BY DESC(?sc)
+    ORDER BY STRLEN(?label)
     """
 
     result = execute_sparql_query(query, limit=10)
@@ -213,3 +213,28 @@ def convert_to_variable_name(name: str) -> str:
         for part in parts[2:]:
             camel_case_name += part.capitalize()
     return camel_case_name
+
+# helper to remove the redundant paths
+def remove_redundant_paths(paths: List[List[tuple]]) -> List[List[tuple]]:
+    """
+    Removes redundant paths by ensuring each path is unique based on var_name for nodes and var_label for edges.
+    
+    Args:
+        paths (List[List[tuple]]): A list of paths, where each path is a list of (var_name, var_label) tuples.
+    
+    Returns:
+        List[List[tuple]]: A list of unique paths in the same format as the input.
+    """
+    unique_paths = set()  # Use a set to store normalized paths
+    result = []  # Store the final list of unique paths
+
+    for path in paths:
+        # Normalize the path by extracting var_name for nodes and var_label for edges
+        normalized_path = tuple((var_name, var_label) for var_name, var_label in path)
+        
+        # Check if the normalized path is already in the set
+        if normalized_path not in unique_paths:
+            unique_paths.add(normalized_path)  # Add to the set
+            result.append(path)  # Add the original path to the result
+
+    return result

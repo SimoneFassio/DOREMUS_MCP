@@ -1,8 +1,6 @@
 from typing import Any, Optional, List, Dict
 import logging
 import re
-from fastmcp import Context
-from fastmcp.server.dependencies import get_context
 from src.server.tool_sampling import tool_sampling_request
 
 logger = logging.getLogger("doremus-mcp")
@@ -59,6 +57,22 @@ class QueryContainer:
         # Map of var_name -> { "uri": str, "count": int }
         self.variable_registry: Dict[str, Dict[str, Any]] = {}
         self.track_dep: bool = True
+
+    #-----------------------
+    # EXTRACT NEW VARIABLES
+    # -----------------------
+    def extract_defined_variables(self, triples: Dict[str, Any]) -> List[Dict[str, str]]:
+        new_vars = []
+        for t in triples:
+            subj = t["subj"]
+            if subj["type"] == "var":
+                if subj["var_name"] not in [new_var["var_name"] for new_var in new_vars]:
+                    new_vars.append({"var_name": subj["var_name"], "var_label": subj["var_label"]})
+            obj = t["obj"]
+            if obj["type"] == "var":
+                if obj["var_name"] not in [new_var["var_name"] for new_var in new_vars] and isinstance(obj["var_name"], str):
+                    new_vars.append({"var_name": obj["var_name"], "var_label": obj["var_label"]}) 
+        return new_vars  
 
     # ----------------------
     # MODULE MANAGEMENT
@@ -309,16 +323,7 @@ Therefore, the current options to put in place of '<<{var_name}>>' are:
 {options}
                         """
                         system_prompt = "You are an expert SPARQL query builder assisting in variable naming."
-                        try:
-                            ctx = get_context()
-                        except Exception as e:
-                            logger.error(f"Failed to get MCP context for tool sampling: {e}")
-                            # Default to renaming
-                            new_var_name = f"{var_name}_{count}"
-                            self._modify_var(new_module, var_name, new_var_name)
-                            self._update_variable_counter(var_label)
-                            continue
-                        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, ctx)
+                        llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
                         try:
                             match = re.search(r'\d+', llm_answer)
                             if match:

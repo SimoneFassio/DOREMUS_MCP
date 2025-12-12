@@ -8,7 +8,7 @@ from typing import Any, Optional, Dict, List
 from difflib import get_close_matches
 from src.server.find_paths import load_graph
 from src.server.graph_schema_explorer import GraphSchemaExplorer
-from src.server.query_container import QueryContainer
+from src.server.query_container import QueryContainer, create_triple_element
 from src.server.query_builder import query_works, query_performance, query_artist
 from src.server.find_paths import find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
 from src.server.utils import (
@@ -17,7 +17,8 @@ from src.server.utils import (
     contract_uri_restrict,
     expand_prefixed_uri,
     get_entity_label,
-    find_candidate_entities_utils
+    find_candidate_entities_utils,
+    remove_redundant_paths
 )
 from src.server.utils import extract_label, convert_to_variable_name
 from src.server.tool_sampling import format_paths_for_llm, tool_sampling_request
@@ -236,7 +237,7 @@ def recur_domain(current_entity: str, target_entity: str, graph, depth: int, pat
     return results
         
     
-async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str, N: int | None, ctx: Context) -> List[dict]:
+async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str, N: int | None) -> List[dict]:
     #-------------------------------
     # CHECK IF QUERY EXISTS
     #-------------------------------
@@ -247,6 +248,9 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
             "success": False,
             "error": f"Query ID {query_id} not found or expired."
         }
+    
+    # RETRIEVE SUBJECT URI
+    subject = subject.strip().lower()
     subject_uri = qc.get_variable_uri(subject)
     # FAILSAFE: debug
     if not subject_uri:
@@ -255,35 +259,37 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
             "error": f"Subject variable ?{subject} not found in query."
         }
     
+    # RETRIEVE OBJECT URI
+    if obj.startswith("http://") or obj.startswith("https://"):
+        obj_uri = obj
+        obj = obj.split("/")[-1]
+    else:
+        obj = obj.strip().lower()
+        res_obj = find_candidate_entities_internal(obj, "vocabulary")
+        if res_obj['matches_found']==0:
+            res_obj = find_candidate_entities_internal(obj, "others")
+            if res_obj['matches_found']>0:
+                obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
+                obj_uri = extract_label(obj_uri_complete)
+            else:
+                return {
+                    "success": False,
+                    "error": f"Object entity '{obj}' not found in the knowledge base."
+                }
+        else:
+            obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
+            obj_uri = obj_uri_complete
+    
     #-------------------------------
     # VOCAB/ONTOLOGY SWITCH
     #-------------------------------
-    if obj.startswith("http://"):
-        # Vocabulary entity provided as URI
-        object_entity_uri = obj
+    if obj_uri.startswith("http://"):
         # Find inverse arcs
-        info_query = f"""
-        SELECT ?label ?type
-        WHERE {{
-            VALUES ?my_entity {{ <{object_entity_uri}> }} . 
-            ?my_entity skos:prefLabel ?label .
-            ?my_entity a ?type .
-        }}
-        """
-        info_result = execute_sparql_query(info_query, limit=1)
-        # FAILSAFE: debug
-        if not info_result.get("success") or len(info_result.get("results", []))==0:
-            return {
-                "success": False,
-                "error": f"Vocabulary entity {obj} not found in the knowledge base."
-            }
-        object_label = info_result["results"][0].get("label")
-        # Find incoming links
         query_inverse = f"""
             SELECT ?incoming_property (SAMPLE(?item_pointing_at_me) AS ?single_example)
             WHERE {{
             # 1. FIX THE TARGET
-            VALUES ?my_entity {{ <{object_entity_uri}> }} .
+            VALUES ?my_entity {{ <{obj_uri}> }} .
 
             # 2. Find incoming links
             ?item_pointing_at_me ?incoming_property ?my_entity .
@@ -315,7 +321,7 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
             }
     else:
         # Onthology term provided as label -> use Graph
-        res = find_inverse_arcs_internal(obj, graph)
+        res = find_inverse_arcs_internal(obj_uri, graph)
         if not res.get("success"):
             return res
         parents = res.get("parents", [])
@@ -329,10 +335,10 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
     logger.info(f"Found parents: {parents} for object {obj}")
     try:
         for parent_entity_uri, arc_uri in parents:
-            #TODO: handle the noise introduced by the many skos properties
-            if "skos" in arc_uri:
-                # Skip skos:broader/narrower relations
-                continue
+            # #TODO: handle the noise introduced by the many skos properties
+            # if "skos" in arc_uri:
+            #     # Skip skos:broader/narrower relations
+            #     continue
             logger.info(f"Finding paths from parent entity {parent_entity_uri} to subject {subject_uri}...")
             possible_subpaths = recur_domain(parent_entity_uri, subject_uri, graph, 1, [(convert_to_variable_name(parent_entity_uri), parent_entity_uri)])
             # FAILSAFE: debug
@@ -340,13 +346,9 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
                 # Do not consider paths with no results
                 logger.info(f"No paths found from {convert_to_variable_name(parent_entity_uri)} -> {extract_label(arc_uri)} to subject {obj}.")
                 continue
-                # return {
-                #     "success": False,
-                #     "error": f"No paths found from parent entity {parent_entity_uri} to subject {subject}."
-                # }
             
             for subpath in possible_subpaths:
-                full_path = subpath + [(convert_to_variable_name(extract_label(arc_uri)), extract_label(arc_uri)), (object_label, object_entity_uri)]
+                full_path = subpath + [(convert_to_variable_name(extract_label(arc_uri)), extract_label(arc_uri)), (obj, obj_uri)]
                 possible_paths.append(full_path)
                 properties_paths[str(extract_label(arc_uri))].append(full_path)
     # FAILSAFE: debug
@@ -367,40 +369,42 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
         selected_path = possible_paths[0]
         
     else:
-        # MULTIPLE PATHS FOUND: Use MCP Sampling to decide
-
-        # Reduce the number of paths by length (keep shortest 5 for each property)
+        # MULTIPLE PATHS FOUND: Use MCP Sampling to decide: reduce the number of paths by length (keep shortest 5 for each property)
         reduced_paths = []
         for prop, paths in properties_paths.items():
-            sorted_paths = sorted(paths, key=len)
+            pruned_paths = remove_redundant_paths(paths)
+            sorted_paths = sorted(pruned_paths, key=len)
             reduced_paths.extend(sorted_paths[:5])
-        possible_paths = reduced_paths
+        possible_paths = sorted(reduced_paths, key=len)[:5]
         
-
         path_options_text = format_paths_for_llm(possible_paths)
         
         # Create the prompt for the LLM
         system_prompt = "You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query."
-        pattern_intent = f"""
-        associating '{subject}' to {N} '{obj}'/s.
+        pattern_intent = f"""which of these paths is the best for associating '{subject}' to {N} '{obj}'/s, 
+given that the current question being asked is: '{qc.get_question()}'.
         
-        I found multiple ways to link them in the database:
-        {path_options_text}
+The opions available are:
+{path_options_text}
         """
-
         # Send Sampling request to LLM
-        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, ctx)
+        llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
         try:
             # simple extraction of the number
             match = re.search(r'\d+', llm_answer)
             if match:
+                # CASE 1: valid index returned
                 index = int(match.group())
                 selected_path = possible_paths[index]
             else:
-                # Fallback to shortest if LLM output is weird
+                # CASE 2: Fallback to shortest if LLM output is weird
                 selected_path = sorted(possible_paths, key=len)[0]
         except (IndexError, ValueError):
-            selected_path = possible_paths[0]
+            # CASE 3: Error in sampling process
+            return {
+                "success": False,
+                "error": "Failed sampling selection, an error occurred"
+            }
     # FAILSAFE: debug
     if not selected_path:
         return {
@@ -410,28 +414,37 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
     
     # Impose subject at the beginning of the path
     selected_path[0] = (subject, subject_uri)
-    pattern_list = [(f"?{selected_path[i][0]} {selected_path[i+1][1]} ?{selected_path[i+2][0]} .", f"Path step {i//2 + 1}") for i in range(0, len(selected_path)-2, 2)]
-    if not pattern_list:
-        return {
-            "success": False,
-            "error": f"No path found from {subject} to {obj} because parents are {parents}."
-        }
+    triples = []
+    for i in range(0, len(selected_path)-2, 2):
+        triples.append({
+            "subj": create_triple_element(selected_path[i][0], selected_path[i][1], "var"),
+            "pred": create_triple_element(selected_path[i+1][0], selected_path[i+1][1], "uri"),
+            "obj": create_triple_element(selected_path[i+2][0], selected_path[i+2][1], "var")
+        })
+    logger.info(f"Selected path for associating {subject} to {obj} is: {triples}")
     if N is not None:
         quantity_property = get_quantity_property(selected_path[-3][1])
         logger.info(f"Quantity property for entity {selected_path[-3][1]} is {quantity_property}")
         if quantity_property:
-            pattern_list.append((f"?{selected_path[-3][0]} {quantity_property} {str(N)} .", "Get the number of medium of performances"))
-        
-    pattern_list.append((f"VALUES (?{object_label}) {{ (<{object_entity_uri}>) }} .", "Save the variable for the object entity"))
-    #TODO: check for the workings of defined_vars
-    # Extract the variable names
-    def_vars = [var for var in selected_path[2::2]]
-    qc.add_module({
-        "id": f"associate_N_entities_module_{selected_path[-1][0]}",
-        "triples": pattern_list,
-        "type": "associate_N_entities_pattern",
-        "required_vars": [f"?{subject}"],
-        "defined_vars": def_vars
+            triples.append({
+                "subj": create_triple_element(selected_path[-3][0], selected_path[-3][1], "var"),
+                "pred": create_triple_element(convert_to_variable_name(quantity_property), quantity_property, "uri"),
+                "obj": create_triple_element(N, "", "literal")
+            })
+    def_vars = qc.extract_defined_variables(triples)
+    logger.info(f"Defined vars after adding triples: {def_vars}")
+    triples.append({
+        "subj": create_triple_element(obj, obj_uri, "var"),
+        "pred": create_triple_element("VALUES", "VALUES", "uri"),
+        "obj": create_triple_element(obj_uri, obj_uri, "uri")
+    })
+    await qc.add_module({
+            "id": f"associate_N_entities_module_{selected_path[-1][0]}",
+            "type": "associate_N_entities_pattern",
+            "scope": "main",
+            "triples": triples,
+            "required_vars": [create_triple_element(subject, subject_uri, "var")],
+            "defined_vars": def_vars[1:] # Exclude subject from defined vars
     })
     sparql_query = qc.to_string()
     return {
