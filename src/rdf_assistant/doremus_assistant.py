@@ -7,8 +7,8 @@ from langchain_groq import ChatGroq
 from langchain_anthropic import ChatAnthropic
 from langchain_ollama import ChatOllama
 
-from src.rdf_assistant.prompts import agent_system_prompt
-from src.rdf_assistant.extended_mcp_client import ExtendedMCPClient
+from .prompts import agent_system_prompt
+from .extended_mcp_client import ExtendedMCPClient
 
 load_dotenv(".env")
 

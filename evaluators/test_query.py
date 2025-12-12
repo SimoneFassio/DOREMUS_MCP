@@ -1,11 +1,16 @@
 import asyncio
 import json
 import os
+import sys
 import logging
 from dotenv import load_dotenv
-from src.rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider
-from src.rdf_assistant.eval.doremus_dataset import examples_queries
-from src.server.utils import execute_sparql_query
+
+# Add src to path for local development
+sys.path.insert(0, 'src')
+
+from rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider
+from rdf_assistant.eval.doremus_dataset import examples_queries
+from server.utils import execute_sparql_query
 
 # Suppress httpx INFO logs
 logging.getLogger("httpx").setLevel(logging.WARNING)
