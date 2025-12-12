@@ -13,17 +13,13 @@ COPY pyproject.toml poetry.lock* ./
 RUN poetry config virtualenvs.create false
 
 # Install only server dependencies (no eval)
-RUN poetry install --only main,server --no-interaction --no-ansi --no-root
+RUN poetry install --only main --no-interaction --no-ansi --no-root
 
 # Copy application files
 COPY src/server ./src/server
-COPY data/ ./data/
 
 # Copy tests if needed for validation
 COPY tests ./tests
-
-# Install the project itself
-RUN poetry install --only-root --no-interaction --no-ansi
 
 # Expose MCP port
 EXPOSE 8000

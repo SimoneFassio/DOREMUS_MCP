@@ -6,25 +6,10 @@ authors = [
     { name = "Simone Fassio", email = "simone.fassio@eurecom.fr" },
     { name = "Dario Gosmar", email = "dario.gosmar@eurecom.fr" },
 ]
-readme = "README.md"
-
-[tool.poetry]
-package-mode = false
-packages = [
-    { include = "server", from = "src" },
-    { include = "rdf_assistant", from = "src" },
-    { include = "evaluators" },
-]
 
 [tool.poetry.dependencies]
 python = "^3.11"
 requests = "^2.31.0"
-
-# --- Group for Server-Only Dependencies ---
-[tool.poetry.group.server]
-optional = false
-
-[tool.poetry.group.server.dependencies]
 fastmcp = "^2.0.0"
 uvicorn = "^0.27.0"
 starlette = "^0.36.0"

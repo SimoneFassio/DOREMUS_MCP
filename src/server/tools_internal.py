@@ -13,7 +13,7 @@ from src.server.utils import (
 )
 
 #load graph for find_path
-project_root = pathlib.Path(__file__).parent.parent.parent
+project_root = pathlib.Path(__file__).parent
 graph_path = project_root / "data" / "graph.csv"
 graph = load_graph(str(graph_path))
 
