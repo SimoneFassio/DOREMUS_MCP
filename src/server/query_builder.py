@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict, Any, Union
 import logging
 from src.server.query_container import QueryContainer, create_triple_element, create_select_element
+from src.server.utils import find_candidate_entities_utils
 from fastmcp import Context
 
 logger = logging.getLogger("doremus-mcp")
@@ -14,7 +15,9 @@ COUNTRY_CODES = {
     "american": "US", "usa": "US", "united states": "US",
     "austrian": "AT", "austria": "AT",
     "russian": "RU", "russia": "RU",
-    # TODO Add more
+    "norwegian": "NO", "norway": "NO",
+    "swedish": "SE", "sweden": "SE",
+    "spanish": "ES", "spain": "ES",
 }
 
 def _resolve_entity(name: str, entity_type: str) -> Optional[str]:
@@ -23,8 +26,6 @@ def _resolve_entity(name: str, entity_type: str) -> Optional[str]:
     Returns the first matching URI or None.
     """
     try:
-        from tools_internal import find_candidate_entities_internal
-
         # Use "others" for generic or specific types not in [artist, vocabulary]
         # But 'find_candidate_entities_internal' supports: artist, vocabulary, others.
         # For Genre/Key we might want 'vocabulary' or specific class?
@@ -36,7 +37,7 @@ def _resolve_entity(name: str, entity_type: str) -> Optional[str]:
         elif entity_type in ["genre", "key"]:
             search_type = "vocabulary"
             
-        result = find_candidate_entities_internal(name, search_type)
+        result = find_candidate_entities_utils(name, search_type)
 
         if result.get("matches_found", 0) > 0:
             # Take the first one (most relevant)
@@ -48,9 +49,9 @@ def _resolve_entity(name: str, entity_type: str) -> Optional[str]:
     
     return None
 
-def query_works(
+async def query_works(
     query_id: str,
-    ctx: Context,
+    question: str = "",
     title: Optional[str] = None,
     composer_name: Optional[str] = None,
     composer_nationality: Optional[str] = None,
@@ -62,7 +63,7 @@ def query_works(
     """
     Initialize a QueryContainer with a baseline query for Musical Works.
     """
-    qc = QueryContainer(query_id, ctx)
+    qc = QueryContainer(query_id, question)
     qc.set_limit(limit)
     
     # 1. Define Select variables
@@ -97,7 +98,7 @@ def query_works(
              "obj": create_triple_element("title", "", "var")}
         ]
     }
-    qc.add_module(core_module)
+    await qc.add_module(core_module)
     
     # 4. Filter Modules
     
@@ -111,7 +112,7 @@ def query_works(
                 {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
             ],
         }
-        qc.add_module(title_filter_module)
+        await qc.add_module(title_filter_module)
     
     # Composer Filter
     if composer_name or composer_nationality:
@@ -147,6 +148,7 @@ def query_works(
         }
         ]
         filter_st = []
+        logger.info(f"Composer name: {composer_name}, resolved: {resolved_composer}")
         
         if resolved_composer:
             # Add VALUES clause with comment
@@ -176,18 +178,27 @@ def query_works(
         
         new_vars = []
         for t in triples:
-            if t["type"] == "var":
-                if t["var_name"] not in new_vars:
-                    new_vars.append({"var_name": t["var_name"], "var_label": t["var_label"]})
+            subj = t["subj"]
+            #logger.info(f"Triple subject: {subj}")
+            if subj["type"] == "var":
+                if subj["var_name"] not in [new_var["var_name"] for new_var in new_vars]:
+                    new_vars.append({"var_name": subj["var_name"], "var_label": subj["var_label"]})
+            obj = t["obj"]
+            #logger.info(f"Triple object: {obj}")
+            if obj["type"] == "var":
+                if obj["var_name"] not in [new_var["var_name"] for new_var in new_vars]:
+                    new_vars.append({"var_name": obj["var_name"], "var_label": obj["var_label"]})
         composer_module = {
             "id": "work_composer_filter",
             "type": "pattern",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,
-            "defined_vars": [{"var_name": var["var_name"], "var_label": var["var_label"]} for var in new_vars]
+            "defined_vars": new_vars,
         }
-        qc.add_module(composer_module)
+        # Does not arrive here
+        #logger.info(f"Adding composer module with triples: {triples} and filters: {filter_st}")
+        await qc.add_module(composer_module)
 
     # Genre Filter
     if genre:
@@ -224,7 +235,7 @@ def query_works(
             "required_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"}],
             "defined_vars": [{"var_name": "genre", "var_label": resolved_genre if resolved_genre else ""}]
         }
-        qc.add_module(genre_module)
+        await qc.add_module(genre_module)
         
     # Place of Composition
     if place_of_composition:
@@ -280,7 +291,7 @@ def query_works(
                 {"var_name": "placeComp", "var_label": resolved_place if resolved_place else ""}
             ]
         }
-        qc.add_module(place_module)
+        await qc.add_module(place_module)
 
     # Key Filter
     if musical_key:
@@ -314,13 +325,13 @@ def query_works(
             "required_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"}],
             "defined_vars": [{"var_name": "key", "var_label": resolved_key if resolved_key else ""}]
         }
-        qc.add_module(key_module)
+        await qc.add_module(key_module)
         
     return qc
 
-def query_performance(
+async def query_performance(
     query_id: str,
-    ctx: Context,
+    question: str = "",
     title: Optional[str] = None,
     location: Optional[str] = None,
     carried_out_by: Optional[List[str]] = None,
@@ -329,7 +340,7 @@ def query_performance(
     """
     Initialize a QueryContainer with a baseline query for Performances.
     """
-    qc = QueryContainer(query_id, ctx)
+    qc = QueryContainer(query_id, question)
     qc.set_limit(limit)
     
     # Select variables
@@ -359,7 +370,7 @@ def query_performance(
             }
         ]
     }
-    qc.add_module(core_module)
+    await qc.add_module(core_module)
     
     # Title Filter (Advanced)
     if title:
@@ -371,7 +382,7 @@ def query_performance(
                 {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
             ],
         }
-        qc.add_module(title_filter_module)
+        await qc.add_module(title_filter_module)
 
     location_triples = []
     location_filters = []
@@ -405,7 +416,7 @@ def query_performance(
                 {"var_name": "locationName", "var_label": ""}
             ]
         }
-        qc.add_module(loc_module)
+        await qc.add_module(loc_module)
     else:
         # Optional location for SELECT
         location_triples.append({
@@ -424,7 +435,7 @@ def query_performance(
                 {"var_name": "locationName", "var_label": ""}
             ]
         }
-        qc.add_module(loc_opt_module)
+        await qc.add_module(loc_opt_module)
 
     # Performer Filter (carried_out_by)
     if carried_out_by:
@@ -480,13 +491,13 @@ def query_performance(
                 "filter_st": performer_filters,
                 "required_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}],
             }
-            qc.add_module(perf_module)
+            await qc.add_module(perf_module)
         
     return qc
 
-def query_artist(
+async def query_artist(
     query_id: str,
-    ctx: Context,
+    question: str = "",
     name: Optional[str] = None,
     nationality: Optional[str] = None,
     birth_place: Optional[str] = None,
@@ -497,7 +508,7 @@ def query_artist(
     """
     Initialize a QueryContainer with a baseline query for Artists.
     """
-    qc = QueryContainer(query_id, ctx)
+    qc = QueryContainer(query_id, question)
     qc.set_limit(limit)
     
     # Select variables
@@ -525,7 +536,7 @@ def query_artist(
             }
         ]
     }
-    qc.add_module(core_module)
+    await qc.add_module(core_module)
     
     # Name Filter
     if name:
@@ -550,7 +561,7 @@ def query_artist(
             "filter_st": filter_st,
             "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}]
         }
-        qc.add_module(name_module)
+        await qc.add_module(name_module)
 
     # Nationality Filter
     if nationality:
@@ -569,7 +580,7 @@ def query_artist(
                 ],
                 "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}]
              }
-             qc.add_module(nat_module)
+             await qc.add_module(nat_module)
          else:
              logger.warning(f"Unknown nationality code for: {nationality}")
 
@@ -601,7 +612,7 @@ def query_artist(
                 {"var_name": "bpLabel", "var_label": ""}
             ]
         }
-        qc.add_module(bp_module)
+        await qc.add_module(bp_module)
 
     # Death Place: ?artist schema:deathPlace ?dp . ?dp rdfs:label ?dpLabel
     if death_place:
@@ -631,7 +642,7 @@ def query_artist(
                 {"var_name": "dpLabel", "var_label": ""}
             ]
         }
-        qc.add_module(dp_module)
+        await qc.add_module(dp_module)
 
     # Work Name Filter
     if work_name:
@@ -667,6 +678,6 @@ def query_artist(
                 {"var_name": "workTitle", "var_label": ""}
             ]
         }
-        qc.add_module(work_module)
+        await qc.add_module(work_module)
 
     return qc

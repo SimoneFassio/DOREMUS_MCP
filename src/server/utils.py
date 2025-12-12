@@ -125,6 +125,67 @@ def execute_sparql_query(query: str, limit: int = 100) -> Dict[str, Any]:
             "error": f"Unexpected error: {str(e)}",
             "generated_query": query
         }
+    
+def find_candidate_entities_utils(
+    name: str,
+    entity_type: str = "others"
+) -> Dict[str, Any]:
+    normalized_type = (entity_type or "").strip().lower()
+    if normalized_type not in {"artist", "vocabulary", "others"}:
+        normalized_type = "others"
+
+    label_predicates = {
+        "artist": "foaf:name",
+        "vocabulary": "skos:prefLabel",
+        "others": "rdfs:label",
+    }
+
+    label_predicate = label_predicates[normalized_type]
+
+    search_term = (name or "").strip()
+    if not search_term:
+        return {
+            "success": False,
+            "error": "Name is required to search for entities."
+        }
+
+    search_term_escaped = search_term.replace("'", "''").replace('"', '\\"')
+    search_literal = f"'{search_term_escaped}'"
+    
+    query = f"""
+    SELECT DISTINCT ?entity ?label ?type
+    WHERE {{
+        ?entity {label_predicate} ?label .
+        ?entity a ?type .
+        ?label bif:contains "{search_literal}" option (score ?sc) .
+    }}
+    ORDER BY DESC(?sc)
+    """
+
+    result = execute_sparql_query(query, limit=10)
+    
+    # Eliminate duplicates based on entity URI and type
+    unique_entities = {}
+    for e in result.get("results", []):
+        ent_uri = e.get("entity")
+        ent_type = e.get("type")
+        key = (ent_uri, ent_type)
+        if key not in unique_entities:
+            unique_entities[key] = e
+
+    if result.get("success"):
+        entities = []
+        for e in unique_entities.values():
+            e["type"] = contract_uri(e["type"])
+            entities.append(e)
+        return {
+            "query": name,
+            "entity_type": entity_type,
+            "matches_found": len(entities),
+            "entities": entities
+        }
+    else:
+        return result
 
 # helper that recieves the link to a property and retuns the label version of it
 def extract_label(full_uri: str) -> str | None:

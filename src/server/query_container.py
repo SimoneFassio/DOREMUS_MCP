@@ -1,6 +1,8 @@
 from typing import Any, Optional, List, Dict
 import logging
+import re
 from fastmcp import Context
+from fastmcp.server.dependencies import get_context
 from src.server.tool_sampling import tool_sampling_request
 
 logger = logging.getLogger("doremus-mcp")
@@ -30,7 +32,7 @@ class QueryContainer:
     variable naming conflicts and ensures consistency between modules.
     """
     
-    def __init__(self, query_id: str, ctx: Context):
+    def __init__(self, query_id: str, question: str = ""):
         self.query_id = query_id
         
         # Select: List of dicts e.g., {"var_name": "title", "var_label": "", "is_sample": True}
@@ -51,8 +53,7 @@ class QueryContainer:
         self.limit: int = 50
 
         # Metadata
-        self.question: str = ""
-        self.ctx: Context = ctx
+        self.question: str = question
         
         # Variable dependency tracking
         # Map of var_name -> { "uri": str, "count": int }
@@ -62,7 +63,7 @@ class QueryContainer:
     # ----------------------
     # MODULE MANAGEMENT
     # ----------------------
-    def add_module(self, module: Dict[str, Any]) -> None:
+    async def add_module(self, module: Dict[str, Any]) -> None:
         """
         Add a query module to the container after validation and connectivity checks.
         
@@ -89,7 +90,7 @@ class QueryContainer:
 
         if module["scope"] == "main":
             # Process variable renaming (if needed for uniqueness or linking)
-            processed_module = self._process_variables(module)
+            processed_module = await self._process_variables(module)
             
             if processed_module.get("filter_st"):
                 for fl in processed_module.get("filter_st", []):
@@ -146,7 +147,7 @@ class QueryContainer:
             if var_info["var_label"] == var_uri:
                 var_info["count"] += 1
 
-    def parse_for_llm(self, new_module: Dict[str, Any]) -> str:
+    def _parse_for_llm(self, new_module: Dict[str, Any], conflict_var: Dict[str, str]) -> str:
         """
         Parse the current query and the module to be added into a human-readable format
         for the LLM to understand, highlighting new modules, existing variables, and conflicts.
@@ -157,6 +158,8 @@ class QueryContainer:
         Returns:
             A string representation of the current query and the module to be added.
         """
+        conflict_var_name = conflict_var["var_name"]
+        conflict_var_label = conflict_var["var_label"]
         query_parts = []
 
         # Build Select string
@@ -165,26 +168,33 @@ class QueryContainer:
 
         for item in self.select:
             var_name = item["var_name"]
-            if item.get("is_sample"):
-                # Example: SAMPLE(?title) as ?title
-                select_vars_str.append(f"SAMPLE(?{var_name}) as ?{var_name}")
+            if var_name == conflict_var_name:
+                highlighted_name = f"**?{var_name}**"
             else:
-                # Example: ?expression
-                select_vars_str.append(f"?{var_name}")
+                highlighted_name = f"?{var_name}"
+            if item.get("is_sample"):
+                select_vars_str.append(f"SAMPLE({highlighted_name}) as {highlighted_name}")
+            else:
+                select_vars_str.append(highlighted_name)
         
         query_parts.append(f"  SELECT {select_mod}{', '.join(select_vars_str)}")
         
         # Build Where string
         query_parts.append("  WHERE {")
+        logger.debug(f"Parsing current query for LLM with conflict variable: {conflict_var_name}")
         for module in self.where:
             mod_id = module.get("id", "unnamed")
             query_parts.append(f"    # Module: {mod_id}")
             if module.get("scope") == "main":
                 triples = module.get("triples", [])
                 for t in triples:
-                    s_str = self._format_term(t.get("subj"), highlight_existing=True)
-                    p_str = self._format_term(t.get("pred"), highlight_existing=True)
-                    o_str = self._format_term(t.get("obj"), highlight_existing=True)
+                    s_str = self._format_term(t.get("subj"))
+                    if t.get("subj").get("var_label") == conflict_var_label:
+                        s_str = f"**{s_str}**"
+                    p_str = self._format_term(t.get("pred"))
+                    o_str = self._format_term(t.get("obj"))
+                    if t.get("obj").get("var_label") == conflict_var_label:
+                        o_str = f"**{o_str}**"
                     if p_str == "VALUES":
                         query_parts.append(f"      {p_str} {s_str} {{ {o_str} }}")
                     else:
@@ -193,27 +203,35 @@ class QueryContainer:
                 query_parts.append(f"    # Unsupported scope: {module.get('scope')}")
 
         # Add the new module with "+" annotations
-        query_parts.append("\n    # New Module:")
+        query_parts.append("\n    + New Module:")
         if "triples" in new_module:
             for t in new_module["triples"]:
-                s_str = self._format_term(t.get("subj"), highlight_existing=True, highlight_conflict=True)
-                p_str = self._format_term(t.get("pred"), highlight_existing=True, highlight_conflict=True)
-                o_str = self._format_term(t.get("obj"), highlight_existing=True, highlight_conflict=True)
+                s_str = self._format_term(t.get("subj"))
+                if s_str == f"?{conflict_var_name}":
+                    s_str = f"<<{s_str}>>"
+                p_str = self._format_term(t.get("pred"))
+                o_str = self._format_term(t.get("obj"))
+                if o_str == f"?{conflict_var_name}":
+                    o_str = f"<<{o_str}>>"
                 if p_str == "VALUES":
                     query_parts.append(f"    + {p_str} {s_str} {{ {o_str} }}")
                 else:
                     query_parts.append(f"    + {s_str} {p_str} {o_str} .")
 
         if "filter_st" in new_module:
-            query_parts.append("    # New Filters:")
+            query_parts.append("\n    + New Filters:")
             for f in new_module["filter_st"]:
                 func = f.get("function")
                 args = f.get("args", [])
+                formatted_args = args.copy()
+                for i, arg in enumerate(formatted_args):
+                    if arg == f"?{conflict_var_name}":
+                        formatted_args[i] = f"<<{arg}>>"
                 if func == "":
-                    args_str = " ".join(args)
+                    args_str = " ".join(formatted_args)
                     query_parts.append(f"    + FILTER ({args_str})")
                 elif func:
-                    args_str = ", ".join(args)
+                    args_str = ", ".join(formatted_args)
                     query_parts.append(f"    + FILTER {func}({args_str})")
 
         query_parts.append("  }")
@@ -269,30 +287,44 @@ class QueryContainer:
                         count = self.variable_registry[var_name]["count"]
                         working_query = self._parse_for_llm(module, def_elem)
                         option_list = []
-                        for var_name, var_el in self.variable_registry.items():
-                            if var_el["var_label"] == var_label:
-                                option_list.append(var_name)
-                        options = "\n".join([f"Option {i}: '{opt}'" for i, opt in enumerate(option_list)])
-                        options += f"\nOption {len(option_list)}: Rename to '{var_name}_{count}'"
-                        pattern_intent = f"""
-                            solving the conflict for '{var_name}' by determining whether to 
-                            rename it or use one of the existing variables.
+                        for reg_var_name, reg_var_el in self.variable_registry.items():
+                            if reg_var_el["var_label"] == var_label:
+                                option_list.append(reg_var_name)
+                        options = "\n".join([f"- Option {i}: '{opt}'" for i, opt in enumerate(option_list)])
+                        options += f"\n- Option {len(option_list)}: Rename to '{var_name}_{count}'"
+                        pattern_intent = f"""solving the conflict for '{var_name}' by determining whether to 
+rename it or use one of the existing variables.
 
-                            This is the current query structure, where:
-                            - The "+" in front of a line indicates the new module being added.
-                            - The **bolded** variable names are the existing ones in the query.
-                            - The <<variable>> indicates the conflicting variable in the new module.
+This is the current query structure, where:
+- The "+" in front of a line indicates the new module being added.
+- The **bolded** variable names are the existing ones in the query.
+- The <<variable>> indicates the conflicting variable in the new module.
 
-                            Current Query:
-                            {working_query}
+The current query is asking about: '{self.question}'
+--
+{working_query}
+--
 
-                            Therefore, the current options to put in place of '<<{var_name}>>' are:
-                            {options}
+Therefore, the current options to put in place of '<<{var_name}>>' are:
+{options}
                         """
                         system_prompt = "You are an expert SPARQL query builder assisting in variable naming."
-                        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, self.ctx)
                         try:
-                            index = int(llm_answer.strip())
+                            ctx = get_context()
+                        except Exception as e:
+                            logger.error(f"Failed to get MCP context for tool sampling: {e}")
+                            # Default to renaming
+                            new_var_name = f"{var_name}_{count}"
+                            self._modify_var(new_module, var_name, new_var_name)
+                            self._update_variable_counter(var_label)
+                            continue
+                        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, ctx)
+                        try:
+                            match = re.search(r'\d+', llm_answer)
+                            if match:
+                                index = int(match.group())
+                            else:
+                                index = len(option_list)
                             if index == len(option_list):
                                 # Rename + add to registry
                                 new_var_name = f"{var_name}_{count}"
@@ -408,7 +440,7 @@ class QueryContainer:
         
         # Build Filters
         if self.filter_st:
-            query_parts.append("  # Filters")
+            query_parts.append("\n  # Filters")
             filter_parts = []
             for i, filter_cond in enumerate(self.filter_st):
                 if i == 0:
@@ -462,7 +494,11 @@ class QueryContainer:
         """
         if not term:
             return ""
-            
+        
+        if "type" not in term:
+            logger.warning(f"Term missing 'type': {term}")
+            return str(term)
+        
         t_type = term.get("type")
 
         if t_type == "var":

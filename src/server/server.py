@@ -7,6 +7,7 @@ via SPARQL endpoint at https://data.doremus.org/sparql/
 
 from typing import Any, Optional, Dict
 from fastmcp import FastMCP, Context
+from fastmcp.server.dependencies import get_context
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import os
@@ -54,6 +55,7 @@ async def build_query(question: str, template: str, filters: Dict[str, Any] | No
             - For Works: { "title": "...", "composer_name": "...", "genre": "...", "musical_key": "...", "limit": 10 }
             - For Performances: { "title": "...", "location": "...", "carried_out_by": ["..."], "limit": 10 }
             - For Artists: { "name": "...", "nationality": "...", "birth_place": "...", "limit": 10 }
+            It may be possible that no filters are needed, in which case pass an empty dict or None.
 
     Returns:
         Dict containing:
@@ -61,7 +63,7 @@ async def build_query(question: str, template: str, filters: Dict[str, Any] | No
         - "query_id": The ID to use with `execute_query`
         - "generated_sparql": The generated SPARQL string for review
     """
-    return build_query_internal(question, template, filters)
+    return await build_query_internal(question, template, filters)
 
 # @mcp.tool()
 # async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int | None, ctx: Context) -> Dict[str, Any]:

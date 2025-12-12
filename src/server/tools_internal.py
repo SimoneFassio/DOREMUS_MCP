@@ -16,7 +16,8 @@ from src.server.utils import (
     contract_uri,
     contract_uri_restrict,
     expand_prefixed_uri,
-    get_entity_label
+    get_entity_label,
+    find_candidate_entities_utils
 )
 from src.server.utils import extract_label, convert_to_variable_name
 from src.server.tool_sampling import format_paths_for_llm, tool_sampling_request
@@ -39,62 +40,8 @@ def find_candidate_entities_internal(
     name: str,
     entity_type: str = "others"
 ) -> Dict[str, Any]:
-    normalized_type = (entity_type or "").strip().lower()
-    if normalized_type not in {"artist", "vocabulary", "others"}:
-        normalized_type = "others"
+    return find_candidate_entities_utils(name, entity_type)
 
-    label_predicates = {
-        "artist": "foaf:name",
-        "vocabulary": "skos:prefLabel",
-        "others": "rdfs:label",
-    }
-
-    label_predicate = label_predicates[normalized_type]
-
-    search_term = (name or "").strip()
-    if not search_term:
-        return {
-            "success": False,
-            "error": "Name is required to search for entities."
-        }
-
-    search_term_escaped = search_term.replace("'", "''").replace('"', '\\"')
-    search_literal = f"'{search_term_escaped}'"
-    
-    query = f"""
-    SELECT DISTINCT ?entity ?label ?type
-    WHERE {{
-        ?entity {label_predicate} ?label .
-        ?entity a ?type .
-        ?label bif:contains "{search_literal}" option (score ?sc) .
-    }}
-    ORDER BY DESC(?sc)
-    """
-
-    result = execute_sparql_query(query, limit=10)
-    
-    # Eliminate duplicates based on entity URI and type
-    unique_entities = {}
-    for e in result.get("results", []):
-        ent_uri = e.get("entity")
-        ent_type = e.get("type")
-        key = (ent_uri, ent_type)
-        if key not in unique_entities:
-            unique_entities[key] = e
-
-    if result.get("success"):
-        entities = []
-        for e in unique_entities.values():
-            e["type"] = contract_uri(e["type"])
-            entities.append(e)
-        return {
-            "query": name,
-            "entity_type": entity_type,
-            "matches_found": len(entities),
-            "entities": entities
-        }
-    else:
-        return result
 
 def find_linked_entities(subject: str, obj: str) -> List[str] | None:
     object_entity = find_candidate_entities_internal(obj, "vocabulary")
@@ -178,11 +125,10 @@ def get_ontology_internal(path: str, depth: int = 1) -> str:
 # QUERY BUILDER INTERNALS
 #-------------------------------
 
-def build_query_internal(
+async def build_query_internal(
     question: str,
     template: str,
     filters: Dict[str, Any] | None,
-    ctx: Context
 ) -> Dict[str, Any]:
     try:
         # Standardize template name
@@ -195,21 +141,22 @@ def build_query_internal(
             filters = {}
         
         if template == "works":
-            qc = query_works(
+            logger.info(f"Building 'Works' query for question: {question} with filters: {filters}")
+            qc = await query_works(
                 query_id=query_id,
-                ctx=ctx,
+                question=question,
                 **filters
             )
         elif template == "performances":
-            qc = query_performance(
+            qc = await query_performance(
                 query_id=query_id,
-                ctx=ctx,
+                question=question,
                 **filters
             )
         elif template == "artists":
-            qc = query_artist(
+            qc = await query_artist(
                 query_id=query_id,
-                ctx=ctx,
+                question=question,
                 **filters
             )
         else:
@@ -221,7 +168,7 @@ def build_query_internal(
         if not qc.dry_run_test():
             return {
                 "success": False,
-                "error": "Malformed query generated. Please check the provided filters."
+                "error": "Malformed query generated. Please check the provided filters -> query is: " + qc.to_string()
             }
         sparql_query = qc.to_string()
         qc.set_question(question)

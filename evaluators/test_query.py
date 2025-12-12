@@ -209,7 +209,7 @@ async def main():
             data=dataset_name,
             evaluators=[results_evaluator, llm_evaluator],
             # Name of the experiment
-            experiment_prefix="Base + Competency - Query Builder 2.0", 
+            experiment_prefix="Base + Competency - Query Builder 2.1", 
             max_concurrency=2
         )
 
