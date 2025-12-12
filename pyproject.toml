@@ -1,5 +1,5 @@
 [project]
-name = "doremus-mcp-project"
+name = "server"
 version = "0.1.0"
 description = "MCP Server and Evaluators for DOREMUS Knowledge Graph"
 authors = [
