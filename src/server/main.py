@@ -10,15 +10,15 @@ from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import os
-from src.server.find_paths import find_k_shortest_paths
-from src.server.tools_internal import (
+from server.find_paths import find_k_shortest_paths
+from server.tools_internal import (
     graph,
     find_candidate_entities_internal,
     get_entity_properties_internal,
     search_musical_works_internal,
     get_ontology_internal,
 )
-from src.server.utils import execute_sparql_query, logger
+from server.utils import execute_sparql_query, logger
 
 # Initialize FastMCP server
 mcp = FastMCP("DOREMUS Knowledge Graph Server")

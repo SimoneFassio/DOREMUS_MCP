@@ -1,7 +1,7 @@
 import logging
 import requests
 from typing import Any, Optional
-from src.server.config import (
+from server.config import (
     SPARQL_ENDPOINT,
     REQUEST_TIMEOUT,
     PREFIXES

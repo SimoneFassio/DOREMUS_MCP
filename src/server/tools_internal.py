@@ -1,9 +1,9 @@
 import pathlib
 from typing import Any, Optional
-from src.server.query_builder import build_works_query
-from src.server.find_paths import load_graph
-from src.server.graph_schema_explorer import GraphSchemaExplorer
-from src.server.utils import (
+from server.query_builder import build_works_query
+from server.find_paths import load_graph
+from server.graph_schema_explorer import GraphSchemaExplorer
+from server.utils import (
     execute_sparql_query,
     contract_uri,
     contract_uri_restrict,
@@ -13,7 +13,7 @@ from src.server.utils import (
 )
 
 #load graph for find_path
-project_root = pathlib.Path(__file__).parent.parent.parent
+project_root = pathlib.Path(__file__).parent
 graph_path = project_root / "data" / "graph.csv"
 graph = load_graph(str(graph_path))
 
