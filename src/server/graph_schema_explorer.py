@@ -207,7 +207,7 @@ class GraphSchemaExplorer:
         """
         if data_dir is None:
             # Default to data folder in project root
-            project_root = pathlib.Path(__file__).parent.parent.parent
+            project_root = pathlib.Path(__file__).parent
             data_dir = project_root / "data"
         else:
             data_dir = pathlib.Path(data_dir)
