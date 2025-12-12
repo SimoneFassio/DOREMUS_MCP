@@ -35,6 +35,7 @@ coverage.xml
 htmlcov/
 .tox/
 .nox/
+queries
 
 # Type checking / caches
 .mypy_cache/

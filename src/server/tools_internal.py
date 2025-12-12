@@ -26,7 +26,7 @@ from src.server.tool_sampling import format_paths_for_llm, tool_sampling_request
 logger = logging.getLogger("doremus-mcp")
 
 #load graph for find_path
-project_root = pathlib.Path(__file__).parent.parent.parent
+project_root = pathlib.Path(__file__).parent
 graph_path = project_root / "data" / "graph.csv"
 graph = load_graph(str(graph_path))
 
