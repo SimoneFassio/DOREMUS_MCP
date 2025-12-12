@@ -1,23 +1,23 @@
 import asyncio
 import json
-import numpy as np
-
-from src.rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider, model_name
-from src.rdf_assistant.eval.doremus_dataset import examples_queries
-
-from src.server.utils import execute_sparql_query
-
+import os
 import logging
+from dotenv import load_dotenv
+from src.rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider
+from src.rdf_assistant.eval.doremus_dataset import examples_queries
+from src.server.utils import execute_sparql_query
 
 # Suppress httpx INFO logs
 logging.getLogger("httpx").setLevel(logging.WARNING)
+
+load_dotenv(".env")
 
 # Set to True to reload the dataset and update it
 RELOAD = False
 
 async def main():
     # DATASET CREATION
-    dataset_name = "Competency Query Evaluation Dataset - 2.3"
+    dataset_name = os.getenv( "EVALUATION_DATASET_NAME","Default Dataset")
     if RELOAD:
         if client.has_dataset(dataset_name=dataset_name):
             print("Reloading Dataset")
@@ -150,7 +150,7 @@ async def main():
         """Use an LLM to evaluate the semantic correctness of the generated query."""
         
         # Instantiate the judge model (using same config as agent)
-        llm = create_model(provider, model_name)
+        llm = create_model(provider)
         
         generated_query = outputs.get("generated_query", "")
         reference_query = reference_outputs["rdf_query"] # ground truth query
