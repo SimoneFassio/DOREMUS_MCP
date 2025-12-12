@@ -1,9 +1,9 @@
 import pathlib
 from typing import Any, Optional
-from src.server.query_builder import build_works_query
-from src.server.find_paths import load_graph
-from src.server.graph_schema_explorer import GraphSchemaExplorer
-from src.server.utils import (
+from server.query_builder import build_works_query
+from server.find_paths import load_graph
+from server.graph_schema_explorer import GraphSchemaExplorer
+from server.utils import (
     execute_sparql_query,
     contract_uri,
     contract_uri_restrict,
