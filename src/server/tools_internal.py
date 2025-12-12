@@ -25,6 +25,8 @@ from server.tool_sampling import format_paths_for_llm, tool_sampling_request
 
 logger = logging.getLogger("doremus-mcp")
 
+SAVE_QUERIES = False
+
 #load graph for find_path
 project_root = pathlib.Path(__file__).parent
 graph_path = project_root / "data" / "graph.csv"
@@ -466,13 +468,14 @@ def execute_query_from_id_internal(query_id: str) -> Dict[str, Any]:
             "error": f"Query ID {query_id} not found or expired."
         }
     
-    # Write query and ID to file, create directory if it doesn't exist
-    os.makedirs("queries", exist_ok=True)
-    with open(f"queries/{query_id}.txt", "w") as f:
-        f.write("Question: \n" + qc.get_question())
-        f.write("\n\n")
-        f.write("SPARQL Query: \n" + qc.to_string())
-        f.write("LIMIT: " + str(qc.get_limit()))
+    if SAVE_QUERIES:
+        # Write query and ID to file, create directory if it doesn't exist
+        os.makedirs("queries", exist_ok=True)
+        with open(f"queries/{query_id}.txt", "w") as f:
+            f.write("Question: \n" + qc.get_question())
+            f.write("\n\n")
+            f.write("SPARQL Query: \n" + qc.to_string())
+            f.write("LIMIT: " + str(qc.get_limit()))
         
     return execute_sparql_query(qc.to_string(), qc.get_limit())
 
