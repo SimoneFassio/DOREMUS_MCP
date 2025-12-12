@@ -1,0 +1,54 @@
+name: Run Evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment_name:
+        description: 'Optional custom name for the evaluation experiment'
+        required: false
+        default: 'Manual Evaluation Run'
+        type: string
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Configure Poetry
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+
+    - name: Install dependencies
+      run: poetry install --with eval --no-interaction
+
+    - name: Run evaluation
+      env:
+        LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+        LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        OLLAMA_API_URL: ${{ secrets.OLLAMA_API_URL }}
+        LLM_EVAL_PROVIDER: ${{ vars.LLM_EVAL_PROVIDER }}
+        GRAPH_RECURSION_LIMIT: ${{ vars.GRAPH_RECURSION_LIMIT }}
+        DOREMUS_MCP_URL: ${{ vars.DOREMUS_MCP_URL }}
+        DOREMUS_MCP_TRANSPORT: ${{ vars.DOREMUS_MCP_TRANSPORT }}
+        EVALUATION_DATASET_NAME: ${{ vars.EVALUATION_DATASET_NAME }}
+        EXPERIMENT_PREFIX: ${{ inputs.experiment_name }}
+      run: |
+        poetry run python evaluators/test_query.py
