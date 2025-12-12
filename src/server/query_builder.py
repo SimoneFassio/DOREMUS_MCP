@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict, Any, Union
 import logging
 from src.server.query_container import QueryContainer, create_triple_element, create_select_element
+from fastmcp import Context
 
 logger = logging.getLogger("doremus-mcp")
 
@@ -49,18 +50,19 @@ def _resolve_entity(name: str, entity_type: str) -> Optional[str]:
 
 def query_works(
     query_id: str,
+    ctx: Context,
     title: Optional[str] = None,
     composer_name: Optional[str] = None,
     composer_nationality: Optional[str] = None,
     genre: Optional[str] = None,
     place_of_composition: Optional[str] = None,
     musical_key: Optional[str] = None,
-    limit: int = 50
+    limit: int = 50, 
 ) -> QueryContainer:
     """
     Initialize a QueryContainer with a baseline query for Musical Works.
     """
-    qc = QueryContainer(query_id)
+    qc = QueryContainer(query_id, ctx)
     qc.set_limit(limit)
     
     # 1. Define Select variables
@@ -318,6 +320,7 @@ def query_works(
 
 def query_performance(
     query_id: str,
+    ctx: Context,
     title: Optional[str] = None,
     location: Optional[str] = None,
     carried_out_by: Optional[List[str]] = None,
@@ -326,7 +329,7 @@ def query_performance(
     """
     Initialize a QueryContainer with a baseline query for Performances.
     """
-    qc = QueryContainer(query_id)
+    qc = QueryContainer(query_id, ctx)
     qc.set_limit(limit)
     
     # Select variables
@@ -483,6 +486,7 @@ def query_performance(
 
 def query_artist(
     query_id: str,
+    ctx: Context,
     name: Optional[str] = None,
     nationality: Optional[str] = None,
     birth_place: Optional[str] = None,
@@ -493,7 +497,7 @@ def query_artist(
     """
     Initialize a QueryContainer with a baseline query for Artists.
     """
-    qc = QueryContainer(query_id)
+    qc = QueryContainer(query_id, ctx)
     qc.set_limit(limit)
     
     # Select variables

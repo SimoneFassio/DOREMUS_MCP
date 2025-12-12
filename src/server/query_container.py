@@ -1,5 +1,7 @@
 from typing import Any, Optional, List, Dict
 import logging
+from fastmcp import Context
+from src.server.tool_sampling import tool_sampling_request
 
 logger = logging.getLogger("doremus-mcp")
 
@@ -28,7 +30,7 @@ class QueryContainer:
     variable naming conflicts and ensures consistency between modules.
     """
     
-    def __init__(self, query_id: str):
+    def __init__(self, query_id: str, ctx: Context):
         self.query_id = query_id
         
         # Select: List of dicts e.g., {"var_name": "title", "var_label": "", "is_sample": True}
@@ -50,10 +52,12 @@ class QueryContainer:
 
         # Metadata
         self.question: str = ""
+        self.ctx: Context = ctx
         
         # Variable dependency tracking
         # Map of var_name -> { "uri": str, "count": int }
         self.variable_registry: Dict[str, Dict[str, Any]] = {}
+        self.track_dep: bool = True
 
     # ----------------------
     # MODULE MANAGEMENT
@@ -113,24 +117,197 @@ class QueryContainer:
         """Basic validation of module structure."""
         required_keys = ["id", "triples"]
         return all(key in module for key in required_keys)
+    
+    def _modify_var(self, module: Dict[str, Any], old_var: str, new_var: str) -> None:
+        """Helper to rename variables in triples."""
+        if "triples" in module.keys():
+            for t in module.get("triples", []):
+                for part in ["subj", "pred", "obj"]:
+                    if t[part]["var_name"] == old_var:
+                        t[part]["var_name"] = new_var
+        if "filter_st" in module.keys():
+            for f in module.get("filter_st", []):
+                for i, arg in enumerate(f.get("args", [])):
+                    if arg == f"?{old_var}":
+                        f["args"][i] = f"?{new_var}"
+        # Also update defined_vars and required_vars if present
+        if "defined_vars" in module:
+            for dv in module["defined_vars"]:
+                if dv["var_name"] == old_var:
+                    dv["var_name"] = new_var
+        if "required_vars" in module:
+            for rv in module["required_vars"]:
+                if rv["var_name"] == old_var:
+                    rv["var_name"] = new_var
+    
+    def _update_variable_counter(self, var_uri: str) -> None:
+        """Increment the counter for each variable having the same URI."""
+        for var_name, var_info in self.variable_registry.items():
+            if var_info["var_label"] == var_uri:
+                var_info["count"] += 1
 
-    def _process_variables(self, module: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_for_llm(self, new_module: Dict[str, Any]) -> str:
+        """
+        Parse the current query and the module to be added into a human-readable format
+        for the LLM to understand, highlighting new modules, existing variables, and conflicts.
+
+        Args:
+            module: The module to be added, containing triples, filters, and other details.
+
+        Returns:
+            A string representation of the current query and the module to be added.
+        """
+        query_parts = []
+
+        # Build Select string
+        select_mod = "DISTINCT " if self.distinct_select else ""
+        select_vars_str = []
+
+        for item in self.select:
+            var_name = item["var_name"]
+            if item.get("is_sample"):
+                # Example: SAMPLE(?title) as ?title
+                select_vars_str.append(f"SAMPLE(?{var_name}) as ?{var_name}")
+            else:
+                # Example: ?expression
+                select_vars_str.append(f"?{var_name}")
+        
+        query_parts.append(f"  SELECT {select_mod}{', '.join(select_vars_str)}")
+        
+        # Build Where string
+        query_parts.append("  WHERE {")
+        for module in self.where:
+            mod_id = module.get("id", "unnamed")
+            query_parts.append(f"    # Module: {mod_id}")
+            if module.get("scope") == "main":
+                triples = module.get("triples", [])
+                for t in triples:
+                    s_str = self._format_term(t.get("subj"), highlight_existing=True)
+                    p_str = self._format_term(t.get("pred"), highlight_existing=True)
+                    o_str = self._format_term(t.get("obj"), highlight_existing=True)
+                    if p_str == "VALUES":
+                        query_parts.append(f"      {p_str} {s_str} {{ {o_str} }}")
+                    else:
+                        query_parts.append(f"      {s_str} {p_str} {o_str} .")
+            else:
+                query_parts.append(f"    # Unsupported scope: {module.get('scope')}")
+
+        # Add the new module with "+" annotations
+        query_parts.append("\n    # New Module:")
+        if "triples" in new_module:
+            for t in new_module["triples"]:
+                s_str = self._format_term(t.get("subj"), highlight_existing=True, highlight_conflict=True)
+                p_str = self._format_term(t.get("pred"), highlight_existing=True, highlight_conflict=True)
+                o_str = self._format_term(t.get("obj"), highlight_existing=True, highlight_conflict=True)
+                if p_str == "VALUES":
+                    query_parts.append(f"    + {p_str} {s_str} {{ {o_str} }}")
+                else:
+                    query_parts.append(f"    + {s_str} {p_str} {o_str} .")
+
+        if "filter_st" in new_module:
+            query_parts.append("    # New Filters:")
+            for f in new_module["filter_st"]:
+                func = f.get("function")
+                args = f.get("args", [])
+                if func == "":
+                    args_str = " ".join(args)
+                    query_parts.append(f"    + FILTER ({args_str})")
+                elif func:
+                    args_str = ", ".join(args)
+                    query_parts.append(f"    + FILTER {func}({args_str})")
+
+        query_parts.append("  }")
+
+        return "\n".join(query_parts)
+
+    async def _process_variables(self, module: Dict[str, Any]) -> Dict[str, Any]:
         """
         Handle variable naming conventions and collision resolution.
+
+        Procedure:
+        - For each required variable in the module, ensure it matches an existing variable.
+        - For each defined variable, check for naming collisions:
+            - If no collision, register it.
+            - If collision, use LLM sampling to decide whether to rename or reuse an existing variable.
         
-        If a variable is new (in defined_vars) and already exists in registry,
-        rename it (e.g., ?var -> ?var_1).
-        If a variable is required (in required_vars), ensure it matches existing.
+        Args:
+            module: The module to be processed.
+        Returns:
+            The processed module with variables renamed as needed.
         """
-        # This is a high-level skeleton. 
-        # In a full implementation, we would iterate through 'defined_vars',
-        # check against self.variable_registry, and rewrite 'triples' with new names.
-        
-        # For now, we mock the logic:
+
         new_module = module.copy()
 
-        #TODO: implement internal checks
-        #TODO: handle different types of modules (e.g., filter_st, where)
+        if self.track_dep:
+            # Check on required variables
+            if "required_vars" in module.keys():
+                for req_elem in module["required_vars"]:
+                    if req_elem["var_name"] not in [v["var_name"] for v in self.select]:
+                        for sel_elem in self.select:
+                            if sel_elem["var_label"] == req_elem["var_label"]:
+                                self._modify_var(new_module, req_elem["var_name"], sel_elem["var_name"])
+                                break
+            # Check on defined variables
+            if "defined_vars" in module.keys():
+                for def_elem in module["defined_vars"]:
+                    var_name = def_elem["var_name"]
+                    var_label = def_elem["var_label"]
+                    # New variable -> register and update the count of all the others with same URI
+                    if var_name not in self.variable_registry.keys():
+                        if var_label not in [v["var_label"] for v in self.variable_registry.values()]:
+                            self.variable_registry[var_name] = {"var_label": var_label, "count": 1}
+                        else:
+                            for existing_var, var_info in self.variable_registry.items():
+                                if var_info["var_label"] == var_label:
+                                    # Maintain count
+                                    count = var_info["count"]
+                                    self.variable_registry[var_name] = {"var_label": var_label, "count": count}
+                                    self._update_variable_counter(var_label)
+                                    break
+                    # Handle collision using LLM-based sampling
+                    else:
+                        count = self.variable_registry[var_name]["count"]
+                        working_query = self._parse_for_llm(module, def_elem)
+                        option_list = []
+                        for var_name, var_el in self.variable_registry.items():
+                            if var_el["var_label"] == var_label:
+                                option_list.append(var_name)
+                        options = "\n".join([f"Option {i}: '{opt}'" for i, opt in enumerate(option_list)])
+                        options += f"\nOption {len(option_list)}: Rename to '{var_name}_{count}'"
+                        pattern_intent = f"""
+                            solving the conflict for '{var_name}' by determining whether to 
+                            rename it or use one of the existing variables.
+
+                            This is the current query structure, where:
+                            - The "+" in front of a line indicates the new module being added.
+                            - The **bolded** variable names are the existing ones in the query.
+                            - The <<variable>> indicates the conflicting variable in the new module.
+
+                            Current Query:
+                            {working_query}
+
+                            Therefore, the current options to put in place of '<<{var_name}>>' are:
+                            {options}
+                        """
+                        system_prompt = "You are an expert SPARQL query builder assisting in variable naming."
+                        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, self.ctx)
+                        try:
+                            index = int(llm_answer.strip())
+                            if index == len(option_list):
+                                # Rename + add to registry
+                                new_var_name = f"{var_name}_{count}"
+                                self._modify_var(new_module, var_name, new_var_name)
+                                self._update_variable_counter(var_label)
+                            else:
+                                # Use existing variable
+                                chosen_var = option_list[index]
+                                self._modify_var(new_module, var_name, chosen_var)
+                        except (ValueError, IndexError):
+                            logger.error(f"LLM returned invalid index '{llm_answer}' for variable conflict resolution.")
+                            # Default to renaming
+                            new_var_name = f"{var_name}_{count}"
+                            self._modify_var(new_module, var_name, new_var_name)
+                            self._update_variable_counter(var_label)
                     
         return new_module
     

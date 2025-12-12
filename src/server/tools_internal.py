@@ -174,10 +174,15 @@ def get_ontology_internal(path: str, depth: int = 1) -> str:
         logger.error(f"Error exploring ontology: {str(e)}")
         return f"Error exploring ontology: {str(e)}"
 
+#-------------------------------
+# QUERY BUILDER INTERNALS
+#-------------------------------
+
 def build_query_internal(
     question: str,
     template: str,
-    filters: Dict[str, Any] | None
+    filters: Dict[str, Any] | None,
+    ctx: Context
 ) -> Dict[str, Any]:
     try:
         # Standardize template name
@@ -192,16 +197,19 @@ def build_query_internal(
         if template == "works":
             qc = query_works(
                 query_id=query_id,
+                ctx=ctx,
                 **filters
             )
         elif template == "performances":
             qc = query_performance(
                 query_id=query_id,
+                ctx=ctx,
                 **filters
             )
         elif template == "artists":
             qc = query_artist(
                 query_id=query_id,
+                ctx=ctx,
                 **filters
             )
         else:
@@ -210,6 +218,11 @@ def build_query_internal(
                 "error": f"Unknown template: {template}. Supported templates: Works, Performances, Artists"
             }
 
+        if not qc.dry_run_test():
+            return {
+                "success": False,
+                "error": "Malformed query generated. Please check the provided filters."
+            }
         sparql_query = qc.to_string()
         qc.set_question(question)
         
@@ -228,6 +241,10 @@ def build_query_internal(
             "success": False,
             "error": str(e)
         }
+
+#-------------------------------
+# ASSOCIATE N ENTITIES INTERNALS
+#-------------------------------
 
 # helper that finds the property to filter based on number of entities
 def get_quantity_property(entity_uri: str) -> str | None:
@@ -477,6 +494,9 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
             "message": "Query pattern added successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
         }
 
+#-------------------------------
+# EXECUTE QUERY INTERNALS
+#-------------------------------
 
 def execute_query_from_id_internal(query_id: str) -> Dict[str, Any]:
     qc = QUERY_STORAGE.get(query_id)
