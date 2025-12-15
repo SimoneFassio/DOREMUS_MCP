@@ -24,7 +24,7 @@ docker-compose up --build
 2. **Access the MCP server at:**
 
 ```
-http://localhost:8000/sse
+http://localhost:8000/mcp
 ```
 
 ### Local Development with Poetry
@@ -39,13 +39,13 @@ curl -sSL https://install.python-poetry.org | python3 -
 
 ```bash
 # Install core + server dependencies only
-poetry install --with server
+poetry install
 ```
 
 3. **Run the server:**
 
 ```bash
-poetry run python -m src.server.server
+poetry run python -m src.server.main
 ```
 
 ### Setting Up Evaluators/Client
@@ -72,13 +72,13 @@ Install combinations as needed:
 
 ```bash
 # Server only
-poetry install --with server
+poetry install
 
 # Everything for development
-poetry install --with server,eval,dev
+poetry install --with eval,dev
 
 # Production (no optional groups)
-poetry install --only main,server
+poetry install --only main
 ```
 
 ## Architecture
@@ -143,4 +143,4 @@ For issues related to:
 
 ---
 
-**Last Updated**: November 2025
+**Last Updated**: December 2025
