@@ -25,19 +25,13 @@ def _resolve_entity(name: str, entity_type: str) -> Optional[str]:
     Helper to resolve a name to a URI using internal tools.
     Returns the first matching URI or None.
     """
+    
+    # Check if name is already an uri
+    if name.startswith("http:") or name.startswith("https:"):
+        return name
+    
     try:
-        # Use "others" for generic or specific types not in [artist, vocabulary]
-        # But 'find_candidate_entities_internal' supports: artist, vocabulary, others.
-        # For Genre/Key we might want 'vocabulary' or specific class?
-        # The tool says: artist, vocabulary, others.
-        
-        search_type = "others"
-        if entity_type == "composer":
-            search_type = "artist"
-        elif entity_type in ["genre", "key"]:
-            search_type = "vocabulary"
-            
-        result = find_candidate_entities_utils(name, search_type)
+        result = find_candidate_entities_utils(name, entity_type)
 
         if result.get("matches_found", 0) > 0:
             # Take the first one (most relevant)
@@ -78,16 +72,16 @@ async def query_works(
     qc.set_select(select_vars)
     
     # 2. Variable Resolvers
-    resolved_composer = _resolve_entity(composer_name, "composer") if composer_name else None
-    resolved_genre = _resolve_entity(genre, "genre") if genre else None
+    resolved_composer = _resolve_entity(composer_name, "artist") if composer_name else None
+    resolved_genre = _resolve_entity(genre, "vocabulary") if genre else None
     resolved_place = _resolve_entity(place_of_composition, "others") if place_of_composition else None
-    resolved_key = _resolve_entity(musical_key, "key") if musical_key else None
+    resolved_key = _resolve_entity(musical_key, "vocabulary") if musical_key else None
 
     # 3. Core Module: Expression & Title
     # Use simple label for display as requested
     core_module = {
         "id": "work_core",
-        "type": "where",
+        "type": "query_builder",
         "scope": "main",
         "triples": [
             {"subj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var"), 
@@ -106,7 +100,7 @@ async def query_works(
     if title:
         title_filter_module = {
             "id": "work_title_filter",
-            "type": "filter",
+            "type": "query_builder",
             "scope": "main",
             "filter_st": [
                 {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
@@ -179,7 +173,7 @@ async def query_works(
         def_vars = qc.extract_defined_variables(triples)
         composer_module = {
             "id": "work_composer_filter",
-            "type": "pattern",
+            "type": "query_builder",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,
@@ -217,7 +211,7 @@ async def query_works(
              
         genre_module = {
             "id": "work_genre_filter",
-            "type": "pattern",
+            "type": "query_builder",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,
@@ -270,7 +264,7 @@ async def query_works(
 
         place_module = {
             "id": "work_place_filter",
-            "type": "pattern",
+            "type": "query_builder",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,
@@ -307,7 +301,7 @@ async def query_works(
              
         key_module = {
             "id": "work_key_filter",
-            "type": "pattern",
+            "type": "query_builder",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,
@@ -344,7 +338,7 @@ async def query_performance(
     # Core Module: Performance Entity
     core_module = {
         "id": "performance_core",
-        "type": "where",
+        "type": "query_builder",
         "scope": "main",
         "triples": [
             {
@@ -365,7 +359,7 @@ async def query_performance(
     if title:
         title_filter_module = {
             "id": "performance_title_filter",
-            "type": "filter",
+            "type": "query_builder",
             "scope": "main",
             "filter_st": [
                 {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
@@ -384,18 +378,26 @@ async def query_performance(
     
     # Location Filter
     if location:
+        resolved_uri = _resolve_entity(location, "others")
+        if resolved_uri:
+            location_triples.append({
+                "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_uri, resolved_uri, "uri")
+            })
         
-        # Filter by String
-        location_triples.append({
-            "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
-            "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
-            "obj": create_triple_element("locationName", "", "var")
-        })
-        location_filters.append({'function': 'REGEX', 'args': ['?locationName', f"\'{location}\'", "\'i\'"]})
+        else:
+            # Filter by String
+            location_triples.append({
+                "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
+                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "obj": create_triple_element("locationName", "", "var")
+            })
+            location_filters.append({'function': 'REGEX', 'args': ['?locationName', f"\'{location}\'", "\'i\'"]})
 
         loc_module = {
             "id": "performance_location_filter",
-            "type": "pattern",
+            "type": "query_builder",
             "scope": "main",
             "triples": location_triples,
             "filter_st": location_filters,
@@ -415,7 +417,7 @@ async def query_performance(
         })
         loc_opt_module = {
             "id": "performance_location_optional",
-            "type": "optional",
+            "type": "query_builder",
             "scope": "optional",
             "triples": location_triples,
             "required_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}],
@@ -474,7 +476,7 @@ async def query_performance(
 
             perf_module = {
                 "id": f"performance_artist_{idx}",
-                "type": "pattern",
+                "type": "query_builder",
                 "scope": "main",
                 "triples": performer_triples,
                 "filter_st": performer_filters,
@@ -510,7 +512,7 @@ async def query_artist(
     # Core Module: Artist Entity
     core_module = {
         "id": "artist_core",
-        "type": "where",
+        "type": "query_builder",
         "scope": "main",
         "triples": [
             {
@@ -529,7 +531,7 @@ async def query_artist(
     
     # Name Filter
     if name:
-        resolved_artist = _resolve_entity(name, "composer")
+        resolved_artist = _resolve_entity(name, "artist")
         triples = []
         filter_st = []
 
@@ -544,7 +546,7 @@ async def query_artist(
         
         name_module = {
             "id": "artist_name_filter",
-            "type": "pattern",
+            "type": "query_builder",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,
@@ -558,7 +560,7 @@ async def query_artist(
          if country_code:
              nat_module = {
                 "id": "artist_nationality_filter",
-                "type": "filter",
+                "type": "query_builder",
                 "scope": "main",
                 "triples": [
                     {
@@ -591,7 +593,7 @@ async def query_artist(
         
         bp_module = {
             "id": "artist_birth_place_filter",
-            "type": "pattern",
+            "type": "query_builder",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,
@@ -621,7 +623,7 @@ async def query_artist(
         
         dp_module = {
             "id": "artist_death_place_filter",
-            "type": "filter",
+            "type": "query_builder",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,
@@ -635,6 +637,7 @@ async def query_artist(
 
     # Work Name Filter
     if work_name:
+        resolved_work = _resolve_entity(work_name, "others")
         triples = [
             {
             "subj": create_triple_element("performanceWork", "efrbroo:F28_Expression_Creation", "var"),
@@ -652,11 +655,20 @@ async def query_artist(
             "obj": create_triple_element("workTitle", "", "var")
             }
         ]
-        filter_st = [{'function': 'REGEX', 'args': ['?workTitle', f"\'{work_name}\'", "\'i\'"]}]
+
+        filter_st = []
+        if resolved_work:
+            triples.append({
+                "subj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_work, resolved_work, "uri")
+            })
+        else:
+            filter_st = [{'function': 'REGEX', 'args': ['?workTitle', f"\'{work_name}\'", "\'i\'"]}]
         
         work_module = {
             "id": "artist_work_filter",
-            "type": "pattern",
+            "type": "query_builder",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,

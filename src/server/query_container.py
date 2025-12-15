@@ -85,7 +85,7 @@ class QueryContainer:
             module: Dictionary containing module definition.
                 {
                     "id": str,
-                    "type": str, # e.g., "filter", "pattern"
+                    "type": str, # e.g., "associate_N_entities", "query_builder"
                     "scope": str, # e.g., "main", "optional" (Placeholder for future)
                     "triples": List[Dict[str, Any]], Structured triples {"subj":{"var_name": str, "var_label": str}, "pred":{...}, "obj":{...}}
                     "filter_st": List[Dict[str, Any]], Optional filters associated with this module
@@ -296,6 +296,14 @@ class QueryContainer:
                                     self.variable_registry[var_name] = {"var_label": var_label, "count": count}
                                     self._update_variable_counter(var_label)
                                     break
+                    # Do not change name for query builder generated variables, TODO it works but logic is not most efficient
+                    elif "query_builder" in module["type"]:
+                        option_list = []
+                        for reg_var_name, reg_var_el in self.variable_registry.items():
+                            if reg_var_el["var_label"] == var_label:
+                                option_list.append(reg_var_name)
+                        chosen_var = option_list[0]
+                        self._modify_var(new_module, var_name, chosen_var)
                     # Handle collision using LLM-based sampling
                     else:
                         count = self.variable_registry[var_name]["count"]
@@ -322,7 +330,11 @@ The current query is asking about: '{self.question}'
 Therefore, the current options to put in place of '<<{var_name}>>' are:
 {options}
                         """
-                        system_prompt = "You are an expert SPARQL query builder assisting in variable naming."
+                        system_prompt = """You are an expert SPARQL query builder assisting in variable naming.
+You are given a SPARQL query and a list of options to replace a variable in the query.
+You must choose one of the options and return the index of the chosen option.
+You should select an option different to 0 ONLY if the variable represent a new entity of the same class of the one in the query, used for example for comparison or for checking relations.
+"""
                         llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
                         try:
                             match = re.search(r'\d+', llm_answer)

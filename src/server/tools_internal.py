@@ -386,7 +386,7 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
         pattern_intent = f"""which of these paths is the best for associating '{subject}' to {N} '{obj}'/s, 
 given that the current question being asked is: '{qc.get_question()}'.
         
-The opions available are:
+The options available are:
 {path_options_text}
         """
         # Send Sampling request to LLM
@@ -442,7 +442,7 @@ The opions available are:
     })
     await qc.add_module({
             "id": f"associate_N_entities_module_{selected_path[-1][0]}",
-            "type": "associate_N_entities_pattern",
+            "type": "associate_N_entities",
             "scope": "main",
             "triples": triples,
             "required_vars": [create_triple_element(subject, subject_uri, "var")],
