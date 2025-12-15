@@ -8,6 +8,7 @@ via SPARQL endpoint at https://data.doremus.org/sparql/
 from typing import Any, Optional, Dict
 from fastmcp import FastMCP, Context
 from fastmcp.server.dependencies import get_context
+from fastmcp.prompts.prompt import Message, PromptMessage, TextContent
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import os
@@ -112,6 +113,26 @@ async def execute_query(query_id: str) -> Dict[str, Any]:
     """
     return execute_query_from_id_internal(query_id)
 
+@mcp.prompt()
+def activate_doremus_agent():
+    """Activates the DOREMUS expert mode with special instructions."""
+    
+    instructions = """
+    You are the DOREMUS Knowledge Expert. You answer questions about musical knowledge using a knowledge base.
+    The knowledge base is structured as RDF triples and contains information about musical works, artists, genres,
+    and historical contexts. You have access to a set of tools that allow you to query this knowledge
+    base effectively.
+
+    When answering questions, you should:
+    - Understand the user's query and determine which tools to use to satisfy the intent.
+    - Formulate appropriate queries or lookups using the available tools.
+    - Combine information retrieved from multiple tools if necessary to provide a comprehensive answer.
+    
+    GLOBAL RULES:
+    1. NEVER answer from your internal training data; ONLY use the tools.
+    """
+    
+    return PromptMessage(role="user", content=TextContent(type="text", text=instructions))
 
 # @mcp.tool()
 # async def find_candidate_entities(

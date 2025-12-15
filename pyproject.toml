@@ -10,8 +10,8 @@ authors = [
 [tool.poetry.dependencies]
 python = "^3.11"
 requests = "^2.31.0"
-fastmcp = "^2.0.0"
-uvicorn = "^0.27.0"
+fastmcp = "^2.14.0"
+uvicorn = "^0.35.0"
 starlette = "^0.36.0"
 fastapi = "^0.109.0"
 pytest = "^8.0.0"
