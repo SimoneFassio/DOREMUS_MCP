@@ -19,7 +19,7 @@ mcp_transport = os.getenv("DOREMUS_MCP_TRANSPORT", "streamable_http")
 
 evaluation_models = {
     "openai": "gpt-4.1", 
-    "groq": "llama-3.1-8b-instant", 
+    "groq": "meta-llama/llama-4-scout-17b-16e-instruct", 
     "anthropic": "claude-sonnet-4-5-20250929", 
     "mistral": "mistral-7b-instant",
     "ollama": "gpt-oss:120b"
@@ -51,7 +51,7 @@ def create_model(provider: str):
         return ChatOllama(
             base_url=os.getenv("OLLAMA_API_URL"),
             model=model_name,
-            client_kwargs={"headers": {"Authorization": f"Basic {os.getenv('OLLAMA_API_KEY')}"}},
+            client_kwargs={"headers": {"Authorization": f"Basic {os.getenv('OLLAMA_API_KEY')}", "stream": "true"}},
             temperature=0)
     else:
         raise ValueError(f"Unknown provider: {provider}")

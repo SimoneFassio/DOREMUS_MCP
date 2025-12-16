@@ -17,6 +17,8 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 load_dotenv(".env")
 
+EXPERIMENT_PREFIX = os.getenv("EXPERIMENT_PREFIX", "")
+
 # Set to True to reload the dataset and update it
 RELOAD = False
 
@@ -149,7 +151,7 @@ async def main():
         # print(f"\nThe query Output is: {query_output[:2]}", ending_que)
         print(f" Percentage of correct values: {percentage_correct:.2f}%")
         
-        return percentage_correct
+        return round(percentage_correct, 2)
 
     async def llm_evaluator(outputs: dict, reference_outputs: dict) -> dict:
         """Use an LLM to evaluate the semantic correctness of the generated query."""
@@ -184,7 +186,7 @@ async def main():
         
         Output a JSON object with:
         - "score": A number between 0 and 1 (1 means semantically equivalent, 0 means completely wrong).
-        - "reasoning": A brief explanation of the score.
+        - "reasoning": A brief explanation of the score where you point out the errors in the generated query.
         
         Only output the JSON.
         """
@@ -201,7 +203,7 @@ async def main():
                 clean_content = clean_content[:-3]
             
             data = json.loads(clean_content.strip())
-            return {"score": data.get("score", 0), "comment": data.get("reasoning", "")}
+            return {"score": round(data.get("score", 0), 2), "comment": data.get("reasoning", "")}
         except Exception as e:
             print(f"LLM Evaluator Error: {e}")
             return {"score": 0, "comment": f"Evaluation failed: {e}"}
@@ -214,7 +216,7 @@ async def main():
             data=dataset_name,
             evaluators=[results_evaluator, llm_evaluator],
             # Name of the experiment
-            experiment_prefix="Base + Competency - QB + ANE", 
+            experiment_prefix=EXPERIMENT_PREFIX, 
             max_concurrency=2
         )
 
