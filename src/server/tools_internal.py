@@ -535,6 +535,24 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
             "error": "Invalid end date format."
         }
     
+    # Type processing
+    if type not in ["less", "more", "equal", "range"]:
+        return {
+            "success": False,
+            "error": "Invalid filter type."
+        }
+
+    if type in ["less", "more", "equal"] and valueEnd is not None:
+        return {
+            "success": False,
+            "error": "Value End is not allowed for this type."
+        }
+    if type == "range" and valueEnd is None:
+        return {
+            "success": False,
+            "error": "Value End is required for this type."
+        }
+    
     prop_module_id = f"has_quantity_of_{property}"
         
     if is_date:
