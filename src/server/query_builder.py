@@ -89,8 +89,14 @@ async def query_works(
              "obj": create_triple_element("expression_type", "efrbroo:F22_Self-Contained_Expression", "uri")},
             {"subj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var"),
              "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
-             "obj": create_triple_element("title", "", "var")}
-        ]
+             "obj": create_triple_element("title", "", "var")},
+             {"subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
+             "pred": create_triple_element("efrbroo:R17_created", "efrbroo:R17_created", "uri"),
+             "obj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var")}
+        ],
+        "defined_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"},
+        {"var_name": "title", "var_label": ""},
+        {"var_name": "expCreation", "var_label": "efrbroo:F28_Expression_Creation"}],
     }
     await qc.add_module(core_module)
     
@@ -102,6 +108,7 @@ async def query_works(
             "id": "work_title_filter",
             "type": "query_builder",
             "scope": "main",
+            "triples": [],
             "filter_st": [
                 {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
             ],
@@ -361,6 +368,7 @@ async def query_performance(
             "id": "performance_title_filter",
             "type": "query_builder",
             "scope": "main",
+            "triples": [],
             "filter_st": [
                 {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
             ],

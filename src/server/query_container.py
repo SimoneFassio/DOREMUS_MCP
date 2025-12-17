@@ -466,7 +466,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
                 args = filter_cond.get("args", [])
                 if func == "":
                     args_str = " ".join(args)
-                    filter_parts.append(f"{args_str})")
+                    filter_parts.append(f"{args_str}")
                 if func == "||":
                     logger.warning("OR filters not yet implemented.")
                 elif func and args:

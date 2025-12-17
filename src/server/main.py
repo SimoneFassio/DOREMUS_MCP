@@ -21,7 +21,8 @@ from server.tools_internal import (
     get_ontology_internal,
     build_query_internal,
     execute_query_from_id_internal,
-    associate_to_N_entities_internal
+    associate_to_N_entities_internal,
+    has_quantity_of_internal,
 )
 
 # Configure logging
@@ -137,6 +138,32 @@ async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int 
     """
     
     return await associate_to_N_entities_internal(subject, obj, query_id, n)
+
+@mcp.tool()
+async def has_quantity_of(subject: str, property: str, type: str, valueStart: str, valueEnd: str | None, query_id: str) -> Dict[str, Any]:
+    """
+    Tool that receives as input the `subject` entity (i.e. “expression”, the name of the variable already present in the query) and the property to apply the pattern to (i.e. “mus:U78_estimated_duration”)
+    For ecrm:P4_has_time-span, input format YYYY-MM-DD or YYYY is supported.
+
+    Args:
+        subject: The subject entity variable name (e.g., "expression")
+        property: The property uri (e.g., "mus:U78_estimated_duration" or "time-span")
+        type: "less", "more", "equal", or "range"
+        valueStart: Start value (number or date)
+        valueEnd: End value (number or date), optional
+        query_id: The ID of the query being built.
+
+    Returns:
+        Dict containing success status and generated SPARQL.
+
+    Examples:
+        - Input: subject="expression", property="mus:U78_estimated_duration", type="less", valueStart="900", valueEnd="", query_id="..."
+          Output: generated_sparql="... FILTER ( ?quantity_val <= 900) ..."
+        - Input: subject="expCreation", property="ecrm:P4_has_time-span", type="range", valueStart="01-01-1870", valueEnd="01-01-1913", query_id="..."
+          Output: generated_sparql="... FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear) ..."
+    """
+    return await has_quantity_of_internal(subject, property, type, valueStart, valueEnd, query_id)
+
 
 @mcp.tool()
 async def execute_query(query_id: str) -> Dict[str, Any]:
