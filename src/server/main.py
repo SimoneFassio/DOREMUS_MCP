@@ -225,7 +225,7 @@ async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     return get_entity_properties_internal(entity_uri)
 
 
-@mcp.tool()
+# @mcp.tool()
 def get_ontology(path: str) -> str:
     """
     Explore the DOREMUS ontology graph schema hierarchically.
@@ -260,7 +260,7 @@ def get_ontology(path: str) -> str:
 
 # # Documentation tools
 
-@mcp.tool()
+# @mcp.tool()
 def get_usage_guide() -> str:
     """
     USE THIS TOOL FIRST TO RETRIEVE GUIDANCE ON QUERYING DOREMUS
@@ -284,6 +284,7 @@ It is designed to describe how a musical idea is created, realized, and performe
 Work -> conceptual idea (idea of a sonata)
 Expression -> musical realization (written notation of the sonata, with his title, composer, etc.)
 Event -> performance or recording
+TODO add high level description of the graph
 
 It defines 7 vocabularies categories:
 - Musical keys
@@ -311,6 +312,7 @@ Build the SPARQL query step by step:
 - When in doubt, start simple and iterate
 - Provide context and explanations, not just raw data
 - Acknowledge limitations when encountered
+- Answer only with information provided by the execution of the query.
 """
 
     return guide

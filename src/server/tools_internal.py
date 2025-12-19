@@ -380,11 +380,21 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
         possible_paths = sorted(reduced_paths, key=len)[:5]
         
         path_options_text = format_paths_for_llm(possible_paths)
+
+        current_query = qc.to_string()
         
         # Create the prompt for the LLM
-        system_prompt = "You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query."
+        system_prompt = """You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query.
+Note the shortest path is rarely the best option, compare the semantic relevance of the paths.
+DOREMUS is based on the CIDOC-CRM ontology, using the EFRBROO (Work-Expression-Manifestation-Item) extension.
+Work -> conceptual idea (idea of a sonata)
+Expression -> musical realization (written notation of the sonata, with his title, composer, etc.)
+Event -> performance or recording"""
         pattern_intent = f"""which of these paths is the best for associating '{subject}' to {N} '{obj}'/s, 
 given that the current question being asked is: '{qc.get_question()}'.
+
+The current query is:
+{current_query}
         
 The options available are:
 {path_options_text}
