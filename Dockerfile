@@ -9,13 +9,16 @@ RUN pip install poetry==2.2.1
 # Copy dependency files
 COPY pyproject.toml poetry.lock* ./
 
-# Copy application files (needed for package installation)
-COPY src/server ./src/server
-
 # Configure Poetry to not create virtual environment (we're already in a container)
 RUN poetry config virtualenvs.create false
 
-# Install only server dependencies (no eval)
+# Install dependencies (no root) to cache them
+RUN poetry install --only main --no-interaction --no-ansi --no-root
+
+# Copy application files
+COPY src/server ./src/server
+
+# Install the project itself (now that source is present)
 RUN poetry install --only main --no-interaction --no-ansi
 
 # Copy tests if needed for validation
