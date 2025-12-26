@@ -392,6 +392,10 @@ You should select an option different to 0 ONLY if the variable represent a new 
 
     def get_question(self) -> str:
         return self.question
+    
+    def get_non_aggregated_vars(self) -> List[str]:
+        """Return a list of variable names in SELECT that are NOT samples/aggregates."""
+        return [item["var_name"] for item in self.select if not item.get("is_sample", False)]
 
     def dry_run_test(self) -> bool:
         """
@@ -488,8 +492,23 @@ You should select an option different to 0 ONLY if the variable represent a new 
 
         # Build Having
         if self.having:
-            h_vars = [f"?{v['var_name']}" for v in self.having]
-            query_parts.append(f"HAVING ({' && '.join(h_vars)})")
+            having_parts = []
+            for condition in self.having:
+                function = condition.get("function", "")
+                var = condition.get("variable", "")
+                agg_expr = f"{function}(?{var})"
+                if condition.get("operator",""):
+                    operator = condition.get("operator","")
+                    if operator == "range":
+                        if condition.get("valueStart","") and condition.get("valueEnd",""):
+                            valueStart = condition.get("valueStart","")
+                            valueEnd = condition.get("valueEnd","")
+                            having_parts.append(f"{agg_expr} >= {valueStart} && {agg_expr} <= {valueEnd}")
+                    else:
+                        valueStart = condition.get("valueStart","")
+                        having_parts.append(f"{agg_expr} {operator} {valueStart}")
+
+            query_parts.append(f"HAVING ({' && '.join(having_parts)})")
 
         # Build Order By
         if self.order_by:

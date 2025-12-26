@@ -12,7 +12,7 @@ from server.utils import (
     extract_label
 )
 
-OPENAI = False
+OPENAI = True if os.getenv("LLM_EVAL_PROVIDER", "ollama").lower() == "openai" else False
 
 logger = logging.getLogger("doremus-mcp")
 

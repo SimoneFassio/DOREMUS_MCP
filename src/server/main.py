@@ -21,7 +21,8 @@ from server.tools_internal import (
     get_ontology_internal,
     build_query_internal,
     execute_query_from_id_internal,
-    associate_to_N_entities_internal
+    associate_to_N_entities_internal,
+    groupBy_having_internal
 )
 
 # Configure logging
@@ -60,7 +61,9 @@ def activate_doremus_agent():
 
 
 @mcp.tool()
-async def build_query(question: str, template: str, filters: Dict[str, Any] | None) -> Dict[str, Any]:
+async def build_query(question: str, 
+                      template: str, 
+                      filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
     Build a SPARQL query safely using a predefined template.
 
@@ -107,7 +110,11 @@ async def build_query(question: str, template: str, filters: Dict[str, Any] | No
     return await build_query_internal(question, template, filters)
 
 @mcp.tool()
-async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int | None) -> Dict[str, Any]:
+async def associate_to_N_entities(
+    subject: str, 
+    obj: str, 
+    query_id: str, 
+    n: int | None = None) -> Dict[str, Any]:
     """
     Tool that inserts in the query a pattern associating the subject entity (i.e. "expression"), usually from the select
     and an object entity (i.e. "violin") n times (the number of entities).
@@ -138,6 +145,58 @@ async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int 
     
     return await associate_to_N_entities_internal(subject, obj, query_id, n)
 
+
+@mcp.tool()
+async def groupBy_having(
+        subject: str, 
+        query_id: str, 
+        obj: str | None = None,
+        function: str | None = None,  
+        logic_type: str | None = None, 
+        valueStart: str | None = None, 
+        valueEnd: str | None = None) -> Dict[str, Any]:
+    """
+    This tool allows to insert a Group By in the current query by specifying the arguments. It can be used to select 
+    certain element based on the properties of the elements of each group (i.e. the number expressed with COUNT, the 
+    average mark expressed with AVG...)
+
+    Args:
+        subject: The subject entity name for which we want to group the records
+        query_id: The ID of the query being built onto which this pattern will be applied.
+        obj: optional, The object entity name which will be used in the "HAVING" filter
+        function: optional, the function to apply to the obj in the "HAVING" filter, it can assume the following values:
+            - COUNT: counts the occurrences of obj in each group
+            - SUM: sums the values of obj in each group
+            - AVG: averages the values of obj in each group
+            - MIN: selects the minimum among the obj in the group
+            - MAX: selects the maximum among the obj in the group
+        logic_type: optional, the logic operation to perform on the "HAVING" filter function (i.e. COUNT(castingDet) = 3 -> logic_type = 3)
+                    It can assume the following values:
+            - more: to apply >
+            - less: to apply <
+            - equal: to apply =
+            - range: to apply a filter within two values
+        valueStart: optional, the value used as a threshold in all the logic_types except in range, where it serves as
+                    lower bound
+        valueEnd: optional, only used when range is applied to specify the upper bound of the range
+    
+    Returns:
+        Dict containing:
+            - "success": boolean
+            - "query_id": The ID to use with `execute_query`
+            - "generated_sparql": The generated SPARQL string for review
+
+    **Example**
+    If we want to apply a group by Casting having the number of details in it equal to 3 we will call the function specifying
+    - subject = Casting
+    - function = COUNT
+    - obj = castingDetail
+    - logic_type = equal
+    - valueStart = 3
+    """
+    return await groupBy_having_internal(subject, query_id, function, obj, logic_type, valueStart, valueEnd)
+
+
 @mcp.tool()
 async def execute_query(query_id: str) -> Dict[str, Any]:
     """
@@ -152,6 +211,7 @@ async def execute_query(query_id: str) -> Dict[str, Any]:
         The results of the SPARQL query execution.
     """
     return execute_query_from_id_internal(query_id)
+
 
 @mcp.tool()
 async def find_candidate_entities(
@@ -197,81 +257,80 @@ async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     """
     return get_entity_properties_internal(entity_uri)
 
+# @mcp.tool()
+# def get_ontology(path: str) -> str:
+#     """
+#     Explore the DOREMUS ontology graph schema hierarchically.
 
-@mcp.tool()
-def get_ontology(path: str) -> str:
-    """
-    Explore the DOREMUS ontology graph schema hierarchically.
+#     This tool helps you understand the structure of the knowledge graph by providing
+#     a hierarchical view of node types (classes) and their relationships (edges).
 
-    This tool helps you understand the structure of the knowledge graph by providing
-    a hierarchical view of node types (classes) and their relationships (edges).
+#     Use this tool to:
+#     - Get an overview of the most important node types and connections (path='/')
+#     - Explore a specific class and its direct relationships
 
-    Use this tool to:
-    - Get an overview of the most important node types and connections (path='/')
-    - Explore a specific class and its direct relationships
+#     Args:
+#         path: Navigation path for exploration:
+#             - '/' - Get a high-level summary of the top 15 most important node types
+#                    and their top 20 most common relationships
+#             - '/{ClassName}' - Explore a specific class (e.g., '/efrbroo:F28_Expression_Creation')
 
-    Args:
-        path: Navigation path for exploration:
-            - '/' - Get a high-level summary of the top 15 most important node types
-                   and their top 20 most common relationships
-            - '/{ClassName}' - Explore a specific class (e.g., '/efrbroo:F28_Expression_Creation')
+#     Returns:
+#         Markdown-formatted visualization of the ontology subgraph, showing:
+#         - Node types (classes) in the knowledge graph
+#         - Edge types (predicates/relationships) connecting them
+#         - Hierarchical structure for easy understanding
 
-    Returns:
-        Markdown-formatted visualization of the ontology subgraph, showing:
-        - Node types (classes) in the knowledge graph
-        - Edge types (predicates/relationships) connecting them
-        - Hierarchical structure for easy understanding
+#     Examples:
+#         - get_ontology('/')
+#           Returns overview of the most important 15 nodes and their relationships
 
-    Examples:
-        - get_ontology('/')
-          Returns overview of the most important 15 nodes and their relationships
+#         - get_ontology('/efrbroo:F22_Self-Contained_Expression')
+#           Shows what properties and relationships a musical work has
+#     """
+#     return get_ontology_internal(path=path, depth=1)
 
-        - get_ontology('/efrbroo:F22_Self-Contained_Expression')
-          Shows what properties and relationships a musical work has
-    """
-    return get_ontology_internal(path=path, depth=1)
+# # # Documentation tools
 
-# # Documentation tools
+# @mcp.tool()
+# def get_usage_guide() -> str:
+#     """
+#     USE THIS TOOL FIRST TO RETRIEVE GUIDANCE ON QUERYING DOREMUS
 
-@mcp.tool()
-def get_usage_guide() -> str:
-    """
-    USE THIS TOOL FIRST TO RETRIEVE GUIDANCE ON QUERYING DOREMUS
+#     Get a comprehensive usage guide and prompt for LLMs interacting with DOREMUS.
 
-    Get a comprehensive usage guide and prompt for LLMs interacting with DOREMUS.
+#     This tool provides guidance on:
+#     - How to effectively use the available tools
+#     - Best practices for entity resolution
+#     """
 
-    This tool provides guidance on:
-    - How to effectively use the available tools
-    - Best practices for entity resolution
-    """
+#     guide = """
+# # DOREMUS MCP Server - LLM Usage Guide
 
-    guide = """
-# DOREMUS MCP Server - LLM Usage Guide
+# ## Purpose
+# This MCP server provides access to the DOREMUS Knowledge Graph, a comprehensive
+# database of classical music metadata including works, composers, performances,
+# recordings, and instrumentation.
 
-## Purpose
-This MCP server provides access to the DOREMUS Knowledge Graph, a comprehensive
-database of classical music metadata including works, composers, performances,
-recordings, and instrumentation.
+# ## Workflow
+# 1. get_ontology: explore the DOREMUS ontology graph schema
+# 2. find_candidate_entities: discover the unique URI identifier for an entity
+# 3. get_entity_properties: retrieve detailed information about a specific entity (all property)
+# 4. build_query: build the base query using information collected
+# 5. Use the most appropriate tool to write complex filters (like associate_to_N_entities)
+# 6. execute_query: execute the query built
+# 7. Check the query result, refine and use again tool to explore more the graph if necessary
+# 8. Once the result is ok, format it in a proper manner and write the response
 
-## Workflow
-1. get_ontology: explore the DOREMUS ontology graph schema
-2. find_candidate_entities: discover the unique URI identifier for an entity
-3. get_entity_properties: retrieve detailed information about a specific entity (all property)
-4. build_query: build the base query using information collected
-5. Use the most appropriate tool to write complex filters (like associate_to_N_entities)
-6. execute_query: execute the query built
-7. Check the query result, refine and use again tool to explore more the graph if necessary
-8. Once the result is ok, format it in a proper manner and write the response
+# ## Remember
+# - The database is authoritative but not complete
+# - Always verify entity resolution before complex queries
+# - When in doubt, start simple and iterate
+# - Provide context and explanations, not just raw data
+# - Acknowledge limitations when encountered
+# """
 
-## Remember
-- The database is authoritative but not complete
-- Always verify entity resolution before complex queries
-- When in doubt, start simple and iterate
-- Provide context and explanations, not just raw data
-- Acknowledge limitations when encountered
-"""
-
-    return guide
+#     return guide
 
 
 if __name__ == "__main__":

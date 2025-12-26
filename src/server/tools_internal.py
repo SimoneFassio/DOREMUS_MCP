@@ -457,6 +457,275 @@ The options available are:
         }
 
 #-------------------------------
+# GROUP BY HAVING INTERNALS
+#-------------------------------
+
+async def _find_path_helper(subj, subj_uri, obj_name, obj_uri, qc):
+    """
+    Internal wrapper re-implementing the core logic of associate_to_N_entities
+    to find a path between subject and object.
+    """
+    # 1. Find Inverse Arcs of Object
+    if obj_uri.startswith("http://"):
+        # Find inverse arcs
+        query_inverse = f"""
+            SELECT ?incoming_property (SAMPLE(?item_pointing_at_me) AS ?single_example)
+            WHERE {{
+            # 1. FIX THE TARGET
+            VALUES ?my_entity {{ <{obj_uri}> }} .
+
+            # 2. Find incoming links
+            ?item_pointing_at_me ?incoming_property ?my_entity .
+
+            }} 
+            # Group by the "Keys" (The things that should be unique per row)
+            GROUP BY ?incoming_property
+        """
+        inverse_arcs = execute_sparql_query(query_inverse, limit=50)
+        # FAILSAFE: debug
+        if len(inverse_arcs.get("results", []))==0:
+            logger.error(f"No incoming arcs found for vocabulary entity: {obj_name}")
+            return []
+        parents = []
+        for arc_val in inverse_arcs.get("results", []):
+            arc = arc_val.get("incoming_property")
+            arc_label = extract_label(arc)
+            for subj, edges in graph.items():
+                for pred, _ in edges:
+                    if pred == arc_label:
+                        parents.append((subj, pred))
+        # FAILSAFE: debug
+        if not parents:
+            logger.error(f"No parent entities found while incoming arcs are {[extract_label(arc_val.get('incoming_property')) for arc_val in inverse_arcs.get('results', [])]} for vocabulary entity: {obj_name}")
+            return []
+    else:
+        # Onthology term provided as label -> use Graph
+        res = find_inverse_arcs_internal(obj_uri, graph)
+        if not res.get("success"):
+            logger.error("No entity found in the inverse arcs")
+            return []
+        parents = res.get("parents", [])
+
+    #-------------------------------
+    # CALL RECURSIVE PATHFINDER
+    #-------------------------------
+    possible_paths = []
+    properties_paths = {str(extract_label(arc_uri)): [] for _, arc_uri in parents}
+    selected_path = None
+    logger.info(f"Found parents: {parents} for object {obj_name}")
+    try:
+        for parent_entity_uri, arc_uri in parents:
+            logger.info(f"Finding paths from parent entity {parent_entity_uri} to subject {subj_uri}...")
+            possible_subpaths = recur_domain(parent_entity_uri, subj_uri, graph, 1, [(convert_to_variable_name(parent_entity_uri), parent_entity_uri)])
+            # FAILSAFE: debug
+            if not possible_subpaths:
+                # Do not consider paths with no results
+                logger.info(f"No paths found from {convert_to_variable_name(parent_entity_uri)} -> {extract_label(arc_uri)} to subject {obj_name}.")
+                continue
+            
+            for subpath in possible_subpaths:
+                full_path = subpath + [(convert_to_variable_name(extract_label(arc_uri)), extract_label(arc_uri)), (obj_name, obj_uri)]
+                possible_paths.append(full_path)
+                properties_paths[str(extract_label(arc_uri))].append(full_path)
+    # FAILSAFE: debug
+    except ValueError as ve:
+        logger.error(str(ve))
+        return []
+    
+    # ---------------------------------------------------------
+    # DECISION LOGIC FOR SAMPLING
+    # ---------------------------------------------------------
+    # FAILSAFE: debug
+    if not possible_paths:
+        logger.error("No paths found.")
+        return []
+         
+    elif len(possible_paths) == 1:
+        selected_path = possible_paths[0]
+        
+    else:
+        # MULTIPLE PATHS FOUND: Use MCP Sampling to decide: reduce the number of paths by length (keep shortest 5 for each property)
+        reduced_paths = []
+        for prop, paths in properties_paths.items():
+            pruned_paths = remove_redundant_paths(paths)
+            sorted_paths = sorted(pruned_paths, key=len)
+            reduced_paths.extend(sorted_paths[:5])
+        possible_paths = sorted(reduced_paths, key=len)[:5]
+        
+        path_options_text = format_paths_for_llm(possible_paths)
+        
+        # Create the prompt for the LLM
+        system_prompt = "You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query."
+        pattern_intent = f"""which of these paths is the best for associating '{subj}' to '{obj_name}'/s, 
+given that the current question being asked is: '{qc.get_question()}'.
+        
+The options available are:
+{path_options_text}
+        """
+        # Send Sampling request to LLM
+        llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
+        try:
+            # simple extraction of the number
+            match = re.search(r'\d+', llm_answer)
+            if match:
+                # CASE 1: valid index returned
+                index = int(match.group())
+                selected_path = possible_paths[index]
+            else:
+                # CASE 2: Fallback to shortest if LLM output is weird
+                selected_path = sorted(possible_paths, key=len)[0]
+        except (IndexError, ValueError):
+            # CASE 3: Error in sampling process
+            logger.error(f"An error occurred in finding the recursive path from {subj} to {obj_name}")
+            return []
+    
+    # Return format: List of tuples [(var, uri), (pred_var, pred_uri), (var, uri)...]
+    return selected_path
+
+async def groupBy_having_internal(
+    subject: str, 
+    query_id: str, 
+    function: Optional[str] = None, 
+    obj: Optional[str] = None, 
+    logic_type: Optional[str] = None, 
+    valueStart: Optional[str] = None, 
+    valueEnd: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Applies a GROUP BY statement and optionally a HAVING clause.
+    It automatically finds the path between the subject and the object to be counted.
+    """
+    
+    # SETUP & VALIDATION
+    qc = QUERY_STORAGE.get(query_id)
+    if not qc:
+        return {"success": False, "error": f"Query ID {query_id} not found."}
+
+    # Validate Subject (Must exist in query)
+    subject = subject.strip()
+    subject_uri = qc.get_variable_uri(subject)
+    if not subject_uri:
+        return {"success": False, "error": f"Subject variable ?{subject} not found in query."}
+
+    # PATHFINDING (Subject -> Object)
+    # If we are doing a HAVING (e.g., COUNT(?obj)), we need to ensure ?obj is connected to ?subject
+    # Example: ?casting (subject) -> has_detail -> ?castingDetail (object)
+    
+    object_var_name = None
+    
+    #TODO: if the object is found how do we behave? in general do we need to define a new variable?
+    if obj:
+        # Check if object variable already exists in query
+        obj_exists = qc.get_variable_uri(obj)
+        
+        if obj_exists:
+            object_var_name = obj
+        else:
+            # We need to find the path and add it to the query
+            logger.info(f"Object '{obj}' not in query. Finding path from {subject}...")
+            
+            # Resolve Object URI (Logic borrowed from associate_to_N_entities)
+            if obj.startswith("http"):
+                obj_target_uri = obj
+                obj_clean_name = obj.split("/")[-1]
+            else:
+                obj_clean_name = obj.strip()
+                # Use "vocabulary" type usually for class definitions in counts, or "others"
+                res_obj = find_candidate_entities_internal(obj_clean_name, "others")
+                if res_obj['matches_found'] > 0:
+                    obj_target_uri = res_obj.get("entities", [])[0]["entity"]
+                else:
+                    # Fallback: Is it a generic class? Try looking it up as a vocab or ontology term
+                    # For simplicty in this generated code, we assume generic discovery
+                     return {"success": False, "error": f"Could not resolve object entity '{obj}' to find a path."}
+
+            selected_path = await _find_path_helper(subject, subject_uri, obj_clean_name, obj_target_uri, qc)
+            
+            if not selected_path:
+                 return {"success": False, "error": f"Could not find path between {subject} and {obj}"}
+
+            # 3. Add the triples for this path to the QueryContainer
+            triples = []
+            # Generate the triples from the path
+            for i in range(0, len(selected_path)-1, 2):
+                # We stop before the last one because the last one is the object we want to count
+                # We need to give it a variable name.
+                s_name = selected_path[i][0]
+                p_uri = selected_path[i+1][1]
+                o_name = selected_path[i+2][0]
+                
+                # Check if this is the final object we want to count
+                if i + 2 == len(selected_path) - 1:
+                    object_var_name = o_name # Set the variable to count
+                
+                triples.append({
+                    "subj": create_triple_element(s_name, selected_path[i][1], "var"),
+                    "pred": create_triple_element(convert_to_variable_name(p_uri), p_uri, "uri"),
+                    "obj": create_triple_element(o_name, selected_path[i+2][1], "var")
+                })
+            
+            # Add module to QC
+            def_vars = qc.extract_defined_variables(triples)
+            await qc.add_module({
+                "id": f"group_by_path_{subject}_{obj}",
+                "type": "pattern",
+                "scope": "main",
+                "triples": triples,
+                "required_vars": [create_triple_element(subject, subject_uri, "var")],
+                "defined_vars": def_vars
+            })
+
+    # CONSTRUCT GROUP BY: Group by the subject + any other non-aggregated variable in SELECT
+    # This handles the "include super-entities" requirement (e.g. including ?expression)
+    
+    group_vars = qc.get_non_aggregated_vars()
+    
+    # Ensure subject is in the group
+    unique_group_vars = list(set(group_vars + [subject]))
+
+    qc.set_group_by(unique_group_vars)
+
+    # CONSTRUCT HAVING
+    if function and object_var_name:
+        
+        # Determine Operator
+        operator = "=" # Default
+        if logic_type == "more": operator = ">"
+        elif logic_type == "less": operator = "<"
+        elif logic_type == "equal": operator = "="
+        elif logic_type == "range": operator = "range"
+
+        having_clause = {
+                "function":function.upper(),
+                "variable":object_var_name,
+                "operator":operator,
+            }
+        
+        # Build Clause
+        if operator == "range":
+            if valueStart and valueEnd:
+                having_clause["valueStart"] = valueStart
+                having_clause["valueEnd"] = valueEnd
+        else:
+            if valueStart:
+                having_clause["valueStart"] = valueStart
+        
+        if having_clause:
+            qc.add_having(having_clause)
+
+    return {
+        "success": True, 
+        "query_id": query_id, 
+        "generated_sparql": qc.to_string(),
+        "message": "Group By and Having clauses applied successfully."
+    }
+
+# --------------------------------------------------------------------------
+# HELPER: Reuses your existing pathfinding logic (Simplified for this snippet)
+# --------------------------------------------------------------------------
+
+
+#-------------------------------
 # EXECUTE QUERY INTERNALS
 #-------------------------------
 
