@@ -207,7 +207,7 @@ async def query_works(
                 "pred": create_triple_element("skos:prefLabel", "skos:prefLabel", "uri"),
                 "obj": create_triple_element("genreLabel", "", "var")
             })
-            triples.append({'function': 'REGEX', 'args': ['?genreLabel', f"\'{genre}\'", "\'i\'"]})
+            filter_st.append({'function': 'REGEX', 'args': ['?genreLabel', f"\'{genre}\'", "\'i\'"]})
              
         genre_module = {
             "id": "work_genre_filter",

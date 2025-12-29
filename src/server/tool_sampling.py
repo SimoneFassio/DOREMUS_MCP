@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 from dotenv import load_dotenv
 
@@ -12,7 +13,7 @@ from server.utils import (
     extract_label
 )
 
-OPENAI = False
+OPENAI = True if os.getenv("LLM_EVAL_PROVIDER", "ollama").lower() == "openai" else False
 
 logger = logging.getLogger("doremus-mcp")
 
@@ -82,8 +83,19 @@ Based on the user's intent, select the most appropriate option by its index numb
             model_preferences=preferences
         )
         if hasattr(result, "content") and hasattr(result.content, "text"):
-            return result.content.text
-        return result.text
+            llm_response = result.content.text
+        else:
+            llm_response = result.text
+
+        logger.info(f"LLM response: {llm_response}")
+
+        # Extract the index from the response
+        match = re.search(r'\d+', llm_response)
+        if match:
+            return match.group()  # Return the valid index
+        else:
+            logger.warning(f"LLM response did not contain a valid index. Response: {llm_response}")
+            return f"0 (Fallback due to invalid response: {llm_response})"  # Fallback to first option with context
     except Exception as e:
         # CATCH THE "AUTO" ERROR (or any other client failure)
         logger.warning(f"Client sampling failed ({str(e)}). Switching to Server-Side Fallback.")
@@ -109,7 +121,14 @@ Based on the user's intent, select the most appropriate option by its index numb
                     max_tokens=10,
                     temperature=0
                 )
-            return response.choices[0].message.content
+            llm_response = response.choices[0].message.content
+            logger.info(f"Fallback LLM response: {llm_response}")  # Log fallback response
+            match = re.search(r'\d+', llm_response)
+            if match:
+                return match.group()
+            else:
+                logger.warning(f"Fallback LLM response did not contain a valid index. Response: {llm_response}")
+                return f"0 (Fallback due to invalid response: {llm_response})"
             
         except Exception as openai_error:
             logger.error(f"Critical: Both Client and Fallback sampling failed. {openai_error}")
