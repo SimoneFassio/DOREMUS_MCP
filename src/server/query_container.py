@@ -131,7 +131,8 @@ class QueryContainer:
     def _validate_module(self, module: Dict[str, Any]) -> bool:
         """Basic validation of module structure."""
         required_keys = ["id", "triples"]
-        return all(key in module for key in required_keys)
+        required_filter_keys = ["id", "filter_st"]
+        return all(key in module for key in required_keys) or all(key in module for key in required_filter_keys)
     
     def _modify_var(self, module: Dict[str, Any], old_var: str, new_var: str) -> None:
         """Helper to rename variables in triples."""
@@ -203,6 +204,8 @@ class QueryContainer:
                 triples = module.get("triples", [])
                 for t in triples:
                     s_str = self._format_term(t.get("subj"))
+                    if not t.get("subj"):
+                        logger.error(f"Malformed triple in module {mod_id}: {t}")
                     if t.get("subj").get("var_label") == conflict_var_label:
                         s_str = f"**{s_str}**"
                     p_str = self._format_term(t.get("pred"))
@@ -570,6 +573,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         type: "var", "uri", "literal"
         """
         if not term:
+            logger.error("Term is None or empty.")
             return ""
         
         if "type" not in term:
@@ -585,6 +589,9 @@ You should select an option different to 0 ONLY if the variable represent a new 
         elif t_type == "uri":
             val = term.get("var_label")
             # It's a full URI -> Wrap in <>
+            if not val:
+                logger.error(f"URI term missing 'var_label': {term}")
+                return ""
             if val.startswith("http"):
                 return f"<{val}>"
             return val # It might be a prefixed URI like mus:U13...

@@ -274,7 +274,7 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
     # RETRIEVE OBJECT URI
     if obj.startswith("http://") or obj.startswith("https://"):
         obj_uri = obj
-        obj = obj.split("/")[-1]
+        obj = (obj.split("/")[-1]).strip().lower()
     else:
         obj = obj.strip().lower()
         res_obj = find_candidate_entities_internal(obj, "vocabulary")
@@ -659,9 +659,10 @@ async def groupBy_having_internal(
             "obj": {
                 "var_name": aggr_obj_name,
                 "uri": triple["obj"]["var_label"],
-                "type": triple["obj"]["type"]
+                "type": "var"
             }
         }
+        logger.info(f"New triple for aggregation: {new_triple}")
         triples = [new_triple]
                 
         # Add module to QC
