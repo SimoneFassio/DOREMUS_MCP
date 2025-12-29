@@ -22,6 +22,7 @@ from server.tools_internal import (
     build_query_internal,
     execute_query_from_id_internal,
     associate_to_N_entities_internal,
+    has_quantity_of_internal,
     groupBy_having_internal
 )
 
@@ -292,6 +293,32 @@ async def groupBy_having(
 
 
 @mcp.tool()
+async def has_quantity_of(subject: str, property: str, type: str, value: str, valueEnd: str | None, query_id: str) -> Dict[str, Any]:
+    """
+    Tool that receives as input the `subject` entity (i.e. “expression”, the name of the variable already present in the query) and the property to apply the pattern to (i.e. “mus:U78_estimated_duration”)
+    For ecrm:P4_has_time-span, input format YYYY-MM-DD or YYYY is supported.
+
+    Args:
+        subject: The subject entity variable name (e.g., "expression")
+        property: The property uri (e.g., "mus:U78_estimated_duration" or "time-span")
+        type: "less", "more", "equal", or "range"
+        value: value (number or date), in case of "range" type, it is the start value
+        valueEnd: End value (number or date), required only for "range" type
+        query_id: The ID of the query being built.
+
+    Returns:
+        Dict containing success status and generated SPARQL.
+
+    Examples:
+        - Input: subject="expression", property="mus:U78_estimated_duration", type="less", value="900", valueEnd="", query_id="..."
+          Output: generated_sparql="... FILTER ( ?quantity_val <= 900) ..."
+        - Input: subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1870", valueEnd="1913", query_id="..."
+          Output: generated_sparql="... FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear) ..."
+    """
+    return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
+
+
+@mcp.tool()
 async def execute_query(query_id: str) -> Dict[str, Any]:
     """
     Execute a previously built SPARQL query by its ID.
@@ -351,80 +378,98 @@ async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     """
     return get_entity_properties_internal(entity_uri)
 
-# @mcp.tool()
-# def get_ontology(path: str) -> str:
-#     """
-#     Explore the DOREMUS ontology graph schema hierarchically.
-
-#     This tool helps you understand the structure of the knowledge graph by providing
-#     a hierarchical view of node types (classes) and their relationships (edges).
-
-#     Use this tool to:
-#     - Get an overview of the most important node types and connections (path='/')
-#     - Explore a specific class and its direct relationships
-
-#     Args:
-#         path: Navigation path for exploration:
-#             - '/' - Get a high-level summary of the top 15 most important node types
-#                    and their top 20 most common relationships
-#             - '/{ClassName}' - Explore a specific class (e.g., '/efrbroo:F28_Expression_Creation')
-
-#     Returns:
-#         Markdown-formatted visualization of the ontology subgraph, showing:
-#         - Node types (classes) in the knowledge graph
-#         - Edge types (predicates/relationships) connecting them
-#         - Hierarchical structure for easy understanding
-
-#     Examples:
-#         - get_ontology('/')
-#           Returns overview of the most important 15 nodes and their relationships
-
-#         - get_ontology('/efrbroo:F22_Self-Contained_Expression')
-#           Shows what properties and relationships a musical work has
-#     """
-#     return get_ontology_internal(path=path, depth=1)
-
-# # # Documentation tools
 
 # @mcp.tool()
-# def get_usage_guide() -> str:
-#     """
-#     USE THIS TOOL FIRST TO RETRIEVE GUIDANCE ON QUERYING DOREMUS
+def get_ontology(path: str) -> str:
+    """
+    Explore the DOREMUS ontology graph schema hierarchically.
 
-#     Get a comprehensive usage guide and prompt for LLMs interacting with DOREMUS.
+    This tool helps you understand the structure of the knowledge graph by providing
+    a hierarchical view of node types (classes) and their relationships (edges).
 
-#     This tool provides guidance on:
-#     - How to effectively use the available tools
-#     - Best practices for entity resolution
-#     """
+    Use this tool to:
+    - Get an overview of the most important node types and connections (path='/')
+    - Explore a specific class and its direct relationships
 
-#     guide = """
-# # DOREMUS MCP Server - LLM Usage Guide
+    Args:
+        path: Navigation path for exploration:
+            - '/' - Get a high-level summary of the top 15 most important node types
+                   and their top 20 most common relationships
+            - '/{ClassName}' - Explore a specific class (e.g., '/efrbroo:F28_Expression_Creation')
 
-# ## Purpose
-# This MCP server provides access to the DOREMUS Knowledge Graph, a comprehensive
-# database of classical music metadata including works, composers, performances,
-# recordings, and instrumentation.
+    Returns:
+        Markdown-formatted visualization of the ontology subgraph, showing:
+        - Node types (classes) in the knowledge graph
+        - Edge types (predicates/relationships) connecting them
+        - Hierarchical structure for easy understanding
 
-# ## Workflow
-# 1. get_ontology: explore the DOREMUS ontology graph schema
-# 2. find_candidate_entities: discover the unique URI identifier for an entity
-# 3. get_entity_properties: retrieve detailed information about a specific entity (all property)
-# 4. build_query: build the base query using information collected
-# 5. Use the most appropriate tool to write complex filters (like associate_to_N_entities)
-# 6. execute_query: execute the query built
-# 7. Check the query result, refine and use again tool to explore more the graph if necessary
-# 8. Once the result is ok, format it in a proper manner and write the response
+    Examples:
+        - get_ontology('/')
+          Returns overview of the most important 15 nodes and their relationships
 
-# ## Remember
-# - The database is authoritative but not complete
-# - Always verify entity resolution before complex queries
-# - When in doubt, start simple and iterate
-# - Provide context and explanations, not just raw data
-# - Acknowledge limitations when encountered
-# """
+        - get_ontology('/efrbroo:F22_Self-Contained_Expression')
+          Shows what properties and relationships a musical work has
+    """
+    return get_ontology_internal(path=path, depth=1)
 
-#     return guide
+# # Documentation tools
+
+# @mcp.tool()
+def get_usage_guide() -> str:
+    """
+    USE THIS TOOL FIRST TO RETRIEVE GUIDANCE ON QUERYING DOREMUS
+
+    Get a comprehensive usage guide and prompt for LLMs interacting with DOREMUS.
+
+    This tool provides guidance on:
+    - How to effectively use the available tools
+    - Best practices for entity resolution
+    """
+
+    guide = """
+# DOREMUS MCP Server - LLM Usage Guide
+
+## Purpose
+This MCP server provides access to the DOREMUS Knowledge Graph, a comprehensive
+database of classical music metadata including works, composers, performances,
+recordings, and instrumentation.
+DOREMUS is based on the CIDOC-CRM ontology, using the EFRBROO (Work-Expression-Manifestation-Item) extension.
+It is designed to describe how a musical idea is created, realized, and performed — connecting the intellectual, artistic, and material aspects of a work.
+Work -> conceptual idea (idea of a sonata)
+Expression -> musical realization (written notation of the sonata, with his title, composer, etc.)
+Event -> performance or recording
+TODO add high level description of the graph
+
+It defines 7 vocabularies categories:
+- Musical keys
+- Modes
+- Genres
+- Media of performance (MoP)
+- Thematic catalogs
+- Derivation types
+- Functions
+
+## Workflow
+Build the SPARQL query step by step:
+1. get_ontology: explore the DOREMUS ontology graph schema
+2. find_candidate_entities: discover the unique URI identifier for an entity
+3. get_entity_properties: retrieve detailed information about a specific entity (all property)
+4. build_query: build the base query using information collected
+5. Use the most appropriate tool to write complex filters (like associate_to_N_entities)
+6. execute_query: execute the query built
+7. Check the query result, refine and use again tool to explore more the graph or restart from beginning if necessary
+8. Once the result is ok, format it in a proper manner and write the response
+
+## Remember
+- The database is authoritative but not complete
+- Always verify entity resolution before complex queries
+- When in doubt, start simple and iterate
+- Provide context and explanations, not just raw data
+- Acknowledge limitations when encountered
+- Answer only with information provided by the execution of the query.
+"""
+
+    return guide
 
 
 if __name__ == "__main__":

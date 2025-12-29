@@ -73,33 +73,42 @@ async def main():
                     print(f"JSON decode error in execute_query message: {e}")
         return {"generated_query": generated_query or ""}
 
-    async def results_evaluator(outputs: dict, reference_outputs: dict) -> float:
+    async def accuracy(outputs: dict, reference_outputs: dict) -> float:
         """Check the percentage of correct values returned by the query."""
         if not outputs.get("generated_query"):
             print("Error: The LLM couldn't generate the query.")
             return 0.0
         
         loop = asyncio.get_running_loop()
+
+        def execute_query_safe(query, limit, retry_limit=None):
+            result = execute_sparql_query(query, limit=limit)
+            if not result["success"] and retry_limit:
+                error_msg = result.get("error", "")
+                if "timeout" in error_msg.lower():
+                    print(f"Query timed out with limit {limit}. Retrying with limit {retry_limit}...")
+                    return execute_sparql_query(query, limit=retry_limit)
+            return result
         
-        # Run blocking reference query in executor
+        # Run blocking reference query in executor with retry
         reference_output_dict = await loop.run_in_executor(
             None, 
-            lambda: execute_sparql_query(reference_outputs["rdf_query"], limit=10000)
+            lambda: execute_query_safe(reference_outputs["rdf_query"], limit=10000, retry_limit=100)
         )
         
         if not reference_output_dict["success"] or reference_output_dict is None:
-            print("Error: Failed to execute reference SPARQL query.")
+            print(f"Error: Failed to execute reference SPARQL query. {reference_output_dict.get('error')}")
             return 0.0
         reference_output = reference_output_dict["results"]
 
-        # Run blocking generated query in executor
+        # Run blocking generated query in executor with retry
         query_output_dict = await loop.run_in_executor(
             None,
-            lambda: execute_sparql_query(outputs["generated_query"], limit=100)
+            lambda: execute_query_safe(outputs["generated_query"], limit=100, retry_limit=10)
         )
         
         if not query_output_dict["success"] or query_output_dict is None:
-            print("Error: Failed to execute generated SPARQL query.")
+            print(f"Error: Failed to execute generated SPARQL query. {query_output_dict.get('error')}")
             return 0.0
         query_output = query_output_dict["results"]
         
@@ -123,7 +132,7 @@ async def main():
                 col_values = [r.get(key) for r in results if r.get(key)]
                 # Check if majority or any starts with http. Let's assume if it looks like a URI column
                 if any(isinstance(v, str) and v.startswith("http") for v in col_values):
-                     uri_values.update(col_values)
+                        uri_values.update(col_values)
             return uri_values
 
         ref_uris = extract_uri_values(reference_output)
@@ -160,9 +169,9 @@ async def main():
         # print(f"\nThe query Output is: {query_output[:2]}", ending_que)
         print(f" Percentage of correct values: {percentage_correct:.2f}%")
         
-        return round(percentage_correct, 2)
+        return round(percentage_correct/100, 3)
 
-    async def llm_evaluator(outputs: dict, reference_outputs: dict) -> dict:
+    async def llm_score(outputs: dict, reference_outputs: dict) -> dict:
         """Use an LLM to evaluate the semantic correctness of the generated query."""
         
         # Instantiate the judge model (using same config as agent)
@@ -212,7 +221,70 @@ async def main():
                 clean_content = clean_content[:-3]
             
             data = json.loads(clean_content.strip())
-            return {"score": round(data.get("score", 0), 2), "comment": data.get("reasoning", "")}
+            return {"score": round(data.get("score", 0), 2), "comment": "".join(data.get("reasoning", ""))}
+        except Exception as e:
+            print(f"LLM Evaluator Error: {e}")
+            return {"score": 0, "comment": f"Evaluation failed: {e}"}
+    
+    async def llm_is_correct(outputs: dict, reference_outputs: dict) -> dict:
+        """Use an LLM to evaluate if the query is practically correct ignoring minor details."""
+        
+        # Instantiate the judge model (using same config as agent)
+        llm = create_model(provider)
+        
+        generated_query = outputs.get("generated_query", "")
+        reference_query = reference_outputs["rdf_query"] # ground truth query
+        
+        if not generated_query:
+            return {"score": 0, "comment": "No query generated"}
+
+        # Define the prompt for the judge
+        prompt = f"""
+        You are an expert SPARQL query evaluator. Determine if the GENERATED SPARQL query is effectively CORRECT compared to the REFERENCE SPARQL query.
+
+        REFERENCE QUERY:
+        ```sparql
+        {reference_query}
+        ```
+        
+        GENERATED QUERY:
+        ```sparql
+        {generated_query}
+        ```
+        
+        Evaluation Rules:
+        1. **Ignore SELECT**: Do NOT evaluate the SELECT clause (variable names, order, or projection).
+        2. **Semantic Equivalence**: strictness is relaxed. If the generated query implements the same filtering logic and graph patterns to retrieve the intended entities, it is CORRECT.
+        3. **Ignore Benign Differences**:
+           - Limit differences (e.g., LIMIT 50 vs 100) -> IGNORE (Correct)
+           - Variable naming differences -> IGNORE (Correct)
+           - Ordering of triple patterns (if logic is same) -> IGNORE (Correct)
+           - Extra optional metadata retrieval -> IGNORE (Correct)
+           - Extra triplets present in the query -> IGNORE (Correct)
+           - Differences in how the date are filtered (consider only the year) -> IGNORE (Correct)
+        4. **Focus on Results**: If the query would likely return the correct core entities (Subject/Object) as the reference, mark it as CORRECT.
+
+        Output a JSON object with:
+        - "is_correct": boolean (true if correct, false otherwise)
+        - "reasoning": A brief explanation of the errors in the generated query. Be very concise, use bullet point to list the errors.
+        
+        Only output the JSON.
+        """
+        
+        try:
+            response = await llm.ainvoke(prompt)
+            content = response.content
+            
+            # extract json
+            clean_content = content.strip()
+            if clean_content.startswith("```json"):
+                clean_content = clean_content[7:]
+            if clean_content.endswith("```"):
+                clean_content = clean_content[:-3]
+            
+            data = json.loads(clean_content.strip())
+            is_correct = data.get("is_correct", False)
+            return {"score": 1 if is_correct else 0, "comment": "".join(data.get("reasoning", ""))}
         except Exception as e:
             print(f"LLM Evaluator Error: {e}")
             return {"score": 0, "comment": f"Evaluation failed: {e}"}
@@ -223,10 +295,10 @@ async def main():
         evaluation = await client.aevaluate(
             target_doremus_assistant,
             data=dataset_name,
-            evaluators=[results_evaluator, llm_evaluator],
+            evaluators=[accuracy, llm_score, llm_is_correct],
             # Name of the experiment
             experiment_prefix=EXPERIMENT_PREFIX, 
-            max_concurrency=2
+            max_concurrency=1
         )
 
 if __name__ == "__main__":

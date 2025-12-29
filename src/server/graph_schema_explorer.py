@@ -277,3 +277,15 @@ class GraphSchemaExplorer:
                 
         except Exception as e:
             return f"An internal error occurred: {str(e)}"
+
+
+    def class_has_property(self, class_name: str, property: str) -> bool:
+        """
+        Checks if a property exists for a class.
+        """
+        # Check if property exists for class
+        for s, e, t in self.all_triples:
+            if s == class_name and e == property:
+                return True
+        return False
+        

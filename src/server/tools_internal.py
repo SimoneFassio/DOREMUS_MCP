@@ -402,11 +402,21 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
         possible_paths = sorted(reduced_paths, key=len)
         
         path_options_text = format_paths_for_llm(possible_paths)
+
+        current_query = qc.to_string()
         
         # Create the prompt for the LLM
-        system_prompt = "You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query."
+        system_prompt = """You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query.
+Note the shortest path is rarely the best option, compare the semantic relevance of the paths.
+DOREMUS is based on the CIDOC-CRM ontology, using the EFRBROO (Work-Expression-Manifestation-Item) extension.
+Work -> conceptual idea (idea of a sonata)
+Expression -> musical realization (written notation of the sonata, with his title, composer, etc.)
+Event -> performance or recording"""
         pattern_intent = f"""which of these paths is the best for associating '{subject}' to {N} '{obj}'/s, 
 given that the current question being asked is: '{qc.get_question()}'.
+
+The current query is:
+{current_query}
         
 The options available are:
 {path_options_text}
@@ -477,6 +487,226 @@ The options available are:
             "generated_sparql": sparql_query,
             "message": "Query pattern added successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
         }
+
+
+def _process_date(date_str: str) -> str:
+    """
+    Helper to process date strings into XSD format.
+    Supports: YYYY, DD-MM-YYYY, YYYY-MM-DD
+    Returns: "value"^^xsd:type
+    """
+    date_str = date_str.strip()
+    # YYYY
+    if re.match(r"^\d{4}$", date_str):
+        return f'"{date_str}"^^xsd:gYear'
+    
+    # DD-MM-YYYY
+    match_dmy = re.match(r"^(\d{2})-(\d{2})-(\d{4})$", date_str)
+    if match_dmy:
+        d, m, y = match_dmy.groups()
+        return f'"{y}-{m}-{d}"^^xsd:date'
+    
+    # YYYY-MM-DD
+    match_ymd = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", date_str)
+    if match_ymd:
+        return f'"{date_str}"^^xsd:date'
+    # Error
+    return None
+
+
+async def has_quantity_of_internal(subject: str, property: str, type: str, valueStart: str, valueEnd: str | None, query_id: str) -> Dict[str, Any]:
+    qc = QUERY_STORAGE.get(query_id)
+    if not qc:
+        return {
+            "success": False,
+            "error": f"Query ID {query_id} not found or expired."
+        }
+    
+    # 1. Check if the property exists for the subject class
+    subject_var = subject
+    subject_label = qc.get_variable_uri(subject) 
+    if not explorer.class_has_property(subject_label, property):
+        return {
+            "success": False,
+            "error": f"Property {property} does not exist for class {subject_label}."
+        }
+         
+    # 2. Resolve Property & Construct Triples
+    propery = property.strip()
+    triples = []
+    filter_st = []
+    defined_vars = []
+    
+    # Value processing (dates vs numbers)
+    # Check if property implies date
+    is_date = "time-span" in propery
+    
+    def format_value(val):
+        if is_date:
+            return _process_date(val)
+        else:
+            # Check if number
+            if val.replace('.', '', 1).isdigit():
+                return val
+            return f'"{val}"'
+
+    if valueEnd == "":
+        valueEnd = None
+
+    val_start_fmt = format_value(valueStart)
+    val_end_fmt = format_value(valueEnd) if valueEnd else None
+
+    if not val_start_fmt:
+        return {
+            "success": False,
+            "error": "Invalid start date format."
+        }
+    if not val_end_fmt and valueEnd is not None:
+        return {
+            "success": False,
+            "error": "Invalid end date format."
+        }
+    
+    # Type processing
+    if type not in ["less", "more", "equal", "range"]:
+        return {
+            "success": False,
+            "error": "Invalid filter type."
+        }
+
+    if type in ["less", "more", "equal"] and valueEnd is not None:
+        return {
+            "success": False,
+            "error": "Value End is not allowed for this type."
+        }
+    if type == "range" and valueEnd is None:
+        return {
+            "success": False,
+            "error": "Value End is required for this type."
+        }
+    
+    prop_module_id = f"has_quantity_of_{property}"
+        
+    if is_date:
+        # Time-Span Pattern: 
+        # ?subject ecrm:P4_has_time-span ?time_span . 
+        # ?time_span time:hasBeginning / time:inXSDDate ?start .
+        # ?time_span time:hasEnd / time:inXSDDate ?end .
+        
+        ts_var = "time_span"
+        triples.append({
+            "subj": create_triple_element(subject_var, subject_label if subject_label else "", "var"),
+            "pred": create_triple_element("ecrm:P4_has_time-span", "ecrm:P4_has_time-span", "uri"),
+            "obj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var")
+        })
+        defined_vars.append({"var_name": ts_var, "var_label": "ecrm:E52_Time-Span"})
+        
+        # We add triples for start/end based on filter type to be efficient?
+        # Or always add them? 
+        # If we only need start (e.g. > 1900), only add start.
+        
+        if type in ["more", "range", "equal"] or (type == "less" and not valueEnd): # Logic check
+             # For 'more than' we usually check start date. 
+             # For 'range' we check start and end.
+             # Let's define:
+             # start var ?start
+             start_var = "start"
+             triples.append({
+                 "subj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var"),
+                 "pred": create_triple_element("time:hasBeginning / time:inXSDDate", "time:hasBeginning / time:inXSDDate", "uri"),
+                 "obj": create_triple_element(start_var, "", "var")
+             })
+             defined_vars.append({"var_name": start_var, "var_label": ""})
+        
+        if type in ["less", "range", "equal"]:
+             end_var = "end"
+             triples.append({
+                 "subj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var"),
+                 "pred": create_triple_element("time:hasEnd / time:inXSDDate", "time:hasEnd / time:inXSDDate", "uri"),
+                 "obj": create_triple_element(end_var, "", "var")
+             })
+             defined_vars.append({"var_name": end_var, "var_label": ""})
+        target_var = None
+        
+    else:
+        # Generic Property
+        # ?subject property ?quantity_val
+        qty_var = "quantity_val"
+        triples.append({
+            "subj": create_triple_element(subject_var, subject_label if subject_label else "", "var"),
+            "pred": create_triple_element(propery, propery, "uri"),
+            "obj": create_triple_element(qty_var, "", "var")
+        })
+        defined_vars.append({"var_name": qty_var, "var_label": ""}) 
+        target_var = f"?{qty_var}"
+
+    # 3. Construct Filters
+    # Filter ops: <=, >=, =, and logical combinations
+    
+    if type == "less":
+        # <= valueStart
+        # If time-span: usually "end time is before X" ?
+        # Or "duration less than X".
+        if is_date:
+             # "less than 1900" -> Ends before 1900? or Starts before? 
+             # Usually "written before 1900" -> End date < 1900.
+             filter_st.append({'function': '', 'args': [f'?end <= {val_start_fmt}']})
+        else:
+             filter_st.append({'function': '', 'args': [f'{target_var} <= {val_start_fmt}']})
+             
+    elif type == "more":
+        # >= valueStart
+        # "more than 1900" -> Starts after 1900
+        if is_date:
+            filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt}']})
+        else:
+            filter_st.append({'function': '', 'args': [f'{target_var} >= {val_start_fmt}']})
+            
+    elif type == "equal":
+        # = valueStart
+        if is_date:
+            # Start = val OR End = val? Or contains?
+            # Let's assume start = val for simplicity or create a generic overlap?
+            # For "written in 1900", it means start >= 1900-01-01 AND end <= 1900-12-31?
+            # But here user says "equal". 
+            filter_st.append({'function': '', 'args': [f'?start = {val_start_fmt}']})
+        else:
+            filter_st.append({'function': '', 'args': [f'{target_var} = {val_start_fmt}']})
+            
+    elif type == "range":
+        # >= valueStart AND <= valueEnd
+        if is_date:
+            # Between 1870 and 1913
+            # Means Start >= 1870 AND End <= 1913 (Inclusive containment)
+            # OR Overlaps? The user example:
+            # ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear
+            filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt} AND ?end <= {val_end_fmt}']})
+        else:
+            filter_st.append({'function': '', 'args': [f'{target_var} >= {val_start_fmt} AND {target_var} <= {val_end_fmt}']})
+
+    # 4. Add Module
+    module = {
+        "id": prop_module_id,
+        "type": "has_quantity_of",
+        "scope": "main",
+        "triples": triples,
+        "filter_st": filter_st,
+        "required_vars": [{"var_name": subject_var, "var_label": subject_label if subject_label else ""}],
+        "defined_vars": defined_vars
+    }
+
+    await qc.add_module(module)
+    
+    return {
+        "success": True,
+        "query_id": query_id,
+        "generated_sparql": qc.to_string(),
+        "message": "Quantity filter added."
+    }
+
+    
+    
+    
 
 #-------------------------------
 # GROUP BY HAVING INTERNALS
