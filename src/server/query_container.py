@@ -468,7 +468,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
 
         for item in self.select:
             var_name = item["var_name"]
-            if item.get("is_sample"):
+            if item.get("is_sample") and self.group_by: #add sample only if group by is present
                 # Example: SAMPLE(?title) as ?title
                 select_vars_str.append(f"SAMPLE(?{var_name}) as ?{var_name}")
             else:

@@ -530,7 +530,7 @@ async def query_artist(
             },
             {
                 "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
-                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "pred": create_triple_element("name", "foaf:name", "uri"),
                 "obj": create_triple_element("name", "", "var")
             }
         ]
