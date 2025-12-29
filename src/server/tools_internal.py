@@ -8,7 +8,7 @@ from typing import Any, Optional, Dict, List
 from difflib import get_close_matches
 from server.find_paths import load_graph
 from server.graph_schema_explorer import GraphSchemaExplorer
-from server.query_container import QueryContainer, create_triple_element
+from server.query_container import QueryContainer, create_triple_element, create_select_element
 from server.query_builder import query_works, query_performance, query_artist
 from server.find_paths import find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
 from server.utils import (
@@ -132,6 +132,7 @@ async def build_query_internal(
     question: str,
     template: str,
     filters: Dict[str, Any] | None,
+    strategy: str
 ) -> Dict[str, Any]:
     try:
         # Standardize template name
@@ -182,7 +183,7 @@ async def build_query_internal(
             "success": True,
             "query_id": query_id,
             "generated_sparql": sparql_query,
-            "message": "Query built successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
+            "message": "Query built successfully. Review the SPARQL. It is strongly suggested to follow this strategy:\n"+strategy+ "\nIf correct, then use execute_query(query_id) to run it."
         }
         
     except Exception as e:
@@ -216,6 +217,9 @@ def recur_domain(current_entity: str, target_entity: str, graph, depth: int, pat
     
     # RECURSION: Explore Parents
     res = find_inverse_arcs_internal(current_entity, graph)
+    if not res:
+        logger.error("find_inverse_arcs error found")
+        return []
     if not res.get("success"):
         # We reached a dead end
         return []
@@ -243,6 +247,12 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
     #-------------------------------
     # CHECK IF QUERY EXISTS
     #-------------------------------
+    if not QUERY_STORAGE:
+        logger.error("Query storage not initialized")
+        return {
+            "success": False,
+            "error": f"Query storage not initialized"
+        }
     qc = QUERY_STORAGE.get(query_id)
     # FAILSAFE: debug
     if not qc:
@@ -301,6 +311,12 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
             GROUP BY ?incoming_property
         """
         inverse_arcs = execute_sparql_query(query_inverse, limit=50)
+        if not inverse_arcs:
+            logger.error(f"No inverse arc found for {obj_uri}")
+            return {
+                "success": False,
+                "error": f"No inverse arc found for {obj_uri}"
+            }
         # FAILSAFE: debug
         if len(inverse_arcs.get("results", []))==0:
             return {
@@ -324,6 +340,12 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
     else:
         # Onthology term provided as label -> use Graph
         res = find_inverse_arcs_internal(obj_uri, graph)
+        if not res:
+            logger.error(f"find_inverse_arcs_internal found no matches for {obj_uri}")
+            return {
+                "success":False,
+                "error": f"find_inverse_arcs_internal found no matches for {obj_uri}"
+            }
         if not res.get("success"):
             return res
         parents = res.get("parents", [])
@@ -377,7 +399,7 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
             pruned_paths = remove_redundant_paths(paths)
             sorted_paths = sorted(pruned_paths, key=len)
             reduced_paths.extend(sorted_paths[:5])
-        possible_paths = sorted(reduced_paths, key=len)[:5]
+        possible_paths = sorted(reduced_paths, key=len)
         
         path_options_text = format_paths_for_llm(possible_paths)
         
@@ -460,127 +482,127 @@ The options available are:
 # GROUP BY HAVING INTERNALS
 #-------------------------------
 
-async def _find_path_helper(subj, subj_uri, obj_name, obj_uri, qc):
-    """
-    Internal wrapper re-implementing the core logic of associate_to_N_entities
-    to find a path between subject and object.
-    """
-    # 1. Find Inverse Arcs of Object
-    if obj_uri.startswith("http://"):
-        # Find inverse arcs
-        query_inverse = f"""
-            SELECT ?incoming_property (SAMPLE(?item_pointing_at_me) AS ?single_example)
-            WHERE {{
-            # 1. FIX THE TARGET
-            VALUES ?my_entity {{ <{obj_uri}> }} .
+# async def _find_path_helper(subj, subj_uri, obj_name, obj_uri, qc):
+#     """
+#     Internal wrapper re-implementing the core logic of associate_to_N_entities
+#     to find a path between subject and object.
+#     """
+#     # 1. Find Inverse Arcs of Object
+#     if obj_uri.startswith("http://"):
+#         # Find inverse arcs
+#         query_inverse = f"""
+#             SELECT ?incoming_property (SAMPLE(?item_pointing_at_me) AS ?single_example)
+#             WHERE {{
+#             # 1. FIX THE TARGET
+#             VALUES ?my_entity {{ <{obj_uri}> }} .
 
-            # 2. Find incoming links
-            ?item_pointing_at_me ?incoming_property ?my_entity .
+#             # 2. Find incoming links
+#             ?item_pointing_at_me ?incoming_property ?my_entity .
 
-            }} 
-            # Group by the "Keys" (The things that should be unique per row)
-            GROUP BY ?incoming_property
-        """
-        inverse_arcs = execute_sparql_query(query_inverse, limit=50)
-        # FAILSAFE: debug
-        if len(inverse_arcs.get("results", []))==0:
-            logger.error(f"No incoming arcs found for vocabulary entity: {obj_name}")
-            return []
-        parents = []
-        for arc_val in inverse_arcs.get("results", []):
-            arc = arc_val.get("incoming_property")
-            arc_label = extract_label(arc)
-            for subj, edges in graph.items():
-                for pred, _ in edges:
-                    if pred == arc_label:
-                        parents.append((subj, pred))
-        # FAILSAFE: debug
-        if not parents:
-            logger.error(f"No parent entities found while incoming arcs are {[extract_label(arc_val.get('incoming_property')) for arc_val in inverse_arcs.get('results', [])]} for vocabulary entity: {obj_name}")
-            return []
-    else:
-        # Onthology term provided as label -> use Graph
-        res = find_inverse_arcs_internal(obj_uri, graph)
-        if not res.get("success"):
-            logger.error("No entity found in the inverse arcs")
-            return []
-        parents = res.get("parents", [])
+#             }} 
+#             # Group by the "Keys" (The things that should be unique per row)
+#             GROUP BY ?incoming_property
+#         """
+#         inverse_arcs = execute_sparql_query(query_inverse, limit=50)
+#         # FAILSAFE: debug
+#         if len(inverse_arcs.get("results", []))==0:
+#             logger.error(f"No incoming arcs found for vocabulary entity: {obj_name}")
+#             return []
+#         parents = []
+#         for arc_val in inverse_arcs.get("results", []):
+#             arc = arc_val.get("incoming_property")
+#             arc_label = extract_label(arc)
+#             for subj, edges in graph.items():
+#                 for pred, _ in edges:
+#                     if pred == arc_label:
+#                         parents.append((subj, pred))
+#         # FAILSAFE: debug
+#         if not parents:
+#             logger.error(f"No parent entities found while incoming arcs are {[extract_label(arc_val.get('incoming_property')) for arc_val in inverse_arcs.get('results', [])]} for vocabulary entity: {obj_name}")
+#             return []
+#     else:
+#         # Onthology term provided as label -> use Graph
+#         res = find_inverse_arcs_internal(obj_uri, graph)
+#         if not res.get("success"):
+#             logger.error("No entity found in the inverse arcs")
+#             return []
+#         parents = res.get("parents", [])
 
-    #-------------------------------
-    # CALL RECURSIVE PATHFINDER
-    #-------------------------------
-    possible_paths = []
-    properties_paths = {str(extract_label(arc_uri)): [] for _, arc_uri in parents}
-    selected_path = None
-    logger.info(f"Found parents: {parents} for object {obj_name}")
-    try:
-        for parent_entity_uri, arc_uri in parents:
-            logger.info(f"Finding paths from parent entity {parent_entity_uri} to subject {subj_uri}...")
-            possible_subpaths = recur_domain(parent_entity_uri, subj_uri, graph, 1, [(convert_to_variable_name(parent_entity_uri), parent_entity_uri)])
-            # FAILSAFE: debug
-            if not possible_subpaths:
-                # Do not consider paths with no results
-                logger.info(f"No paths found from {convert_to_variable_name(parent_entity_uri)} -> {extract_label(arc_uri)} to subject {obj_name}.")
-                continue
+#     #-------------------------------
+#     # CALL RECURSIVE PATHFINDER
+#     #-------------------------------
+#     possible_paths = []
+#     properties_paths = {str(extract_label(arc_uri)): [] for _, arc_uri in parents}
+#     selected_path = None
+#     logger.info(f"Found parents: {parents} for object {obj_name}")
+#     try:
+#         for parent_entity_uri, arc_uri in parents:
+#             logger.info(f"Finding paths from parent entity {parent_entity_uri} to subject {subj_uri}...")
+#             possible_subpaths = recur_domain(parent_entity_uri, subj_uri, graph, 1, [(convert_to_variable_name(parent_entity_uri), parent_entity_uri)])
+#             # FAILSAFE: debug
+#             if not possible_subpaths:
+#                 # Do not consider paths with no results
+#                 logger.info(f"No paths found from {convert_to_variable_name(parent_entity_uri)} -> {extract_label(arc_uri)} to subject {obj_name}.")
+#                 continue
             
-            for subpath in possible_subpaths:
-                full_path = subpath + [(convert_to_variable_name(extract_label(arc_uri)), extract_label(arc_uri)), (obj_name, obj_uri)]
-                possible_paths.append(full_path)
-                properties_paths[str(extract_label(arc_uri))].append(full_path)
-    # FAILSAFE: debug
-    except ValueError as ve:
-        logger.error(str(ve))
-        return []
+#             for subpath in possible_subpaths:
+#                 full_path = subpath + [(convert_to_variable_name(extract_label(arc_uri)), extract_label(arc_uri)), (obj_name, obj_uri)]
+#                 possible_paths.append(full_path)
+#                 properties_paths[str(extract_label(arc_uri))].append(full_path)
+#     # FAILSAFE: debug
+#     except ValueError as ve:
+#         logger.error(str(ve))
+#         return []
     
-    # ---------------------------------------------------------
-    # DECISION LOGIC FOR SAMPLING
-    # ---------------------------------------------------------
-    # FAILSAFE: debug
-    if not possible_paths:
-        logger.error("No paths found.")
-        return []
+#     # ---------------------------------------------------------
+#     # DECISION LOGIC FOR SAMPLING
+#     # ---------------------------------------------------------
+#     # FAILSAFE: debug
+#     if not possible_paths:
+#         logger.error("No paths found.")
+#         return []
          
-    elif len(possible_paths) == 1:
-        selected_path = possible_paths[0]
+#     elif len(possible_paths) == 1:
+#         selected_path = possible_paths[0]
         
-    else:
-        # MULTIPLE PATHS FOUND: Use MCP Sampling to decide: reduce the number of paths by length (keep shortest 5 for each property)
-        reduced_paths = []
-        for prop, paths in properties_paths.items():
-            pruned_paths = remove_redundant_paths(paths)
-            sorted_paths = sorted(pruned_paths, key=len)
-            reduced_paths.extend(sorted_paths[:5])
-        possible_paths = sorted(reduced_paths, key=len)[:5]
+#     else:
+#         # MULTIPLE PATHS FOUND: Use MCP Sampling to decide: reduce the number of paths by length (keep shortest 5 for each property)
+#         reduced_paths = []
+#         for prop, paths in properties_paths.items():
+#             pruned_paths = remove_redundant_paths(paths)
+#             sorted_paths = sorted(pruned_paths, key=len)
+#             reduced_paths.extend(sorted_paths[:5])
+#         possible_paths = sorted(reduced_paths, key=len)[:5]
         
-        path_options_text = format_paths_for_llm(possible_paths)
+#         path_options_text = format_paths_for_llm(possible_paths)
         
-        # Create the prompt for the LLM
-        system_prompt = "You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query."
-        pattern_intent = f"""which of these paths is the best for associating '{subj}' to '{obj_name}'/s, 
-given that the current question being asked is: '{qc.get_question()}'.
+#         # Create the prompt for the LLM
+#         system_prompt = "You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query."
+#         pattern_intent = f"""which of these paths is the best for associating '{subj}' to '{obj_name}'/s, 
+# given that the current question being asked is: '{qc.get_question()}'.
         
-The options available are:
-{path_options_text}
-        """
-        # Send Sampling request to LLM
-        llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
-        try:
-            # simple extraction of the number
-            match = re.search(r'\d+', llm_answer)
-            if match:
-                # CASE 1: valid index returned
-                index = int(match.group())
-                selected_path = possible_paths[index]
-            else:
-                # CASE 2: Fallback to shortest if LLM output is weird
-                selected_path = sorted(possible_paths, key=len)[0]
-        except (IndexError, ValueError):
-            # CASE 3: Error in sampling process
-            logger.error(f"An error occurred in finding the recursive path from {subj} to {obj_name}")
-            return []
+# The options available are:
+# {path_options_text}
+#         """
+#         # Send Sampling request to LLM
+#         llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
+#         try:
+#             # simple extraction of the number
+#             match = re.search(r'\d+', llm_answer)
+#             if match:
+#                 # CASE 1: valid index returned
+#                 index = int(match.group())
+#                 selected_path = possible_paths[index]
+#             else:
+#                 # CASE 2: Fallback to shortest if LLM output is weird
+#                 selected_path = sorted(possible_paths, key=len)[0]
+#         except (IndexError, ValueError):
+#             # CASE 3: Error in sampling process
+#             logger.error(f"An error occurred in finding the recursive path from {subj} to {obj_name}")
+#             return []
     
-    # Return format: List of tuples [(var, uri), (pred_var, pred_uri), (var, uri)...]
-    return selected_path
+#     # Return format: List of tuples [(var, uri), (pred_var, pred_uri), (var, uri)...]
+#     return selected_path
 
 async def groupBy_having_internal(
     subject: str, 
@@ -603,90 +625,66 @@ async def groupBy_having_internal(
 
     # Validate Subject (Must exist in query)
     subject = subject.strip()
-    subject_uri = qc.get_variable_uri(subject)
-    if not subject_uri:
-        return {"success": False, "error": f"Subject variable ?{subject} not found in query."}
+    if ":" in subject:
+        # The LLM passed a label
+        subject_uri = subject
+        tmp_subj = qc.get_varName_from_uri(subject_uri)
+        if not tmp_subj:
+            return {"success": False, "error": f"No subject was found with URI {subject_uri}"}
+        subject = tmp_subj
+    else:
+        subject_uri = qc.get_variable_uri(subject)
+        if not subject_uri:
+            return {"success": False, "error": f"Subject variable ?{subject} not found in query."}
 
-    # PATHFINDING (Subject -> Object)
-    # If we are doing a HAVING (e.g., COUNT(?obj)), we need to ensure ?obj is connected to ?subject
-    # Example: ?casting (subject) -> has_detail -> ?castingDetail (object)
-    
-    object_var_name = None
-    
-    #TODO: if the object is found how do we behave? in general do we need to define a new variable?
     if obj:
-        # Check if object variable already exists in query
-        obj_exists = qc.get_variable_uri(obj)
+        # Validate Object
+        if ":" in obj:
+            #the LLM passed a label or URI
+            obj_uri = obj
+            tmp_obj = qc.get_varName_from_uri(obj_uri)
+            if not tmp_obj:
+                return {"success": False, "error": f"No object was found with URI {obj_uri}"}
+            obj = tmp_obj
         
-        if obj_exists:
-            object_var_name = obj
-        else:
-            # We need to find the path and add it to the query
-            logger.info(f"Object '{obj}' not in query. Finding path from {subject}...")
-            
-            # Resolve Object URI (Logic borrowed from associate_to_N_entities)
-            if obj.startswith("http"):
-                obj_target_uri = obj
-                obj_clean_name = obj.split("/")[-1]
-            else:
-                obj_clean_name = obj.strip()
-                # Use "vocabulary" type usually for class definitions in counts, or "others"
-                res_obj = find_candidate_entities_internal(obj_clean_name, "others")
-                if res_obj['matches_found'] > 0:
-                    obj_target_uri = res_obj.get("entities", [])[0]["entity"]
-                else:
-                    # Fallback: Is it a generic class? Try looking it up as a vocab or ontology term
-                    # For simplicty in this generated code, we assume generic discovery
-                     return {"success": False, "error": f"Could not resolve object entity '{obj}' to find a path."}
 
-            selected_path = await _find_path_helper(subject, subject_uri, obj_clean_name, obj_target_uri, qc)
-            
-            if not selected_path:
-                 return {"success": False, "error": f"Could not find path between {subject} and {obj}"}
-
-            # 3. Add the triples for this path to the QueryContainer
-            triples = []
-            # Generate the triples from the path
-            for i in range(0, len(selected_path)-1, 2):
-                # We stop before the last one because the last one is the object we want to count
-                # We need to give it a variable name.
-                s_name = selected_path[i][0]
-                p_uri = selected_path[i+1][1]
-                o_name = selected_path[i+2][0]
+        triple = qc.get_triple_object(subject, obj)
+        if not triple:
+            return {"success": False, "error": f"Unable to find a triple between {subject} and {obj}"}
+        
+        aggr_obj_name = "all"+triple["obj"]["var_name"]
+        new_triple = {
+            "subj": triple["subj"],
+            "pred": triple["pred"],
+            "obj": {
+                "var_name": aggr_obj_name,
+                "uri": triple["obj"]["var_label"],
+                "type": triple["obj"]["type"]
+            }
+        }
+        triples = [new_triple]
                 
-                # Check if this is the final object we want to count
-                if i + 2 == len(selected_path) - 1:
-                    object_var_name = o_name # Set the variable to count
-                
-                triples.append({
-                    "subj": create_triple_element(s_name, selected_path[i][1], "var"),
-                    "pred": create_triple_element(convert_to_variable_name(p_uri), p_uri, "uri"),
-                    "obj": create_triple_element(o_name, selected_path[i+2][1], "var")
-                })
-            
-            # Add module to QC
-            def_vars = qc.extract_defined_variables(triples)
-            await qc.add_module({
-                "id": f"group_by_path_{subject}_{obj}",
-                "type": "pattern",
-                "scope": "main",
-                "triples": triples,
-                "required_vars": [create_triple_element(subject, subject_uri, "var")],
-                "defined_vars": def_vars
-            })
+        # Add module to QC
+        await qc.add_module({
+            "id": f"group_by_path_{subject}_{obj}",
+            "type": "pattern",
+            "scope": "main",
+            "triples": triples,
+            "required_vars": [create_triple_element(subject, subject_uri, "var")],
+            "defined_vars": []
+        })
 
     # CONSTRUCT GROUP BY: Group by the subject + any other non-aggregated variable in SELECT
-    # This handles the "include super-entities" requirement (e.g. including ?expression)
+    # We first update the selct to include the subject of the group By (which might not be
+    # in it) and then extract the variables in the select that are not sampled
     
+    qc.add_select(create_select_element(subject, subject_uri))
     group_vars = qc.get_non_aggregated_vars()
-    
-    # Ensure subject is in the group
-    unique_group_vars = list(set(group_vars + [subject]))
 
-    qc.set_group_by(unique_group_vars)
+    qc.set_group_by(group_vars)
 
     # CONSTRUCT HAVING
-    if function and object_var_name:
+    if function and aggr_obj_name:
         
         # Determine Operator
         operator = "=" # Default
@@ -697,7 +695,7 @@ async def groupBy_having_internal(
 
         having_clause = {
                 "function":function.upper(),
-                "variable":object_var_name,
+                "variable":aggr_obj_name,
                 "operator":operator,
             }
         
@@ -719,11 +717,6 @@ async def groupBy_having_internal(
         "generated_sparql": qc.to_string(),
         "message": "Group By and Having clauses applied successfully."
     }
-
-# --------------------------------------------------------------------------
-# HELPER: Reuses your existing pathfinding logic (Simplified for this snippet)
-# --------------------------------------------------------------------------
-
 
 #-------------------------------
 # EXECUTE QUERY INTERNALS

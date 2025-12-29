@@ -366,6 +366,46 @@ You should select an option different to 0 ONLY if the variable represent a new 
             return self.variable_registry[var_name]["var_label"]
         return None
 
+    def get_varName_from_uri(self, var_uri: str) -> Optional[str]:
+        for var, val in self.variable_registry:
+            if val["var_label"] == var_uri:
+                return var
+        return None
+    
+    def get_triple_object(self, subj_name: str, obj_name: str) -> Dict[str, Any]:
+        #TODO: check that group by link is only in where
+        best_match = None
+        best_score = -1
+
+        for mod in self.where:
+            triples = mod["triples"]
+            for t in triples:
+                score = 0
+
+                # Check subject match
+                if t["subj"]["var_name"] == subj_name:
+                    score += 2  # Exact match gets higher weight
+                elif subj_name in t["subj"]["var_name"]:
+                    score += 1  # Partial match gets lower weight
+
+                # Check object match
+                if t["obj"]["var_name"] == obj_name:
+                    score += 2  # Exact match gets higher weight
+                elif isinstance(t["obj"]["var_name"], str):
+                    if obj_name in t["obj"]["var_name"]:
+                        score += 1  # Partial match gets lower weight
+                
+                # Update best match if this triple has a higher score
+                if score > best_score:
+                    best_match = t
+                    best_score = score
+        if best_match:
+            return best_match
+
+        logger.error(f"Impossible to find a matching triple with subj: {subj_name} and obj: {obj_name}")
+        return {}
+
+
     def set_select(self, variables: List[Dict[str, Any]], distinct: bool = True) -> None:
         """Set the SELECT variables."""
         self.select = variables
@@ -379,7 +419,8 @@ You should select an option different to 0 ONLY if the variable represent a new 
 
     def add_select(self, var_elem: Dict[str, Any]) -> None:
         """Add a single variable to the SELECT list."""
-        self.select.append(var_elem)
+        if var_elem["var_name"] not in [v["var_name"] for v in self.select]:
+            self.select.append(var_elem)
 
     def set_limit(self, limit: int) -> None:
         self.limit = limit
@@ -395,7 +436,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
     
     def get_non_aggregated_vars(self) -> List[str]:
         """Return a list of variable names in SELECT that are NOT samples/aggregates."""
-        return [item["var_name"] for item in self.select if not item.get("is_sample", False)]
+        return [item for item in self.select if not item.get("is_sample", False)]
 
     def dry_run_test(self) -> bool:
         """
