@@ -131,7 +131,8 @@ class QueryContainer:
     def _validate_module(self, module: Dict[str, Any]) -> bool:
         """Basic validation of module structure."""
         required_keys = ["id", "triples"]
-        return all(key in module for key in required_keys)
+        required_filter_keys = ["id", "filter_st"]
+        return all(key in module for key in required_keys) or all(key in module for key in required_filter_keys)
     
     def _modify_var(self, module: Dict[str, Any], old_var: str, new_var: str) -> None:
         """Helper to rename variables in triples."""
@@ -203,6 +204,8 @@ class QueryContainer:
                 triples = module.get("triples", [])
                 for t in triples:
                     s_str = self._format_term(t.get("subj"))
+                    if not t.get("subj"):
+                        logger.error(f"Malformed triple in module {mod_id}: {t}")
                     if t.get("subj").get("var_label") == conflict_var_label:
                         s_str = f"**{s_str}**"
                     p_str = self._format_term(t.get("pred"))
@@ -366,6 +369,46 @@ You should select an option different to 0 ONLY if the variable represent a new 
             return self.variable_registry[var_name]["var_label"]
         return None
 
+    def get_varName_from_uri(self, var_uri: str) -> Optional[str]:
+        for var, val in self.variable_registry:
+            if val["var_label"] == var_uri:
+                return var
+        return None
+    
+    def get_triple_object(self, subj_name: str, obj_name: str) -> Dict[str, Any]:
+        #TODO: check that group by link is only in where
+        best_match = None
+        best_score = -1
+
+        for mod in self.where:
+            triples = mod["triples"]
+            for t in triples:
+                score = 0
+
+                # Check subject match
+                if t["subj"]["var_name"] == subj_name:
+                    score += 2  # Exact match gets higher weight
+                elif subj_name in t["subj"]["var_name"]:
+                    score += 1  # Partial match gets lower weight
+
+                # Check object match
+                if t["obj"]["var_name"] == obj_name:
+                    score += 2  # Exact match gets higher weight
+                elif isinstance(t["obj"]["var_name"], str):
+                    if obj_name in t["obj"]["var_name"]:
+                        score += 1  # Partial match gets lower weight
+                
+                # Update best match if this triple has a higher score
+                if score > best_score:
+                    best_match = t
+                    best_score = score
+        if best_match:
+            return best_match
+
+        logger.error(f"Impossible to find a matching triple with subj: {subj_name} and obj: {obj_name}")
+        return {}
+
+
     def set_select(self, variables: List[Dict[str, Any]], distinct: bool = True) -> None:
         """Set the SELECT variables."""
         self.select = variables
@@ -379,7 +422,8 @@ You should select an option different to 0 ONLY if the variable represent a new 
 
     def add_select(self, var_elem: Dict[str, Any]) -> None:
         """Add a single variable to the SELECT list."""
-        self.select.append(var_elem)
+        if var_elem["var_name"] not in [v["var_name"] for v in self.select]:
+            self.select.append(var_elem)
 
     def set_limit(self, limit: int) -> None:
         self.limit = limit
@@ -392,6 +436,10 @@ You should select an option different to 0 ONLY if the variable represent a new 
 
     def get_question(self) -> str:
         return self.question
+    
+    def get_non_aggregated_vars(self) -> List[str]:
+        """Return a list of variable names in SELECT that are NOT samples/aggregates."""
+        return [item for item in self.select if not item.get("is_sample", False)]
 
     def dry_run_test(self) -> bool:
         """
@@ -488,8 +536,23 @@ You should select an option different to 0 ONLY if the variable represent a new 
 
         # Build Having
         if self.having:
-            h_vars = [f"?{v['var_name']}" for v in self.having]
-            query_parts.append(f"HAVING ({' && '.join(h_vars)})")
+            having_parts = []
+            for condition in self.having:
+                function = condition.get("function", "")
+                var = condition.get("variable", "")
+                agg_expr = f"{function}(?{var})"
+                if condition.get("operator",""):
+                    operator = condition.get("operator","")
+                    if operator == "range":
+                        if condition.get("valueStart","") and condition.get("valueEnd",""):
+                            valueStart = condition.get("valueStart","")
+                            valueEnd = condition.get("valueEnd","")
+                            having_parts.append(f"{agg_expr} >= {valueStart} && {agg_expr} <= {valueEnd}")
+                    else:
+                        valueStart = condition.get("valueStart","")
+                        having_parts.append(f"{agg_expr} {operator} {valueStart}")
+
+            query_parts.append(f"HAVING ({' && '.join(having_parts)})")
 
         # Build Order By
         if self.order_by:
@@ -510,6 +573,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         type: "var", "uri", "literal"
         """
         if not term:
+            logger.error("Term is None or empty.")
             return ""
         
         if "type" not in term:
@@ -525,6 +589,9 @@ You should select an option different to 0 ONLY if the variable represent a new 
         elif t_type == "uri":
             val = term.get("var_label")
             # It's a full URI -> Wrap in <>
+            if not val:
+                logger.error(f"URI term missing 'var_label': {term}")
+                return ""
             if val.startswith("http"):
                 return f"<{val}>"
             return val # It might be a prefixed URI like mus:U13...

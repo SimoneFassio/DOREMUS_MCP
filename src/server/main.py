@@ -23,6 +23,7 @@ from server.tools_internal import (
     execute_query_from_id_internal,
     associate_to_N_entities_internal,
     has_quantity_of_internal,
+    groupBy_having_internal
 )
 
 # Configure logging
@@ -61,9 +62,16 @@ def activate_doremus_agent():
 
 
 @mcp.tool()
-async def build_query(question: str, template: str, filters: Dict[str, Any] | None) -> Dict[str, Any]:
+async def build_query(question: str, 
+                      template: str, 
+                      filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
+    **STEP 1: ALWAYS CALL THIS FIRST.**
     Build a SPARQL query safely using a predefined template.
+
+    **CRITICAL INSTRUCTION:** Before calling this, if the user mentions specific names (e.g. "Beethoven", "Magic Flute"), 
+    you SHOULD use the `search_entity` (or `find_candidate_entities`) tool first to get their URIs. 
+    Passing URIs in `filters` is much more accurate than passing raw strings.
 
     This tool does NOT execute the query. It generates the SPARQL string and returns a `query_id`.
     The LLM should inspect the generated SPARQL. If it looks correct, use `execute_query(query_id)` to run it.
@@ -72,10 +80,13 @@ async def build_query(question: str, template: str, filters: Dict[str, Any] | No
 
     Args:
         question: The user natural language question to answer.
-        template: The type of query to build. Options:
+        template: The conceptual domain to search within. CHOOSE CAREFULLY:
             - "works": For musical works (titles, composers, genres, keys...)
+                       Use this even if searching by creator (e.g. "Works by Bach").
             - "performances": For events/performances (dates, locations, performers...)
+                              Focuses on *when* and *where* something happened.
             - "artists": For finding artists (names, instruments, birth places...)
+                         Use this to find *people*, not their works.
         filters: A dictionary of filters to apply.
             - For Works: 
                 "title": String or URI, 
@@ -104,40 +115,182 @@ async def build_query(question: str, template: str, filters: Dict[str, Any] | No
         - "success": boolean
         - "query_id": The ID to use with `execute_query`
         - "generated_sparql": The generated SPARQL string for review
+        - "message": The query output and a set of few-shot examples to follow
     """
-    return await build_query_internal(question, template, filters)
+
+    strategy_guide = ""
+    # CATEGOPRY 3: Strict filtering
+    if "strictly" in question.lower() or "exactly" in question.lower() or "quartet" in question.lower() or "trio" in question.lower():
+        strategy_guide = """
+        ### TYPE 3: Strict/Exact Instrumentation (Closed Sets)
+        *Trigger:* "Strictly...", "Exactly...", "String Quartet" (implied set), "Trio"
+        *Strategy:*
+        1. `build_query`
+        2. `associate_to_N_entities` for EACH instrument.
+        3. `groupBy` to count the Total Number of Parts (ensuring no extra instruments).
+        
+        *Example:* "Works written for violin, clarinet and piano (strictly)"
+        -> build_query(...)
+        -> associate_to_N_entities(expression, violin, q_id)
+        -> associate_to_N_entities(expression, clarinet, q_id)
+        -> associate_to_N_entities(expression, piano, q_id)
+        -> groupBy(casting, q_id, castingDetail, COUNT, equal, 3) 
+        (Note: Logic is 'equal 3' because we have 3 distinct instrument parts)
+        
+        *Example:* "Works for String Quartet" (2 Violins, 1 Viola, 1 Cello = 3 distinct parts usually)
+        -> associate_to_N_entities(expression, violin, q_id, 2)
+        -> associate_to_N_entities(expression, viola, q_id, 1)
+        -> associate_to_N_entities(expression, cello, q_id, 1)
+        -> groupBy(casting, q_id, castingDetail, COUNT, equal, 3)
+        """
+
+    # CATEGORY 2: Open filters
+    elif "for" in question.lower() or "at least" in question.lower() or "involving at least" in question.lower():
+        strategy_guide = """
+        ### TYPE 2: Open Instrumentation (Inclusion)
+        *Trigger:* "Works for oboe...", "involving at least...", "for choir and orchestra"
+        *Strategy:* 1. `build_query` (set template="Works")
+        2. `associate_to_N_entities` for EACH instrument mentioned.
+        3. `has_quantity_of` if a date/time is mentioned.
+        4. DO NOT use `groupBy` (we allow other instruments to be present).
+        
+        *Example:* "Works written for oboe and orchestra after 1900"
+        -> build_query(..., filters={})
+        -> associate_to_N_entities(expression, oboe, q_id)
+        -> associate_to_N_entities(expression, orchestra, q_id)
+        -> has_quantity_of(expCreation, time-span, more, "01-01-1900", q_id)
+        """
+
+    # CATEGORY 1: simple metadata queries that can be asked with query builder -> default
+    else: 
+        strategy_guide = """
+        ### TYPE 1: Simple Metadata (Composer, Genre, Title)
+        *Trigger:* "Who composed...", "Works by...", "Sacred music..."
+        *Strategy:* Use `build_query` with filters. Do NOT use entity associations unless instruments are mentioned.
+        *Example:* "Works by Mozart"
+        -> build_query(template="Artists", filters={"name": "Wolfgang Amadeus Mozart"})
+        Review what has been done by the build_query tool and if necessary call it again
+        """
+    return await build_query_internal(question, template, filters, strategy_guide)
 
 @mcp.tool()
-async def associate_to_N_entities(subject: str, obj: str, query_id: str, n: int | None) -> Dict[str, Any]:
+async def associate_to_N_entities(
+    subject: str, 
+    obj: str, 
+    query_id: str, 
+    n: int | None = None) -> Dict[str, Any]:
     """
-    Tool that inserts in the query a pattern associating the subject entity (i.e. "expression"), usually from the select
-    and an object entity (i.e. "violin") n times (the number of entities).
+    Adds a constraint to the query to filter items based on their components or instrumentation. 
+    It answers questions like "Find [Subject] that has [N] [Objects]".
 
-    Use cases are: "Find all works composed for 3 violins", "Find all works performed by 2 pianists and 1 violinist", etc.
+    **WHEN TO USE:**
+    Use this tool when the user specifies a QUANTITY of a specific COMPONENT.
+    - "Works written for **3 violins**"
+    - "Bands with **2 drummers**"
+    - "Performances with a **string quarted** (2 violins, 1 viola and 1 cello)
+
+    **CRITICAL CONSTRAINTS:**
+    1. **Subject Existence:** The `subject` MUST be a variable that is ALREADY defined in the current query (e.g., 'expression', 'work').
+    2. **Object vs Subject:** - `subject` = The "Container" or "Main Entity" (e.g., The Symphony).
+       - `obj` = The "Ingredient" or "Instrument" (e.g., The Violin).
 
     Args:
-        subject: The subject entity name for which we want to find a subgraph connected to object (e.g., "expression")
-        obj: The object entity name to which the subject is connected (e.g., "violin")
-        query_id: The ID of the query being built onto which this pattern will be applied.
-        n (optional): The number of entities to associate. If we don't want to specify a number, pass None.
-    
+        subject: The variable name of the PARENT entity currently being filtered. This variable must typically be contained in the `SELECT`. (e.g., "expression").
+        obj: The specific COMPONENT or INSTRUMENT required. (e.g., "violin", "piano", "cello").
+        query_id: The ID of the active query to modify.
+        n: The specific QUANTITY of the object required. 
+           - Pass an integer (e.g., 3) for exact matches ("for 3 violins").
+           - Pass `None` if the user just asks for the *presence* of the object without a specific count ("for violin").
+
     Returns:
-        Dict containing:
-            - "success": boolean
-            - "query_id": The ID to use with `execute_query`
-            - "generated_sparql": The generated SPARQL string for review
+        Dict: {"success": bool, "query_id": str, "generated_sparql": str}
     
-    Example:
-        Suppose that we receive as input prompt from the user to select all the musical works that were written for 3 violins.
-        In this case, the tool will be called with:
-        Input: subject="expression", object="violin", query_id="d75H8V9AWH", N=3
-        Output: generated_sparql="... ?expression mus:U13_has_casting ?casting .
-                                 ?casting mus:U23_has_casting_detail ?castingDet .
-                                 ?castingDet mus:U2_foresees_use_of_medium_of_performance ?Violin .
-                                 ?castingDet mus:U30_foresees_quantity_of_mop 3 . ..."
+    **FEW-SHOT EXAMPLES:**
+
+    User: "Find all musical works composed for exactly 3 violins."
+    Context: We are looking for 'works' (subject) that use 'violins' (obj).
+    Call: associate_to_N_entities(
+        subject="expression",
+        obj="violin", 
+        n=3,
+        query_id="current_id"
+    )
+
+    User: "Show me pieces that use a piano." (No specific count)
+    Call: associate_to_N_entities(
+        subject="expression",
+        obj="piano",
+        n=None,
+        query_id="current_id"
+    )
     """
-    
+
     return await associate_to_N_entities_internal(subject, obj, query_id, n)
+
+
+@mcp.tool()
+async def groupBy_having(
+        subject: str, 
+        query_id: str, 
+        obj: str | None = None,
+        function: str | None = None,  
+        logic_type: str | None = None, 
+        valueStart: str | None = None, 
+        valueEnd: str | None = None) -> Dict[str, Any]:
+    """
+    Applies a GROUP BY aggregation to an existing SPARQL query, specifically to filter groups based on calculated metrics (like counts or averages).
+    
+    **WHEN TO USE:**
+    Use this tool ONLY when the user asks for:
+    1. Aggregations: "Count the number of...", "Calculate the average..."
+    2. Group Filters: "...which are written for a string quarted (exactly 4 instruments)", "...with an average rating LESS than 3".
+    
+    **DO NOT USE:**
+    - For simple property filters (e.g., "Find works released in 2020"). Use the standard `build_query` tool for that.
+    - If the user has not yet started a query (requires a valid `query_id`).
+
+    Args:
+        subject: The variable/entity to GROUP BY. This is the "bucket" or "category". (e.g., If counting instruments per Casting, this is 'casting').
+        query_id: The ID of the active query to modify.
+        obj: The variable/entity to MEASURE or COUNT inside the group. (e.g., If counting movies per Director, this is 'Movie'). 
+             REQUIRED if a 'function' is specified.
+        function: The mathematical operation to apply to the 'obj'. 
+             Valid options: 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX'.
+        logic_type: The comparison operator for the HAVING clause. 
+             Valid options:
+             - 'more' (applies >)
+             - 'less' (applies <)
+             - 'equal' (applies =)
+             - 'range' (applies a filter between valueStart and valueEnd)
+        valueStart: The threshold number for the logic_type. (e.g., if logic_type is 'more', and valueStart is '5', it means '> 5').
+        valueEnd: The upper bound number. ONLY used if logic_type is 'range'.
+
+    Returns:
+        Dict: {"success": bool, "query_id": str, "generated_sparql": str}
+
+    **FEW-SHOT EXAMPLES:**
+    
+    User: "Give me works that are written for three instruments"
+    Context: We are grouping castings by the count of casting details
+    Call: groupBy_having(
+        subject="Casting",
+        obj="castingDetail",
+        function="COUNT",
+        logic_type="equal",
+        valueStart="3"
+    )
+
+    User: "List directors with an average movie rating higher than 8."
+    Call: groupBy_having(
+        subject="Director", 
+        obj="Rating", 
+        function="AVG", 
+        logic_type="more", 
+        valueStart="8"
+    )
+    """
+    return await groupBy_having_internal(subject.lower(), query_id, function, obj.lower(), logic_type, valueStart, valueEnd)
+
 
 @mcp.tool()
 async def has_quantity_of(subject: str, property: str, type: str, value: str, valueEnd: str | None, query_id: str) -> Dict[str, Any]:
@@ -179,6 +332,7 @@ async def execute_query(query_id: str) -> Dict[str, Any]:
         The results of the SPARQL query execution.
     """
     return execute_query_from_id_internal(query_id)
+
 
 @mcp.tool()
 async def find_candidate_entities(

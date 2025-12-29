@@ -49,20 +49,29 @@ async def main():
 
     async def target_doremus_assistant(inputs: dict) -> dict:
         """Process a user input through the doremus assistant and capture the generated query."""
-        response = await doremus_assistant.ainvoke(
-            {"messages": [{"role": "user", "content": inputs["query_input"]}]}
-        )
+        try:
+            response = await doremus_assistant.ainvoke(
+                {"messages": [{"role": "user", "content": inputs["query_input"]}]}
+            )
+        except Exception as e:
+            print(f"Error during ainvoke: {e}")
+            return {"generated_query": ""}
 
         # Check the messages field first
         messages = response.get("messages", [])
-        generated_query = ""
+        #print(f"Messages: {messages}")
+        generated_query = None
+
         for message in messages:
             messContent = message.content if hasattr(message, "content") else ""
             if hasattr(message, "name") and message.name == "execute_query":
-                content_json = json.loads(messContent)
-                generated_query = content_json.get("generated_query", "")
-        if generated_query:
-            return {"generated_query": generated_query or ""}
+                try:
+                    content_json = json.loads(messContent)
+                    if "generated_query" in content_json and content_json["generated_query"]:
+                        generated_query = content_json["generated_query"]
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error in execute_query message: {e}")
+        return {"generated_query": generated_query or ""}
 
     async def accuracy(outputs: dict, reference_outputs: dict) -> float:
         """Check the percentage of correct values returned by the query."""
