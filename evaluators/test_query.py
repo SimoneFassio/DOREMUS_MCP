@@ -212,7 +212,7 @@ async def main():
                 clean_content = clean_content[:-3]
             
             data = json.loads(clean_content.strip())
-            return {"score": round(data.get("score", 0), 2), "comment": data.get("reasoning", "")}
+            return {"score": round(data.get("score", 0), 2), "comment": "".join(data.get("reasoning", ""))}
         except Exception as e:
             print(f"LLM Evaluator Error: {e}")
             return {"score": 0, "comment": f"Evaluation failed: {e}"}
@@ -275,7 +275,7 @@ async def main():
             
             data = json.loads(clean_content.strip())
             is_correct = data.get("is_correct", False)
-            return {"score": 1 if is_correct else 0, "comment": data.get("reasoning", "")}
+            return {"score": 1 if is_correct else 0, "comment": "".join(data.get("reasoning", ""))}
         except Exception as e:
             print(f"LLM Evaluator Error: {e}")
             return {"score": 0, "comment": f"Evaluation failed: {e}"}
