@@ -168,11 +168,6 @@ async def query_works(
         #            ?compositionActivity -> ?composer (carried_out_by)
         
         triples = [
-            {
-            "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
-            "pred": create_triple_element("efrbroo:R17_created", "efrbroo:R17_created", "uri"),
-            "obj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var")
-        },
         {
             "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
             "pred": create_triple_element("ecrm:P9_consists_of", "ecrm:P9_consists_of", "uri"),
@@ -287,12 +282,6 @@ async def query_works(
         # so we must be careful. Ideally, we define a "Creation Event" module if needed.
         # But for now, we can just re-state or use OPTIONAL/UNION if we were advanced.
         # Safest is to restate the link:
-        triples.append({
-                "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
-                "pred": create_triple_element("efrbroo:R17_created", "efrbroo:R17_created", "uri"),
-                "obj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var")
-            }
-        )
         triples.append({
                 "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
                 "pred": create_triple_element("ecrm:P7_took_place_at", "ecrm:P7_took_place_at", "uri"),
