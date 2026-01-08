@@ -128,7 +128,8 @@ def execute_sparql_query(query: str, limit: int = 100) -> Dict[str, Any]:
     
 def find_candidate_entities_utils(
     name: str,
-    entity_type: str = "others"
+    entity_type: str = "others",
+    limit: int = 15
 ) -> Dict[str, Any]:
     normalized_type = (entity_type or "").strip().lower()
     if normalized_type not in {"artist", "vocabulary", "others"}:
@@ -153,16 +154,31 @@ def find_candidate_entities_utils(
     search_literal = f"'{search_term_escaped}'"
 
     query = f"""
-    SELECT DISTINCT ?entity ?label ?type
+    SELECT ?entity ?label ?type
     WHERE {{
-        ?entity {label_predicate} ?label .
-        ?entity a ?type .
-        ?label bif:contains "{search_literal}" .
+    {{
+        SELECT ?entity ?type (SUBSTR(MIN(CONCAT(?priority, ?label_lang)), 2) AS ?label) (MAX(?sc) AS ?maxSc)
+        WHERE {{
+            ?entity {label_predicate} ?label_lang .
+            ?entity a ?type .
+            ?label_lang bif:contains "{search_literal}" option (score ?sc) .
+
+            BIND(IF(LANG(?label_lang) = "en", "1", IF(LANG(?label_lang) = "", "2", "3")) AS ?priority)
+        }}
+        GROUP BY ?entity ?type
     }}
-    ORDER BY STRLEN(?label)
+
+    # Calculate the length difference
+    BIND(ABS(STRLEN(?label) - STRLEN("{search_literal}")) AS ?lenDiff)
+
+    # We divide the score by the length difference (adding 1 to avoid division by zero)
+    # This makes longer strings have a lower relevance.
+    BIND((xsd:float(?maxSc) / (xsd:float(?lenDiff) + 1.0)) AS ?hybridScore)
+    }}
+    ORDER BY DESC(?hybridScore)
     """
 
-    result = execute_sparql_query(query, limit=10)
+    result = execute_sparql_query(query, limit=limit)
     
     # Eliminate duplicates based on entity URI and type
     unique_entities = {}

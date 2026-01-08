@@ -68,6 +68,8 @@ Based on the user's intent, select the most appropriate option by its index numb
 **Reply ONLY with the integer index of the best option (e.g., '0' or '1')**.
 You MUST reply with exactly one token: the integer index only — nothing else, no punctuation, no commentary.
         """
+        
+    logger.info(f"LLM sampling message: {user_message}")
     # MODEL PREFERENCES
     preferences = types.ModelPreferences(
         hints=[
@@ -137,10 +139,11 @@ You MUST reply with exactly one token: the integer index only — nothing else, 
                     options={"temperature":0}
                 )
                 llm_response = response.message.content
-            logger.info(f"Fallback LLM response: {llm_response}")  # Log fallback response
-            match = re.search(r'\d+', llm_response)
-            if match:
-                return match.group()
+            logger.info(f"Fallback LLM response: {llm_response}")
+            # Consider last number found, if the LLM is reasoning before it is ignored
+            numbers = re.findall(r'\d+', llm_response)
+            if numbers:
+                return numbers[-1]
             else:
                 logger.warning(f"Fallback LLM response did not contain a valid index. Response: {llm_response}")
                 return f"0 (Fallback due to invalid response: {llm_response})"

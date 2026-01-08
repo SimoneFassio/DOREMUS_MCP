@@ -1,7 +1,9 @@
 from typing import Optional, List, Dict, Any, Union
 import logging
+import re
 from server.query_container import QueryContainer, create_triple_element, create_select_element
 from server.utils import find_candidate_entities_utils
+from server.tool_sampling import tool_sampling_request
 from fastmcp import Context
 
 logger = logging.getLogger("doremus-mcp")
@@ -20,10 +22,10 @@ COUNTRY_CODES = {
     "spanish": "ES", "spain": "ES",
 }
 
-def _resolve_entity(name: str, entity_type: str) -> Optional[str]:
+async def _resolve_entity(name: str, entity_type: str, question: str = "") -> Optional[str]:
     """
-    Helper to resolve a name to a URI using internal tools.
-    Returns the first matching URI or None.
+    Helper to resolve a name to a URI using internal tools with LLM sampling.
+    Returns the most relevant matching URI or None.
     """
     
     # Check if name is already an uri
@@ -34,9 +36,53 @@ def _resolve_entity(name: str, entity_type: str) -> Optional[str]:
         result = find_candidate_entities_utils(name, entity_type)
 
         if result.get("matches_found", 0) > 0:
-            # Take the first one (most relevant)
-            first_entity = result["entities"][0]
-            return first_entity.get("entity") # URI
+            entities = result["entities"]
+            
+            # If only one match, return it directly
+            if len(entities) == 1:
+                return entities[0].get("entity")
+            
+            # Multiple matches: use sampling to choose best one
+            entity_options_text = "\n".join([
+                f"{i}. {entity.get('label', 'N/A')} ({entity.get('entity', 'N/A')}) ({entity.get('type', 'N/A')})"
+                for i, entity in enumerate(entities)
+            ])
+            
+            # Add REGEX fallback option as the last choice
+            regex_option_index = len(entities)
+            entity_options_text += f"\n{regex_option_index}. None of the above - use REGEX pattern matching instead"
+            
+            system_prompt = f"""You are an expert in entity resolution for the DOREMUS music knowledge base.
+Choose the most semantically relevant entity that matches the user's query intent.
+If none of the specific entities match well, choose the REGEX option to use pattern matching instead."""
+            
+            pattern_intent = f"""Which of these entities best represents '{name}' (type: {entity_type})?
+{f"Given the question: '{question}'" if question else ""}
+
+The options available are:
+{entity_options_text}
+
+Return only the number (index) of the best match."""
+            
+            # Send Sampling request to LLM
+            llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
+            
+            try:
+                # Extract the number
+                match = re.search(r'\d+', llm_answer)
+                if match:
+                    index = int(match.group())
+                    # Check if LLM chose the REGEX option
+                    if index == regex_option_index:
+                        logger.info(f"LLM chose REGEX fallback for '{name}'")
+                        return None
+                    elif 0 <= index < len(entities):
+                        return entities[index].get("entity")
+                # Fallback to first if invalid index
+                return entities[0].get("entity")
+            except (IndexError, ValueError):
+                # Fallback to first on error
+                return entities[0].get("entity")
             
     except Exception as e:
         logger.warning(f"Failed to resolve entity {name}: {e}")
@@ -72,10 +118,10 @@ async def query_works(
     qc.set_select(select_vars)
     
     # 2. Variable Resolvers
-    resolved_composer = _resolve_entity(composer_name, "artist") if composer_name else None
-    resolved_genre = _resolve_entity(genre, "vocabulary") if genre else None
-    resolved_place = _resolve_entity(place_of_composition, "others") if place_of_composition else None
-    resolved_key = _resolve_entity(musical_key, "vocabulary") if musical_key else None
+    resolved_composer = await _resolve_entity(composer_name, "artist", question) if composer_name else None
+    resolved_genre = await _resolve_entity(genre, "vocabulary", question) if genre else None
+    resolved_place = await _resolve_entity(place_of_composition, "others", question) if place_of_composition else None
+    resolved_key = await _resolve_entity(musical_key, "vocabulary", question) if musical_key else None
 
     # 3. Core Module: Expression & Title
     # Use simple label for display as requested
@@ -386,7 +432,7 @@ async def query_performance(
     
     # Location Filter
     if location:
-        resolved_uri = _resolve_entity(location, "others")
+        resolved_uri = await _resolve_entity(location, "others", question)
         if resolved_uri:
             location_triples.append({
                 "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
@@ -440,7 +486,7 @@ async def query_performance(
     if carried_out_by:
         for idx, person_name in enumerate(carried_out_by):
             # Resolve if possible
-            resolved_uri = _resolve_entity(person_name, "artist")
+            resolved_uri = _resolve_entity(person_name, "artist", question)
             
             # The pattern is recursive/deep: ?performance -> consists_of* -> activity -> carried_out_by -> artist
             # We use a path that covers both conductors and musicians
@@ -539,7 +585,7 @@ async def query_artist(
     
     # Name Filter
     if name:
-        resolved_artist = _resolve_entity(name, "artist")
+        resolved_artist = await _resolve_entity(name, "artist", question)
         triples = []
         filter_st = []
 
@@ -645,7 +691,7 @@ async def query_artist(
 
     # Work Name Filter
     if work_name:
-        resolved_work = _resolve_entity(work_name, "others")
+        resolved_work = await _resolve_entity(work_name, "others", question)
         triples = [
             {
             "subj": create_triple_element("performanceWork", "efrbroo:F28_Expression_Creation", "var"),
