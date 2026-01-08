@@ -3835,7 +3835,7 @@ version = "0.6.1"
 description = "The official Python client for Ollama."
 optional = false
 python-versions = ">=3.8"
-groups = ["eval"]
+groups = ["main", "eval"]
 files = [
     {file = "ollama-0.6.1-py3-none-any.whl", hash = "sha256:fc4c984b345735c5486faeee67d8a265214a31cbb828167782dc642ce0a2bf8c"},
     {file = "ollama-0.6.1.tar.gz", hash = "sha256:478c67546836430034b415ed64fa890fd3d1ff91781a9d548b3325274e69d7c6"},
@@ -6973,4 +6973,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "392e346a6d4d50d2f1cb953fbe132000ea40b0f64a48e8e68ef25a1b64cf264d"
+content-hash = "4a3b22bb343173a4bd86f76ed482434729e32b8f2e840fa7da94c4c81710f0d1"

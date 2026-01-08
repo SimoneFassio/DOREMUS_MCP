@@ -2,26 +2,39 @@ import os
 import re
 import logging
 from dotenv import load_dotenv
-
-load_dotenv()
 import mcp.types as types
 from fastmcp.server.dependencies import get_context
 from openai import OpenAI
 from groq import Groq
-from server.utils import (
-    convert_to_variable_name,
-    extract_label
-)
-
-OPENAI = True if os.getenv("LLM_EVAL_PROVIDER", "ollama").lower() == "openai" else False
+from ollama import Client
 
 logger = logging.getLogger("doremus-mcp")
 
-# Fallback client for sampling if needed
-if OPENAI:
+# Sampling-specific provider/model selection
+sampling_models = {
+    "openai": "gpt-4o",
+    "groq": "llama-3.3-70b-versatile",
+    "ollama": "gpt-oss:120b"
+}
+load_dotenv()
+
+sampling_provider = os.getenv("LLM_SAMPLING_PROVIDER", os.getenv("LLM_EVAL_PROVIDER", "ollama")).lower()
+if sampling_provider not in sampling_models:
+    logger.warning(f"Unknown LLM_SAMPLING_PROVIDER '{sampling_provider}', defaulting to 'ollama'.")
+    sampling_provider = "ollama"
+
+sampling_model = os.getenv("LLM_SAMPLING_MODEL", os.getenv("LLM_EVAL_MODEL", "gpt-oss:120b"))
+
+# Fallback client for sampling if needed (matches sampling provider)
+if sampling_provider == "openai":
     fallback_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-else:
+elif sampling_provider == "groq":
     fallback_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+else:
+    fallback_client = Client(
+        host=os.getenv("OLLAMA_API_URL"),
+        headers= {"Authorization": f"Basic {os.getenv('OLLAMA_API_KEY')}"},
+        )
 
 # Helper to format paths for the LLM
 def format_paths_for_llm(paths):
@@ -39,7 +52,7 @@ async def tool_sampling_request(system_prompt: str, pattern_intent: str) -> str:
     Sends a sampling request to the client (LLM) to resolve ambiguity.
     This function will handle fallback to server-side LLM if client sampling fails.
     1. Try client sampling
-    2. If fails, use server-side LLM (OpenAI or Groq)
+    2. If fails, use server-side LLM (OpenAI, Groq, or Ollama based on env vars)
     3. Return the selected option index as string
     """
 
@@ -52,11 +65,13 @@ async def tool_sampling_request(system_prompt: str, pattern_intent: str) -> str:
     user_message = f"""
 The user is asking about {pattern_intent}
 Based on the user's intent, select the most appropriate option by its index number.
-- Reply ONLY with the integer index of the best option (e.g., '0' or '1').
+**Reply ONLY with the integer index of the best option (e.g., '0' or '1')**.
+You MUST reply with exactly one token: the integer index only — nothing else, no punctuation, no commentary.
         """
     # MODEL PREFERENCES
     preferences = types.ModelPreferences(
         hints=[
+            types.ModelHint(name=sampling_model),
             # Standard VS Code / General High Performance
             types.ModelHint(name="gpt-4o"),
             types.ModelHint(name="claude-3-5-sonnet"),
@@ -101,9 +116,9 @@ Based on the user's intent, select the most appropriate option by its index numb
         logger.warning(f"Client sampling failed ({str(e)}). Switching to Server-Side Fallback.")
         try:
             # 3. Manual Fallback 
-            if OPENAI:
+            if sampling_provider == "openai" or sampling_provider == "groq":
                 response = fallback_client.chat.completions.create(
-                    model="gpt-4o",
+                    model=sampling_model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message}
@@ -111,17 +126,17 @@ Based on the user's intent, select the most appropriate option by its index numb
                     max_tokens=20,
                     temperature=0
                 )
+                llm_response = response.choices[0].message.content
             else:
-                response = fallback_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile", #"llama-3.1-8b-instant", 
+                response = fallback_client.chat(
+                    model=sampling_model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message}
                     ],
-                    max_tokens=10,
-                    temperature=0
+                    options={"temperature":0}
                 )
-            llm_response = response.choices[0].message.content
+                llm_response = response.message.content
             logger.info(f"Fallback LLM response: {llm_response}")  # Log fallback response
             match = re.search(r'\d+', llm_response)
             if match:

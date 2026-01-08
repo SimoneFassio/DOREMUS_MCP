@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # Add src to path for local development
 sys.path.insert(0, 'src')
 
-from rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider
+from rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider, model_name
 from rdf_assistant.eval.doremus_dataset import examples_queries
 from server.utils import execute_sparql_query
 
@@ -175,7 +175,7 @@ async def main():
         """Use an LLM to evaluate the semantic correctness of the generated query."""
         
         # Instantiate the judge model (using same config as agent)
-        llm = create_model(provider)
+        llm = create_model(provider, model_name)
         
         generated_query = outputs.get("generated_query", "")
         reference_query = reference_outputs["rdf_query"] # ground truth query
@@ -230,7 +230,7 @@ async def main():
         """Use an LLM to evaluate if the query is practically correct ignoring minor details."""
         
         # Instantiate the judge model (using same config as agent)
-        llm = create_model(provider)
+        llm = create_model(provider, model_name)
         
         generated_query = outputs.get("generated_query", "")
         reference_query = reference_outputs["rdf_query"] # ground truth query
