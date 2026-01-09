@@ -104,6 +104,23 @@ def find_inverse_arcs_internal(entity_uri: str, graph) -> Dict[str, Any]:
         "error": f"No incoming arcs found for entity: {entity_uri}"
     }
 
+# Helper to find for an entity the child entities and their relative arcs from it
+def find_arcs_internal(entity_uri: str, graph) -> Dict[str, Any]:
+    children = []
+    for subj, edges in graph.items():
+        for pred, obj in edges:
+            if subj == entity_uri and (pred, obj) not in children:
+                children.append((pred, obj))
+    if children:
+        return {
+            "success": True,
+            "children": children
+        }
+    return {
+        "success": False,
+        "error": f"No outgoing arcs found for entity: {entity_uri}"
+    }
+
 if __name__ == "__main__":
     if len(sys.argv) != 5:
         print("Usage: python find_paths.py <csv_file> <start_node> <end_node> <k>")

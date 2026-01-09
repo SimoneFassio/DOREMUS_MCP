@@ -10,7 +10,7 @@ from server.find_paths import load_graph
 from server.graph_schema_explorer import GraphSchemaExplorer
 from server.query_container import QueryContainer, create_triple_element, create_select_element
 from server.query_builder import query_works, query_performance, query_artist
-from server.find_paths import find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
+from server.find_paths import find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal, find_arcs_internal
 from server.utils import (
     execute_sparql_query,
     contract_uri,
@@ -214,8 +214,12 @@ def recur_domain(current_entity: str, target_entity: str, graph, depth: int, pat
     # 2. SUCCESS: Target Found
     if current_entity == target_entity:
         return [path]
+
+    results = []
     
-    # RECURSION: Explore Parents
+    # ---------------------------------------------
+    # OPTION A: Explore Parents (Incoming Arcs)
+    # ---------------------------------------------
     res = find_inverse_arcs_internal(current_entity, graph)
     if not res:
         logger.error("find_inverse_arcs error found")
@@ -225,21 +229,45 @@ def recur_domain(current_entity: str, target_entity: str, graph, depth: int, pat
         return []
     
     parents = res.get("parents", [])
-    results = []
     for neighbor, predicate in parents:
         neighbor_var = convert_to_variable_name(neighbor)
         predicate_var = convert_to_variable_name(predicate)
 
         # avoid cycles
-        if any(neighbor == uri for _, uri in path):
+        if any(neighbor == uri for _, uri, *_ in path):
             continue
 
-        new_path = [(neighbor_var, neighbor), (predicate_var, predicate)] + path
+        new_path = [(neighbor_var, neighbor), (predicate_var, predicate, "forward")] + path
         child_paths = recur_domain(neighbor, target_entity, graph, depth + 1, new_path)
         
         # Collect valid paths
         results.extend(child_paths)
     
+    # ---------------------------------------------
+    # OPTION B: Explore Children (Outgoing Arcs)
+    # ---------------------------------------------
+    res_2 = find_arcs_internal(current_entity, graph)
+    if not res_2:
+        logger.error("find_arcs error found")
+        return []
+    if not res_2.get("success"):
+        # We reached a dead end
+        return []
+    children = res_2.get("children", [])
+    for predicate, neighbor in children:
+        neighbor_var = convert_to_variable_name(neighbor)
+        predicate_var = convert_to_variable_name(predicate)
+
+        # avoid cycles
+        if any(neighbor == uri for _, uri, *_ in path):
+            continue
+
+        new_path = [(neighbor_var, neighbor), (predicate_var, predicate, "inverse")] + path
+        child_paths = recur_domain(neighbor, target_entity, graph, depth + 1, new_path)
+        
+        # Collect valid paths
+        results.extend(child_paths)
+
     return results
         
     
@@ -266,31 +294,50 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
     subject_uri = qc.get_variable_uri(subject)
     # FAILSAFE: debug
     if not subject_uri:
-        return {
-            "success": False,
-            "error": f"Subject variable ?{subject} not found in query."
-        }
+        # Sampling dynamic to ask the LLM
+        question = qc.get_question()
+        system_prompt = "You are a SPARQL query expert. Based on the user's question, decide if the variable could be useful to add to the SELECT statement."
+        pattern_intent = f"""
+The current question is: '{question}'
+The variable being checked is: '?{subject}'
+Should this variable be added to the SELECT statement?
+- Option 0: Yes, it is relevant.
+- Option 1: No, it is not relevant."""
+        llm_response = await tool_sampling_request(system_prompt, pattern_intent)
+        
+        # Parse LLM response
+        if "0" in llm_response.strip():
+            qc.add_select(create_select_element(subject, ""))
+            logger.info(f"Variable ?{subject} added to SELECT based on LLM response.")
+        else:
+            logger.info(f"Variable ?{subject} not added to SELECT based on LLM response.")
+            return {
+                "success": False,
+                "error": f"Subject variable ?{subject} not found in query. LLM response: {llm_response}"
+            }
     
     # RETRIEVE OBJECT URI
-    if obj.startswith("http://") or obj.startswith("https://"):
-        obj_uri = obj
-        obj = (obj.split("/")[-1]).strip().lower()
-    else:
-        obj = obj.strip().lower()
-        res_obj = find_candidate_entities_internal(obj, "vocabulary")
-        if res_obj['matches_found']==0:
-            res_obj = find_candidate_entities_internal(obj, "others")
-            if res_obj['matches_found']>0:
-                obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
-                obj_uri = extract_label(obj_uri_complete)
-            else:
-                return {
-                    "success": False,
-                    "error": f"Object entity '{obj}' not found in the knowledge base."
-                }
+    obj_uri = qc.get_variable_uri(obj)
+    if not obj_uri:
+        if obj.startswith("http://") or obj.startswith("https://"):
+            obj_uri = obj
+            obj = (obj.split("/")[-1]).strip().lower()
         else:
-            obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
-            obj_uri = obj_uri_complete
+            obj = obj.strip().lower()
+            res_obj = find_candidate_entities_internal(obj, "vocabulary")
+            if res_obj['matches_found']==0:
+                res_obj = find_candidate_entities_internal(obj, "others")
+                if res_obj['matches_found']>0:
+                    obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
+                    obj_uri = extract_label(obj_uri_complete)
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Object entity '{obj}' not found in the knowledge base."
+                    }
+            else:
+                obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
+                obj_uri = obj_uri_complete
     
     #-------------------------------
     # VOCAB/ONTOLOGY SWITCH
@@ -450,12 +497,31 @@ The options available are:
     selected_path[0] = (subject, subject_uri)
     triples = []
     for i in range(0, len(selected_path)-2, 2):
-        triples.append({
-            "subj": create_triple_element(selected_path[i][0], selected_path[i][1], "var"),
-            "pred": create_triple_element(selected_path[i+1][0], selected_path[i+1][1], "uri"),
-            "obj": create_triple_element(selected_path[i+2][0], selected_path[i+2][1], "var")
-        })
-    logger.info(f"Selected path for associating {subject} to {obj} is: {triples}")
+        # 1. Extract Elements
+        node_a = selected_path[i]       # (var, uri)
+        edge   = selected_path[i+1]     # (var, uri, direction)
+        node_b = selected_path[i+2]     # (var, uri)
+
+        # 2. Extract Edge Metadata
+        pred_label = edge[0]
+        pred_uri   = edge[1]
+        # Default to forward if tuple is short (backward compatibility)
+        direction  = edge[2] if len(edge) > 2 else "forward" 
+
+        # 3. Create Triple Elements
+        var_a = create_triple_element(node_a[0], node_a[1], "var")
+        var_b = create_triple_element(node_b[0], node_b[1], "var")
+        pred  = create_triple_element(pred_label, pred_uri, "uri")
+
+        # 4. Directional Logic
+        if direction == "forward":
+            # Path: A -> B, Ontology: A -> B
+            triples.append({"subj": var_a, "pred": pred, "obj": var_b})
+        else:
+            # Path: A -> B, Ontology: B -> A (Inverse)
+            triples.append({"subj": var_b, "pred": pred, "obj": var_a})
+
+    logger.info(f"Selected path with directions: {selected_path}")
     if N is not None:
         quantity_property = get_quantity_property(selected_path[-3][1])
         logger.info(f"Quantity property for entity {selected_path[-3][1]} is {quantity_property}")

@@ -246,7 +246,7 @@ def remove_redundant_paths(paths: List[List[tuple]]) -> List[List[tuple]]:
 
     for path in paths:
         # Normalize the path by extracting var_name for nodes and var_label for edges
-        normalized_path = tuple((var_name, var_label) for var_name, var_label in path)
+        normalized_path = tuple((var_name, var_label) for var_name, var_label, *_ in path)
         
         # Check if the normalized path is already in the set
         if normalized_path not in unique_paths:
