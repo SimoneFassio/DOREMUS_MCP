@@ -331,9 +331,7 @@ async def add_triplet(
 ) -> Dict[str, Any]:
     """
     Add a general triplet to the query, validating it with a dry run.
-    
-    This tool allows adding custom relationships to the query. It automatically checks if the property
-    exists for the subject class and verifies if the new triplet returns results by executing a dry run.
+    Use this tool ONLY when with the other tools is impossible to write the correct pattern, NO EXCEPTION.
 
     Args:
         subject: The variable name of the subject (e.g. "expression").
