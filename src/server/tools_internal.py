@@ -709,6 +709,89 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
     
 
 #-------------------------------
+# ADD TRIPLET INTERNALS
+#-------------------------------
+
+async def add_triplet_internal(
+    subject: str, 
+    subject_class: str, 
+    property: str, 
+    obj: str, 
+    obj_class: str, 
+    query_id: str
+) -> Dict[str, Any]:
+    qc = QUERY_STORAGE.get(query_id)
+    if not qc:
+        return {
+            "success": False,
+            "error": f"Query ID {query_id} not found or expired."
+        }
+        
+    # 1. Check property existence
+    if not explorer.class_has_property(subject_class, property):
+         return {
+            "success": False,
+            "error": f"Property {property} does not exist for class {subject_class}."
+        }
+        
+    # 2. Prepare Triples and Vars
+    triples = []
+    required_vars = []
+    defined_vars = []
+    
+    # Subject handling
+    subj_uri = qc.get_variable_uri(subject)
+    if subj_uri:
+        # Subject exists -> Required
+        required_vars.append(create_triple_element(subject, subject_class, "var"))
+    else:
+        # Subject new -> Defined
+        defined_vars.append({"var_name": subject, "var_label": subject_class})
+        
+    # Object handling
+    obj_uri = qc.get_variable_uri(obj)
+    if obj_uri:
+        # Object exists -> Required
+        required_vars.append(create_triple_element(obj, obj_class, "var"))
+    else:
+        # Object new -> Defined
+        defined_vars.append({"var_name": obj, "var_label": obj_class})
+        
+    triples.append({
+        "subj": create_triple_element(subject, subject_class, "var"),
+        "pred": create_triple_element(property, property, "uri"),
+        "obj": create_triple_element(obj, obj_class, "var")
+    })
+    
+    module_id = f"add_triplet_{subject}_{property}_{obj}"
+    
+    module = {
+        "id": module_id,
+        "type": "add_triplet",
+        "scope": "main",
+        "triples": triples,
+        "required_vars": required_vars,
+        "defined_vars": defined_vars
+    }
+
+    # 3. Add Module with Dry Run
+    # dry_run=True will execute query. If returns True, module is KEPT.
+    success = await qc.add_module(module, dry_run=True)
+    
+    if success:
+        return {
+            "success": True,
+            "query_id": query_id,
+            "generated_sparql": qc.to_string(),
+            "message": "Triplet added successfully."
+        }
+    else:
+        return {
+            "success": False,
+            "error": "Query execution failed or returned 0 results with the new triplet. The triplet was discarded."
+        }
+
+#-------------------------------
 # GROUP BY HAVING INTERNALS
 #-------------------------------
 

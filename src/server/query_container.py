@@ -2,6 +2,7 @@ from typing import Any, Optional, List, Dict
 import logging
 import re
 from server.tool_sampling import tool_sampling_request
+from server.utils import execute_sparql_query
 
 logger = logging.getLogger("doremus-mcp")
 
@@ -77,7 +78,7 @@ class QueryContainer:
     # ----------------------
     # MODULE MANAGEMENT
     # ----------------------
-    async def add_module(self, module: Dict[str, Any]) -> None:
+    async def add_module(self, module: Dict[str, Any], dry_run: bool = False) -> bool:
         """
         Add a query module to the container after validation and connectivity checks.
         
@@ -93,15 +94,27 @@ class QueryContainer:
                     "required_vars": List[Tuple[str, str]], variables that MUST be already defined
                     "defined_vars": List[Tuple[str, str]], variables that this module defines
                 }
+            dry_run: If True, adds module temporarily, tests query, and reverts if it fails.
+
         Returns:
-            The processed module that was added (useful for logging/debugging).
+            True if module was added (or would be valid in dry_run), False otherwise.
         """
         # Validate module structure
         if not self._validate_module(module):
             error_msg = f"Invalid module structure for ID: {module.get('id', 'unknown')}"
             logger.error(error_msg)
-            return {"error": error_msg}
+            return False
 
+        # BACKUP STATE
+        state_backup = {
+            "where": self.where.copy(),
+            "filter_st": self.filter_st.copy(),
+            "variable_registry": {k: v.copy() for k, v in self.variable_registry.items()},
+            # deeply copy select to avoid issues with modifications
+            "select": [s.copy() for s in self.select] 
+        }
+
+        # 1. ADD MODULE (TEMPORARILY)
         if module["scope"] == "main":
             # Process variable renaming (if needed for uniqueness or linking)
             processed_module = await self._process_variables(module)
@@ -112,12 +125,22 @@ class QueryContainer:
             
             if processed_module.get("triples"):
                 self.where.append(processed_module)
-        if module["scope"] == "optional":
-            #TODO: implement OPTIONAL module handling
-            logger.warning("Optional modules not yet implemented.")
-            # Placeholder for future implementation of OPTIONAL patterns
         
-    
+        elif module["scope"] == "optional":
+            logger.warning("Optional modules not yet implemented.")
+            return False
+
+        # 2. DRY RUN TEST
+        if dry_run:
+            if not self.dry_run_test():
+                # REVERT STATE
+                self.where = state_backup["where"]
+                self.filter_st = state_backup["filter_st"]
+                self.variable_registry = state_backup["variable_registry"]
+                self.select = state_backup["select"]
+                return False
+        
+        return True
 
     def set_order_by(self, variables: List[Dict[str, Any]]) -> None:
         self.order_by = variables
@@ -445,6 +468,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         """
         Basic sanity check for the query structure.
         Connectivity is already checked in add_module, so this checks buildability.
+        Also executes the query with LIMIT 1 to check for 0 results or errors.
         """
         if not self.select:
             logger.warning("Dry Run Failed: No SELECT variables defined.")
@@ -454,6 +478,22 @@ You should select an option different to 0 ONLY if the variable represent a new 
             logger.warning("Dry Run Failed: WHERE clause is empty.")
             return False
             
+        # Execute Query with LIMIT 1
+        current_limit = self.limit
+        self.limit = 1
+        query_str = self.to_string()
+        self.limit = current_limit
+        
+        res = execute_sparql_query(query_str, limit=1)
+        
+        if not res["success"]:
+            logger.warning(f"Dry Run Failed: Query execution error: {res.get('error')}")
+            return False
+        
+        if res.get("count", 0) == 0:
+            logger.warning("Dry Run Failed: Query returned 0 results.")
+            return False
+
         return True
 
     def to_string(self) -> str:

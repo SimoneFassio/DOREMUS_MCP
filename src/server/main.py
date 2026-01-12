@@ -23,7 +23,8 @@ from server.tools_internal import (
     execute_query_from_id_internal,
     associate_to_N_entities_internal,
     has_quantity_of_internal,
-    groupBy_having_internal
+    groupBy_having_internal,
+    add_triplet_internal
 )
 
 # Configure logging
@@ -77,6 +78,7 @@ async def build_query(question: str,
     The LLM should inspect the generated SPARQL. If it looks correct, use `execute_query(query_id)` to run it.
     If it is incorrect, call `build_query` again with adjusted filters.
     Use find_candidate_entities to find the URI of the filters.
+    Use full names (always prefer name surname) for the filters, do not use initials for composers, places or instruments.
 
     Args:
         question: The user natural language question to answer.
@@ -316,6 +318,36 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
           Output: generated_sparql="... FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear) ..."
     """
     return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
+
+
+@mcp.tool()
+async def add_triplet(
+    subject: str, 
+    subject_class: str, 
+    property: str, 
+    obj: str, 
+    obj_class: str, 
+    query_id: str
+) -> Dict[str, Any]:
+    """
+    Add a general triplet to the query, validating it with a dry run.
+    
+    This tool allows adding custom relationships to the query. It automatically checks if the property
+    exists for the subject class and verifies if the new triplet returns results by executing a dry run.
+
+    Args:
+        subject: The variable name of the subject (e.g. "expression").
+        subject_class: The URI class of the subject (e.g. "efrbroo:F22_Self-Contained_Expression").
+        property: The property URI (e.g. "efrbroo:R17_created").
+        obj: The variable name of the object (e.g. "creation").
+        obj_class: The URI class of the object (e.g. "efrbroo:F28_Expression_Creation").
+        query_id: The active query ID.
+
+    Returns:
+        Dict containing success status and the updated SPARQL query if successful.
+        If the triplet causes an error or returns 0 results, it is discarded and an error is returned.
+    """
+    return await add_triplet_internal(subject, subject_class, property, obj, obj_class, query_id)
 
 
 @mcp.tool()
