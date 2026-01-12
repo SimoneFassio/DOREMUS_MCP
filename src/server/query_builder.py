@@ -193,17 +193,12 @@ async def query_works(
         logger.info(f"Composer name: {composer_name}, resolved: {resolved_composer}")
         
         if resolved_composer:
-            # Add VALUES clause with comment
             triples.append({
             "subj": create_triple_element("composer", "ecrm:E21_Person", "var"),
             "pred": create_triple_element("VALUES", "VALUES", "uri"),
             "obj": create_triple_element(resolved_composer, resolved_composer, "uri")
         })
         elif composer_name:
-            # Fallback to regex if resolution failed? 
-            # User explicitly said "take the first URI... then add the URI to the query".
-            # If resolution fails, maybe we should still try regex or just fail?
-            # I'll add regex fallback for robustness.
             filter_st.append({'function': 'REGEX', 'args': ['?composerName', f"\'{composer_name}\'", "\'i\'"]})
 
         if composer_nationality:
@@ -215,7 +210,6 @@ async def query_works(
                     "obj": create_triple_element(code, composer_nationality, "literal")
                 })
             else:
-                # Fallback if unknown code?
                 logger.warning(f"Unknown nationality code for: {composer_nationality}")
         
         def_vars = qc.extract_defined_variables(triples)
@@ -227,8 +221,6 @@ async def query_works(
             "filter_st": filter_st,
             "defined_vars": def_vars,
         }
-        # Does not arrive here
-        #logger.info(f"Adding composer module with triples: {triples} and filters: {filter_st}")
         await qc.add_module(composer_module)
 
     # Genre Filter
@@ -272,22 +264,12 @@ async def query_works(
     if place_of_composition:
         # Pattern:
         # ?expCreation ecrm:P7_took_place_at ?placeComp .
-        
-        triples = [
-            # Ensure ?expCreation is bound. If composer filter wasn't added, we need to bind ?expCreation to ?expression
-        ]
-        
-        # Check if we need to link expCreation to expression again or if it's already there?
-        # QueryContainer doesn't automatically deduplicate patterns (yet), 
-        # so we must be careful. Ideally, we define a "Creation Event" module if needed.
-        # But for now, we can just re-state or use OPTIONAL/UNION if we were advanced.
-        # Safest is to restate the link:
+        triples = []
         triples.append({
                 "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
                 "pred": create_triple_element("ecrm:P7_took_place_at", "ecrm:P7_took_place_at", "uri"),
                 "obj": create_triple_element("placeComp", "", "var")
-            }
-        )
+            })
         filter_st = []
 
         if resolved_place:
@@ -371,8 +353,7 @@ async def query_performance(
     # Select variables
     select_vars = [
         create_select_element("performance", "efrbroo:F31_Performance", False),
-        create_select_element("title", "", True),
-        create_select_element("locationName", "", True)
+        create_select_element("title", "", True)
     ]
     
     qc.set_select(select_vars)
@@ -393,7 +374,8 @@ async def query_performance(
                 "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
                 "obj": create_triple_element("title", "", "var")
             }
-        ]
+        ],
+        "defined_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}, {"var_name": "title", "var_label": ""}]
     }
     await qc.add_module(core_module)
     
@@ -407,6 +389,7 @@ async def query_performance(
             "filter_st": [
                 {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
             ],
+            "required_vars": [{"var_name": "title", "var_label": ""}]
         }
         await qc.add_module(title_filter_module)
 
@@ -476,7 +459,6 @@ async def query_performance(
         for idx, person_name in enumerate(carried_out_by):
             # Resolve if possible
             resolved_uri = _resolve_entity(person_name, "artist", question)
-            
             # The pattern is recursive/deep: ?performance -> consists_of* -> activity -> carried_out_by -> artist
             # We use a path that covers both conductors and musicians
             
@@ -524,6 +506,9 @@ async def query_performance(
                 "triples": performer_triples,
                 "filter_st": performer_filters,
                 "required_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}],
+                "defined_vars": [{"var_name": f"{activity_var}", "var_label": "ecrm:E7_Activity"},
+                {"var_name": f"{artist_var}", "var_label": "ecrm:E21_Person"},
+                {"var_name": f"{artist_name_var}", "var_label": ""}]
             }
             await qc.add_module(perf_module)
         
