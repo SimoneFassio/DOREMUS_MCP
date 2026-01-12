@@ -24,7 +24,9 @@ from server.tools_internal import (
     associate_to_N_entities_internal,
     has_quantity_of_internal,
     groupBy_having_internal,
-    add_triplet_internal
+    groupBy_having_internal,
+    add_triplet_internal,
+    add_select_variable_internal
 )
 
 # Configure logging
@@ -291,7 +293,7 @@ async def groupBy_having(
         valueStart="8"
     )
     """
-    return await groupBy_having_internal(subject.lower(), query_id, function, obj.lower(), logic_type, valueStart, valueEnd)
+    return await groupBy_having_internal(subject.lower(), query_id, function, obj, logic_type, valueStart, valueEnd)
 
 
 @mcp.tool()
@@ -346,6 +348,30 @@ async def add_triplet(
         If the triplet causes an error or returns 0 results, it is discarded and an error is returned.
     """
     return await add_triplet_internal(subject, subject_class, property, obj, obj_class, query_id)
+
+
+@mcp.tool()
+async def add_select(
+    variable: str,
+    query_id: str,
+    aggregator: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Add a variable to the SELECT clause of the query, optionally with an aggregator.
+    
+    This tool is used to explicitly include a variable in the final result.
+    If the variable is already selected, this tool can be used to update its aggregator (e.g. adding 'COUNT' or 'SAMPLE').
+    
+    Args:
+        variable: The name of the variable to select (e.g., "title", "composer").
+        query_id: The active query ID.
+        aggregator: Optional aggregator function (e.g., "COUNT", "SAMPLE", "MIN", "MAX", "AVG").
+                    If None, the variable is selected as is.
+    
+    Returns:
+        Dict containing success status and the updated SPARQL query.
+    """
+    return await add_select_variable_internal(variable, aggregator, query_id)
 
 
 @mcp.tool()

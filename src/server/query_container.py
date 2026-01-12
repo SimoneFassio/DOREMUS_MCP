@@ -14,9 +14,6 @@ def create_triple_element(var_name: str, var_label: str, vtype: str) -> Dict[str
     if vtype not in ["var", "uri", "literal"]:
         raise ValueError(f"Invalid type '{vtype}' for query element. Must be 'var', 'uri', or 'literal'.")
     return {"var_name": var_name, "var_label": var_label, "type": vtype}
-    
-def create_select_element(var_name: str, var_label: str, is_sample: bool = False) -> Dict[str, Any]:
-    return {"var_name": var_name, "var_label": var_label, "is_sample": is_sample}
 
 #----------------------
 # QUERY CONTAINER
@@ -34,7 +31,7 @@ class QueryContainer:
     def __init__(self, query_id: str, question: str = ""):
         self.query_id = query_id
         
-        # Select: List of dicts e.g., {"var_name": "title", "var_label": "", "is_sample": True}
+        # Select: List of dicts e.g., {"var_name": "title", "var_label": "", "aggregator": "COUNT"}
         self.select: List[Dict[str, Any]] = []
         self.distinct_select: bool = True
         
@@ -55,7 +52,7 @@ class QueryContainer:
         self.question: str = question
         
         # Variable dependency tracking
-        # Map of var_name -> { "uri": str, "count": int }
+        # Map of var_name -> { "var_label": str, "count": int }
         self.variable_registry: Dict[str, Dict[str, Any]] = {}
         self.track_dep: bool = True
 
@@ -210,8 +207,9 @@ class QueryContainer:
                 highlighted_name = f"**?{var_name}**"
             else:
                 highlighted_name = f"?{var_name}"
-            if item.get("is_sample"):
-                select_vars_str.append(f"SAMPLE({highlighted_name}) as {highlighted_name}")
+            if item.get("aggregator"):
+                agg = item["aggregator"]
+                select_vars_str.append(f"{agg}({highlighted_name}) as {highlighted_name}")
             else:
                 select_vars_str.append(highlighted_name)
         
@@ -431,22 +429,22 @@ You should select an option different to 0 ONLY if the variable represent a new 
         logger.error(f"Impossible to find a matching triple with subj: {subj_name} and obj: {obj_name}")
         return {}
 
-
-    def set_select(self, variables: List[Dict[str, Any]], distinct: bool = True) -> None:
-        """Set the SELECT variables."""
-        self.select = variables
-        self.distinct_select = distinct
-        # Initialize variable registry entries
-        for var in variables:
-            var_name = var["var_name"]
-            var_label = var["var_label"]
-            if var_name not in self.variable_registry:
-                self.variable_registry[var_name] = {"var_label": var_label, "count": 1}
-
-    def add_select(self, var_elem: Dict[str, Any]) -> None:
-        """Add a single variable to the SELECT list."""
-        if var_elem["var_name"] not in [v["var_name"] for v in self.select]:
-            self.select.append(var_elem)
+    def add_select(self, var_name: str, var_label: str = "", aggregator: Optional[str] = None) -> None:
+        """Add a single variable to the SELECT list or update its aggregator."""
+        existing = next((v for v in self.select if v["var_name"] == var_name), None)
+        if var_name not in self.variable_registry.keys():
+            return {"success": False, "error": "Variable not found in registry"}
+        
+        if aggregator:
+            aggregator = aggregator.upper()
+            if aggregator not in ["COUNT", "SUM", "AVG", "MAX", "MIN"]:
+                return {"success": False, "error": "Invalid aggregator"}
+        if existing:
+            # Update aggregator
+            existing["aggregator"] = aggregator
+        else:
+            self.select.append({"var_name": var_name, "var_label": var_label, "aggregator": aggregator})
+        return {"success": True}
 
     def set_limit(self, limit: int) -> None:
         self.limit = limit
@@ -461,8 +459,8 @@ You should select an option different to 0 ONLY if the variable represent a new 
         return self.question
     
     def get_non_aggregated_vars(self) -> List[str]:
-        """Return a list of variable names in SELECT that are NOT samples/aggregates."""
-        return [item for item in self.select if not item.get("is_sample", False)]
+        """Return a list of variable names in SELECT that are NOT aggregated."""
+        return [item for item in self.select if not item.get("aggregator")]
 
     def dry_run_test(self) -> bool:
         """
@@ -508,12 +506,34 @@ You should select an option different to 0 ONLY if the variable represent a new 
 
         for item in self.select:
             var_name = item["var_name"]
-            if item.get("is_sample") and self.group_by: #add sample only if group by is present
-                # Example: SAMPLE(?title) as ?title
-                select_vars_str.append(f"SAMPLE(?{var_name}) as ?{var_name}")
+            
+            if self.group_by:
+                # Check if this variable is part of the grouping
+                is_grouped = any(g["var_name"] == var_name for g in self.group_by)
+                
+                if is_grouped:
+                    # Case 1: Variable is grouped -> Select as is
+                    select_vars_str.append(f"?{var_name}")
+                
+                elif item.get("aggregator"):
+                    # Case 2: Variable has explicit aggregator
+                    agg = item["aggregator"]
+                    select_vars_str.append(f"{agg}(?{var_name}) as ?{var_name}_{agg.lower()}")
+                
+                else:
+                    # Case 3: Variable is NOT grouped and NO aggregator -> Auto-SAMPLE
+                    select_vars_str.append(f"SAMPLE(?{var_name}) as ?{var_name}")
+            
             else:
-                # Example: ?expression
-                select_vars_str.append(f"?{var_name}")
+                # No GROUP BY -> Select as is
+                # Note: If an aggregator is present but NO group by, strictly speaking it's valid RDF (implicit group of whole result),
+                # but usually mixed with non-aggregated vars it is invalid. 
+                # However, if user explicitly set aggregator, we respect it.
+                if item.get("aggregator"):
+                    agg = item["aggregator"]
+                    select_vars_str.append(f"{agg}(?{var_name}) as ?{var_name}")
+                else:
+                    select_vars_str.append(f"?{var_name}")
         
         query_parts.append(f"SELECT {select_mod}{' '.join(select_vars_str)}")
         

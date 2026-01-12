@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict, Any, Union
 import logging
 import re
-from server.query_container import QueryContainer, create_triple_element, create_select_element
+from server.query_container import QueryContainer, create_triple_element
 from server.utils import find_candidate_entities_utils
 from server.tool_sampling import tool_sampling_request
 from fastmcp import Context
@@ -106,17 +106,6 @@ async def query_works(
     qc = QueryContainer(query_id, question)
     qc.set_limit(limit)
     
-    # 1. Define Select variables
-    # We want: ?expression, ?title (SAMPLE), ?composer (SAMPLE)
-    # User example: SELECT DISTINCT ?expression SAMPLE(?title) as ?title
-    # We will use the user's preferred robust pattern.
-    
-    select_vars = [create_select_element("expression", "efrbroo:F22_Self-Contained_Expression", False), create_select_element("title", "", True)]
-    if composer_name or composer_nationality:
-        select_vars.append(create_select_element("composer", "ecrm:E21_Person", True))
-        
-    qc.set_select(select_vars)
-    
     # 2. Variable Resolvers
     resolved_composer = await _resolve_entity(composer_name, "artist", question) if composer_name else None
     resolved_genre = await _resolve_entity(genre, "vocabulary", question) if genre else None
@@ -124,7 +113,6 @@ async def query_works(
     resolved_key = await _resolve_entity(musical_key, "vocabulary", question) if musical_key else None
 
     # 3. Core Module: Expression & Title
-    # Use simple label for display as requested
     core_module = {
         "id": "work_core",
         "type": "query_builder",
@@ -145,6 +133,8 @@ async def query_works(
         {"var_name": "expCreation", "var_label": "efrbroo:F28_Expression_Creation"}],
     }
     await qc.add_module(core_module)
+
+    qc.add_select("expression", "efrbroo:F22_Self-Contained_Expression")
     
     # 4. Filter Modules
     
@@ -350,13 +340,6 @@ async def query_performance(
     qc = QueryContainer(query_id, question)
     qc.set_limit(limit)
     
-    # Select variables
-    select_vars = [
-        create_select_element("performance", "efrbroo:F31_Performance", False),
-        create_select_element("title", "", True)
-    ]
-    
-    qc.set_select(select_vars)
     
     # Core Module: Performance Entity
     core_module = {
@@ -378,6 +361,7 @@ async def query_performance(
         "defined_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}, {"var_name": "title", "var_label": ""}]
     }
     await qc.add_module(core_module)
+    qc.add_select("performance", "efrbroo:F31_Performance")
     
     # Title Filter (Advanced)
     if title:
@@ -530,13 +514,6 @@ async def query_artist(
     qc = QueryContainer(query_id, question)
     qc.set_limit(limit)
     
-    # Select variables
-    select_vars = [
-        {"var_name": "artist", "var_label": "ecrm:E21_Person", "is_sample": False},
-        {"var_name": "name", "var_label": "", "is_sample": True}
-    ]
-    qc.set_select(select_vars)
-    
     # Core Module: Artist Entity
     core_module = {
         "id": "artist_core",
@@ -556,7 +533,7 @@ async def query_artist(
         ]
     }
     await qc.add_module(core_module)
-    
+    qc.add_select("artist", "ecrm:E21_Person")
     # Name Filter
     if name:
         resolved_artist = await _resolve_entity(name, "artist", question)

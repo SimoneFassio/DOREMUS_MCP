@@ -8,7 +8,7 @@ from typing import Any, Optional, Dict, List
 from difflib import get_close_matches
 from server.find_paths import load_graph
 from server.graph_schema_explorer import GraphSchemaExplorer
-from server.query_container import QueryContainer, create_triple_element, create_select_element
+from server.query_container import QueryContainer, create_triple_element
 from server.query_builder import query_works, query_performance, query_artist
 from server.find_paths import find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
 from server.utils import (
@@ -792,6 +792,46 @@ async def add_triplet_internal(
         }
 
 #-------------------------------
+# ADD SELECT VARIABLE INTERNALS
+#-------------------------------
+
+async def add_select_variable_internal(
+    variable: str,
+    aggregator: Optional[str],
+    query_id: str
+) -> Dict[str, Any]:
+    qc = QUERY_STORAGE.get(query_id)
+    if not qc:
+        return {
+            "success": False,
+            "error": f"Query ID {query_id} not found or expired."
+        }
+    
+    # Check if variable exists in registry (it must be defined somewhere)
+    var_label = ""
+    # Try to find label from registry
+    if variable in qc.variable_registry:
+        var_label = qc.variable_registry[variable]["var_label"]
+    else:
+        # Check if it was already in SELECT
+        for s in qc.select:
+            if s["var_name"] == variable:
+                var_label = s["var_label"]
+                break
+    
+    # Add/Update select
+    res = qc.add_select(variable, var_label, aggregator=aggregator)
+    if not res["success"]:
+        return res
+    
+    return {
+        "success": True,
+        "query_id": query_id,
+        "generated_sparql": qc.to_string(),
+        "message": f"Variable ?{variable} added to SELECT list."
+    }
+
+#-------------------------------
 # GROUP BY HAVING INTERNALS
 #-------------------------------
 
@@ -951,6 +991,7 @@ async def groupBy_having_internal(
             return {"success": False, "error": f"Subject variable ?{subject} not found in query."}
 
     if obj:
+        obj = obj.lower()
         # Validate Object
         if ":" in obj:
             #the LLM passed a label or URI
@@ -989,10 +1030,10 @@ async def groupBy_having_internal(
         })
 
     # CONSTRUCT GROUP BY: Group by the subject + any other non-aggregated variable in SELECT
-    # We first update the selct to include the subject of the group By (which might not be
+    # We first update the select to include the subject of the group By (which might not be
     # in it) and then extract the variables in the select that are not sampled
     
-    qc.add_select(create_select_element(subject, subject_uri))
+    qc.add_select(subject, subject_uri)
     group_vars = qc.get_non_aggregated_vars()
 
     qc.set_group_by(group_vars)
