@@ -10,7 +10,13 @@ It is designed to describe how a musical idea is created, realized, and performe
 Work -> conceptual idea (idea of a sonata)
 Expression -> musical realization (written notation of the sonata, with his title, composer, etc.)
 Event -> performance or recording
-TODO add high level description of the graph
+
+### Graph Summary Schema
+Work / Expression & creation: efrbroo:F22_Self-Contained_Expression — created via efrbroo:R17_created (creation event node) where creation events link to agents through ecrm:P9_consists_of → ecrm:P14_carried_out_by (identifies composer/creator).
+Work vs Expression relation: efrbroo:F14_Individual_Work ↔ efrbroo:R9_is_realised_in → efrbroo:F22_Self-Contained_Expression (maps conceptual works to concrete expressions/realizations).
+Casting / instrumentation model: mus:U13_has_casting → mus:U23_has_casting_detail → mus:U2_foresees_use_of_medium_of_performance (instrument) and mus:U30_foresees_quantity_of_mop (quantity) — used to answer instrument/ensemble queries and strict/at-most conditions.
+Time, genre, duration filters: ecrm:P4_has_time-span (with time:hasBeginning/time:hasEnd / XSD dates) for composition/performance dates; mus:U12_has_genre for genre filters; mus:U78_estimated_duration / mus:U53_has_duration for duration constraints.
+Performance / Recording linking: efrbroo:F31_Performance and mus:M42_Performed_Expression_Creation with mus:U54_is_performed_expression_of (performed ↔ expression), ecrm:P7_took_place_at (place), and recording/publication nodes efrbroo:F29_Recording_Event / mus:U51_is_partial_or_full_recording_of + mus:U10_has_order_number (tracks).
 
 It defines 7 vocabularies categories:
 - Musical keys
