@@ -2,7 +2,7 @@ from typing import Any, Optional, List, Dict
 import logging
 import re
 from server.tool_sampling import tool_sampling_request
-from server.utils import execute_sparql_query
+from server.utils import execute_sparql_query, validate_doremus_uri, get_entity_label
 
 logger = logging.getLogger("doremus-mcp")
 
@@ -134,6 +134,26 @@ class QueryContainer:
             error_msg = f"Invalid module structure for ID: {module.get('id', 'unknown')}"
             logger.error(error_msg)
             raise Exception(error_msg)
+
+        # Validate DOREMUS URIs to prevent hallucinations
+        if "triples" in module:
+            for t in module["triples"]:
+                for part in ["subj", "pred", "obj"]:
+                    elem = t.get(part)
+                    if elem:
+                        val = elem.get("var_name", "")
+                        if val.startswith("http://") or val.startswith("https://"):
+                            if not validate_doremus_uri(val):
+                                error_msg = f"Hallucinated URI detected: {val}"
+                                logger.error(error_msg)
+                                raise Exception(error_msg)
+                            else:
+                                try:
+                                    label_found = get_entity_label(val)
+                                    if label_found:
+                                        elem["hum_readable_label"] = label_found
+                                except Exception as e:
+                                    logger.warning(f"Could not fetch label for {val}: {e}")
 
         # Auto-categorize variables if not explicitly provided
         if "required_vars" not in module and "defined_vars" not in module:
@@ -596,9 +616,20 @@ You should select an option different to 0 ONLY if the variable represent a new 
                     
                     if p_str == "VALUES":
                         # Special handling for VALUES clause
-                        query_parts.append(f"  {p_str} {s_str} {{ {o_str} }}")
+                        line = f"  {p_str} {s_str} {{ {o_str} }}"
                     else:
-                        query_parts.append(f"  {s_str} {p_str} {o_str} .")
+                        line = f"  {s_str} {p_str} {o_str} ."
+                    # Add comments
+                    comments = []
+                    for part in ["subj", "pred", "obj"]:
+                        part_elem = t.get(part)
+                        if part_elem and "hum_readable_label" in part_elem:
+                            comments.append(part_elem["hum_readable_label"])
+                    
+                    if comments:
+                        line += f" # {', '.join(comments)}"
+                        
+                    query_parts.append(line)
             else:
                 logger.warning(f"Module {mod_id} has unsupported scope: {module.get('scope')}")
                 continue

@@ -254,3 +254,37 @@ def remove_redundant_paths(paths: List[List[tuple]]) -> List[List[tuple]]:
             result.append(path)  # Add the original path to the result
 
     return result
+
+def validate_doremus_uri(uri: str) -> bool:
+    """
+    Validates a DOREMUS URI by checking if it returns a hallucination error message.
+    Uses POST with h=1 to bypass the confirmation page.
+    """
+    # Optimization: Only check DOREMUS URIs
+    if not uri.startswith("http://data.doremus.org") and not uri.startswith("https://data.doremus.org"):
+        return True
+
+    # Upgrade to HTTPS to match the server and avoid 301 redirects dropping POST data
+    if uri.startswith("http://"):
+        uri = uri.replace("http://", "https://", 1)
+
+    try:
+        # Use POST with h=1 to bypass confirmation page
+        response = requests.post(
+            uri, 
+            data={'h': '1'}, 
+            headers={"Accept": "text/html"}, 
+            timeout=5
+        )
+        
+        # Check for the specific error message
+        if "No further information is available." in response.text:
+            logger.warning(f"Hallucinated URI detected: {uri}")
+            return False
+            
+        return True
+        
+    except Exception as e:
+        # Fail open on network errors to avoid blocking valid queries due to connectivity issues
+        logger.warning(f"Could not validate URI {uri}: {e}")
+        return True
