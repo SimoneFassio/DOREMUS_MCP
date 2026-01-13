@@ -334,6 +334,7 @@ async def add_triplet(
     """
     Add a general triplet to the query, validating it with a dry run.
     Use this tool ONLY when with the other tools is impossible to write the correct pattern, NO EXCEPTION.
+    Use the get_ontology tool to explore the DOREMUS ontology graph schema.
 
     Args:
         subject: The variable name of the subject (e.g. "expression").
@@ -435,7 +436,7 @@ async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     return get_entity_properties_internal(entity_uri)
 
 
-# @mcp.tool()
+@mcp.tool()
 def get_ontology(path: str) -> str:
     """
     Explore the DOREMUS ontology graph schema hierarchically.
