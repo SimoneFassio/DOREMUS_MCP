@@ -407,7 +407,10 @@ The options available are:
 {path_options_text}
         """
         # Send Sampling request to LLM
-        llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
+        def log_sampling(log_data: Dict[str, Any]):
+            qc.sampling_logs.append(log_data)
+        
+        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling)
         try:
             # simple extraction of the number
             match = re.search(r'\d+', llm_answer)

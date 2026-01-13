@@ -55,6 +55,9 @@ class QueryContainer:
         # Map of var_name -> { "var_label": str, "count": int }
         self.variable_registry: Dict[str, Dict[str, Any]] = {}
         self.track_dep: bool = True
+        
+        # Sampling Logs
+        self.sampling_logs: List[Dict[str, Any]] = []
 
 
     def _auto_categorize_variables(self, module: Dict[str, Any]) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
@@ -108,7 +111,7 @@ class QueryContainer:
     # ----------------------
     # MODULE MANAGEMENT
     # ----------------------
-    async def add_module(self, module: Dict[str, Any], dry_run: bool = False) -> bool:
+    async def add_module(self, module: Dict[str, Any], dry_run: bool = True) -> bool:
         """
         Add a query module to the container after validation and connectivity checks.
         
@@ -420,7 +423,11 @@ You are given a SPARQL query and a list of options to replace a variable in the 
 You must choose one of the options and return the index of the chosen option.
 You should select an option different to 0 ONLY if the variable represent a new entity of the same class of the one in the query, used for example for comparison or for checking relations.
 """
-                        llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
+                        # Define callback to capture sampling logs
+                        def log_sampling(log_data: Dict[str, Any]):
+                            self.sampling_logs.append(log_data)
+                            
+                        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling)
                         try:
                             match = re.search(r'\d+', llm_answer)
                             if match:

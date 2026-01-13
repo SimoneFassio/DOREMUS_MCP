@@ -10,7 +10,7 @@ from fastmcp import FastMCP, Context
 from fastmcp.server.dependencies import get_context
 from fastmcp.prompts.prompt import Message, PromptMessage, TextContent
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, JSONResponse
 import os
 import logging
 from server.find_paths import find_k_shortest_paths
@@ -26,7 +26,8 @@ from server.tools_internal import (
     groupBy_having_internal,
     groupBy_having_internal,
     add_triplet_internal,
-    add_select_variable_internal
+    add_select_variable_internal,
+    QUERY_STORAGE
 )
 
 # Configure logging
@@ -40,6 +41,20 @@ mcp = FastMCP("DOREMUS Knowledge Graph Server")
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request: Request) -> PlainTextResponse:
     return PlainTextResponse("OK")
+
+
+@mcp.custom_route("/sampling/{query_id}", methods=["GET"])
+async def get_sampling_logs(request: Request) -> Any:
+    """
+    Get sampling logs for a specific query ID.
+    """
+    query_id = request.path_params["query_id"]
+    
+    if query_id not in QUERY_STORAGE:
+        return JSONResponse({"error": f"Query ID {query_id} not found"}, status_code=404)
+        
+    qc = QUERY_STORAGE[query_id]
+    return JSONResponse(qc.sampling_logs)
 
 
 @mcp.prompt()
@@ -436,7 +451,7 @@ async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     return get_entity_properties_internal(entity_uri)
 
 
-@mcp.tool()
+# @mcp.tool()
 def get_ontology(path: str) -> str:
     """
     Explore the DOREMUS ontology graph schema hierarchically.

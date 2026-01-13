@@ -1,7 +1,8 @@
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Callable
 import logging
 import re
 from server.query_container import QueryContainer, create_triple_element
+# ...
 from server.utils import find_candidate_entities_utils
 from server.tool_sampling import tool_sampling_request
 from fastmcp import Context
@@ -22,7 +23,7 @@ COUNTRY_CODES = {
     "spanish": "ES", "spain": "ES",
 }
 
-async def _resolve_entity(name: str, entity_type: str, question: str = "") -> Optional[str]:
+async def _resolve_entity(name: str, entity_type: str, question: str = "", log_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> Optional[str]:
     """
     Helper to resolve a name to a URI using internal tools with LLM sampling.
     Returns the most relevant matching URI or None.
@@ -65,7 +66,7 @@ The options available are:
 Return only the number (index) of the best match."""
             
             # Send Sampling request to LLM
-            llm_answer = await tool_sampling_request(system_prompt, pattern_intent)
+            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_callback)
             
             try:
                 # Extract the number
@@ -106,11 +107,15 @@ async def query_works(
     qc = QueryContainer(query_id, question)
     qc.set_limit(limit)
     
+    # Define logging callback
+    def log_sampling(log_data: Dict[str, Any]):
+        qc.sampling_logs.append(log_data)
+    
     # 2. Variable Resolvers
-    resolved_composer = await _resolve_entity(composer_name, "artist", question) if composer_name else None
-    resolved_genre = await _resolve_entity(genre, "vocabulary", question) if genre else None
-    resolved_place = await _resolve_entity(place_of_composition, "others", question) if place_of_composition else None
-    resolved_key = await _resolve_entity(musical_key, "vocabulary", question) if musical_key else None
+    resolved_composer = await _resolve_entity(composer_name, "artist", question, log_sampling) if composer_name else None
+    resolved_genre = await _resolve_entity(genre, "vocabulary", question, log_sampling) if genre else None
+    resolved_place = await _resolve_entity(place_of_composition, "others", question, log_sampling) if place_of_composition else None
+    resolved_key = await _resolve_entity(musical_key, "vocabulary", question, log_sampling) if musical_key else None
 
     # 3. Core Module: Expression & Title
     core_module = {
@@ -325,6 +330,10 @@ async def query_performance(
     """
     qc = QueryContainer(query_id, question)
     qc.set_limit(limit)
+
+    # Define logging callback
+    def log_sampling(log_data: Dict[str, Any]):
+        qc.sampling_logs.append(log_data)
     
     
     # Core Module: Performance Entity
@@ -372,7 +381,7 @@ async def query_performance(
     
     # Location Filter
     if location:
-        resolved_uri = await _resolve_entity(location, "others", question)
+        resolved_uri = await _resolve_entity(location, "others", question, log_sampling)
         if resolved_uri:
             location_triples.append({
                 "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
@@ -416,7 +425,7 @@ async def query_performance(
     if carried_out_by:
         for idx, person_name in enumerate(carried_out_by):
             # Resolve if possible
-            resolved_uri = _resolve_entity(person_name, "artist", question)
+            resolved_uri = await _resolve_entity(person_name, "artist", question, log_sampling)
             # The pattern is recursive/deep: ?performance -> consists_of* -> activity -> carried_out_by -> artist
             # We use a path that covers both conductors and musicians
             
@@ -484,6 +493,10 @@ async def query_artist(
     qc = QueryContainer(query_id, question)
     qc.set_limit(limit)
     
+    # Define logging callback
+    def log_sampling(log_data: Dict[str, Any]):
+        qc.sampling_logs.append(log_data)
+    
     # Core Module: Artist Entity
     core_module = {
         "id": "artist_core",
@@ -506,7 +519,7 @@ async def query_artist(
     qc.add_select("artist", "ecrm:E21_Person")
     # Name Filter
     if name:
-        resolved_artist = await _resolve_entity(name, "artist", question)
+        resolved_artist = await _resolve_entity(name, "artist", question, log_sampling)
         triples = []
         filter_st = []
 
@@ -600,7 +613,7 @@ async def query_artist(
 
     # Work Name Filter
     if work_name:
-        resolved_work = await _resolve_entity(work_name, "others", question)
+        resolved_work = await _resolve_entity(work_name, "others", question, log_sampling)
         triples = [
             {
             "subj": create_triple_element("performanceWork", "efrbroo:F28_Expression_Creation", "var"),
