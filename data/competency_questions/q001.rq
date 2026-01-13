@@ -1,5 +1,6 @@
 # category: "Works and Expressions"
 # question: "Which works have been composed by Mozart ?"
+# build_query(question="Which works have been composed by Mozart ?", template="Works", filters={"composer_name": "Wolfgang Amadeus Mozart"})
 # query:
 SELECT DISTINCT ?expression SAMPLE(?title) as ?title
 WHERE {

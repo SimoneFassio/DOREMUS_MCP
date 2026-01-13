@@ -1,5 +1,7 @@
 # category: "Works and Expressions"
 # question: "Give me a list of melodies of 20th century"
+# build_query(question="Give me a list of melodies of 20th century", template="Works", filters={"genre": "melody"})
+# has_quantity_of(subject="expCreation", property="time-span", type="range", value="01-01-1900", valueEnd="01-01-2001", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?start, ?end
 WHERE {

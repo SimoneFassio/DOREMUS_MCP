@@ -1,5 +1,10 @@
 # category: "Works and Expressions"
 # question: "Which works have been written for string quartet?"
+# build_query(question="Which works have been written for string quartet?", template="Works", filters={})
+# associate_to_N_entities(subject="expression", obj="violin", query_id=query_id, n=2)
+# associate_to_N_entities(subject="expression", obj="viola", query_id=query_id, n=1)
+# associate_to_N_entities(subject="expression", obj="cello", query_id=query_id, n=1)
+# groupBy_having(subject="casting", query_id=query_id, obj="castingDetail", function="COUNT", logic_type="equal", valueStart="3")
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?casting
 WHERE {

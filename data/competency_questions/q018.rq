@@ -1,5 +1,7 @@
 # category: "Works and Expressions"
 # question: "Give me the list of all symphonies that include 5 movements"
+# build_query(question="Give me the list of all symphonies that include 5 movements", template="Works", filters={"genre": "symphony"})
+# groupBy_having(subject="work", query_id=query_id, obj="movement", function="COUNT", logic_type="more", valueStart="5")
 # query:
 SELECT DISTINCT ?work, SAMPLE(?title) as ?title
 WHERE {

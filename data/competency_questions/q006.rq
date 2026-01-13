@@ -1,5 +1,9 @@
 # category: "Works and Expressions"
 # question: "Give me the works written for oboe and orchestra after the 1900"
+# build_query(question="Give me the works written for oboe and orchestra after the 1900", template="Works", filters={})
+# associate_to_N_entities(subject="expression", obj="oboe", query_id=query_id)
+# associate_to_N_entities(subject="expression", obj="orchestra", query_id=query_id)
+# has_quantity_of(subject="expCreation", property="time-span", type="more", value="01-01-1900", valueEnd=None, query_id=query_id)
 # query:
 SELECT DISTINCT ?start, ?expression, SAMPLE(?title) as ?title, ?casting
 WHERE {

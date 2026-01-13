@@ -1,5 +1,8 @@
 # category: "Works and Expressions"
 # question: "Give me the list of the works of which at least one of the dedicatees is also a performer of the work"
+# build_query(question="Give me the list of the works of which at least one of the dedicatees is also a performer of the work", template="Works", filters={})
+# associate_to_N_entities(subject="expression", obj="dedicatee", query_id=query_id)
+# associate_to_N_entities(subject="expression", obj="performance", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?dedicatee, ?performance
 WHERE {
