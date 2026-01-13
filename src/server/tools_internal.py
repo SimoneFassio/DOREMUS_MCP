@@ -444,8 +444,7 @@ The options available are:
                 "pred": create_triple_element(convert_to_variable_name(quantity_property), quantity_property, "uri"),
                 "obj": create_triple_element(N, "", "literal")
             })
-    def_vars = qc.extract_defined_variables(triples)
-    logger.info(f"Defined vars after adding triples: {def_vars}")
+
     triples.append({
         "subj": create_triple_element(obj, obj_uri, "var"),
         "pred": create_triple_element("VALUES", "VALUES", "uri"),
@@ -455,9 +454,7 @@ The options available are:
             "id": f"associate_N_entities_module_{selected_path[-1][0]}",
             "type": "associate_N_entities",
             "scope": "main",
-            "triples": triples,
-            "required_vars": [create_triple_element(subject, subject_uri, "var")],
-            "defined_vars": def_vars[1:] # Exclude subject from defined vars
+            "triples": triples
     })
     sparql_query = qc.to_string()
     return {
@@ -509,7 +506,6 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         propery = property.strip()
         triples = []
         filter_st = []
-        defined_vars = []
         
         # Value processing (dates vs numbers)
         # Check if property implies date
@@ -558,7 +554,6 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                 "pred": create_triple_element("ecrm:P4_has_time-span", "ecrm:P4_has_time-span", "uri"),
                 "obj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var")
             })
-            defined_vars.append({"var_name": ts_var, "var_label": "ecrm:E52_Time-Span"})
             
             # We add triples for start/end based on filter type to be efficient?
             # Or always add them? 
@@ -575,7 +570,6 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                      "pred": create_triple_element("time:hasBeginning / time:inXSDDate", "time:hasBeginning / time:inXSDDate", "uri"),
                      "obj": create_triple_element(start_var, "", "var")
                  })
-                 defined_vars.append({"var_name": start_var, "var_label": ""})
             
             if type in ["less", "range", "equal"]:
                  end_var = "end"
@@ -584,7 +578,6 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                      "pred": create_triple_element("time:hasEnd / time:inXSDDate", "time:hasEnd / time:inXSDDate", "uri"),
                      "obj": create_triple_element(end_var, "", "var")
                  })
-                 defined_vars.append({"var_name": end_var, "var_label": ""})
             target_var = None
             
         else:
@@ -596,7 +589,6 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                 "pred": create_triple_element(propery, propery, "uri"),
                 "obj": create_triple_element(qty_var, "", "var")
             })
-            defined_vars.append({"var_name": qty_var, "var_label": ""}) 
             target_var = f"?{qty_var}"
 
         # 3. Construct Filters
@@ -648,9 +640,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
             "type": "has_quantity_of",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st,
-            "required_vars": [{"var_name": subject_var, "var_label": subject_label if subject_label else ""}],
-            "defined_vars": defined_vars
+            "filter_st": filter_st
         }
 
         await qc.add_module(module)
@@ -691,34 +681,12 @@ async def add_triplet_internal(
         if not explorer.class_has_property(subject_class, property):
              raise Exception(f"Property {property} does not exist for class {subject_class}.")
             
-        # 2. Prepare Triples and Vars
-        triples = []
-        required_vars = []
-        defined_vars = []
-        
-        # Subject handling
-        subj_uri = qc.get_variable_uri(subject)
-        if subj_uri:
-            # Subject exists -> Required
-            required_vars.append(create_triple_element(subject, subject_class, "var"))
-        else:
-            # Subject new -> Defined
-            defined_vars.append({"var_name": subject, "var_label": subject_class})
-            
-        # Object handling
-        obj_uri = qc.get_variable_uri(obj)
-        if obj_uri:
-            # Object exists -> Required
-            required_vars.append(create_triple_element(obj, obj_class, "var"))
-        else:
-            # Object new -> Defined
-            defined_vars.append({"var_name": obj, "var_label": obj_class})
-            
-        triples.append({
+        # 2. Prepare Triples
+        triples = [{
             "subj": create_triple_element(subject, subject_class, "var"),
             "pred": create_triple_element(property, property, "uri"),
             "obj": create_triple_element(obj, obj_class, "var")
-        })
+        }]
         
         module_id = f"add_triplet_{subject}_{property}_{obj}"
         
@@ -726,9 +694,7 @@ async def add_triplet_internal(
             "id": module_id,
             "type": "add_triplet",
             "scope": "main",
-            "triples": triples,
-            "required_vars": required_vars,
-            "defined_vars": defined_vars
+            "triples": triples
         }
 
         # 3. Add Module with Dry Run
@@ -862,9 +828,7 @@ async def groupBy_having_internal(
                 "id": f"group_by_path_{subject}_{obj}",
                 "type": "pattern",
                 "scope": "main",
-                "triples": triples,
-                "required_vars": [create_triple_element(subject, subject_uri, "var")],
-                "defined_vars": []
+                "triples": triples
             })
 
         # CONSTRUCT GROUP BY: Group by the subject + any other non-aggregated variable in SELECT

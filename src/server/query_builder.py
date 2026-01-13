@@ -128,9 +128,6 @@ async def query_works(
              "pred": create_triple_element("efrbroo:R17_created", "efrbroo:R17_created", "uri"),
              "obj": create_triple_element("expression", "efrbroo:F22_Self-Contained_Expression", "var")}
         ],
-        "defined_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"},
-        {"var_name": "title", "var_label": ""},
-        {"var_name": "expCreation", "var_label": "efrbroo:F28_Expression_Creation"}],
     }
     await qc.add_module(core_module)
 
@@ -202,14 +199,12 @@ async def query_works(
             else:
                 logger.warning(f"Unknown nationality code for: {composer_nationality}")
         
-        def_vars = qc.extract_defined_variables(triples)
         composer_module = {
             "id": "work_composer_filter",
             "type": "query_builder",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st,
-            "defined_vars": def_vars,
+            "filter_st": filter_st
         }
         await qc.add_module(composer_module)
 
@@ -244,9 +239,7 @@ async def query_works(
             "type": "query_builder",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st,
-            "required_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"}],
-            "defined_vars": [{"var_name": "genre", "var_label": resolved_genre if resolved_genre else ""}]
+            "filter_st": filter_st
         }
         await qc.add_module(genre_module)
         
@@ -281,12 +274,7 @@ async def query_works(
             "type": "query_builder",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st,
-            "required_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"}],
-            "defined_vars": [
-                {"var_name": "expCreation", "var_label": "efrbroo:F28_Expression_Creation"},
-                {"var_name": "placeComp", "var_label": resolved_place if resolved_place else ""}
-            ]
+            "filter_st": filter_st
         }
         await qc.add_module(place_module)
 
@@ -318,9 +306,7 @@ async def query_works(
             "type": "query_builder",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st,
-            "required_vars": [{"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"}],
-            "defined_vars": [{"var_name": "key", "var_label": resolved_key if resolved_key else ""}]
+            "filter_st": filter_st
         }
         await qc.add_module(key_module)
         
@@ -358,7 +344,6 @@ async def query_performance(
                 "obj": create_triple_element("title", "", "var")
             }
         ],
-        "defined_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}, {"var_name": "title", "var_label": ""}]
     }
     await qc.add_module(core_module)
     qc.add_select("performance", "efrbroo:F31_Performance")
@@ -372,8 +357,7 @@ async def query_performance(
             "triples": [],
             "filter_st": [
                 {'function': 'REGEX', 'args': ['?title', f"\'{title}\'", "\'i\'"]}
-            ],
-            "required_vars": [{"var_name": "title", "var_label": ""}]
+            ]
         }
         await qc.add_module(title_filter_module)
 
@@ -410,12 +394,7 @@ async def query_performance(
             "type": "query_builder",
             "scope": "main",
             "triples": location_triples,
-            "filter_st": location_filters,
-            "required_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}],
-            "defined_vars": [
-                {"var_name": "place", "var_label": "ecrm:E53_Place"},
-                {"var_name": "locationName", "var_label": ""}
-            ]
+            "filter_st": location_filters
         }
         await qc.add_module(loc_module)
     else:
@@ -429,12 +408,7 @@ async def query_performance(
             "id": "performance_location_optional",
             "type": "query_builder",
             "scope": "optional",
-            "triples": location_triples,
-            "required_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}],
-            "defined_vars": [
-                {"var_name": "place", "var_label": "ecrm:E53_Place"},
-                {"var_name": "locationName", "var_label": ""}
-            ]
+            "triples": location_triples
         }
         await qc.add_module(loc_opt_module)
 
@@ -488,11 +462,7 @@ async def query_performance(
                 "type": "query_builder",
                 "scope": "main",
                 "triples": performer_triples,
-                "filter_st": performer_filters,
-                "required_vars": [{"var_name": "performance", "var_label": "efrbroo:F31_Performance"}],
-                "defined_vars": [{"var_name": f"{activity_var}", "var_label": "ecrm:E7_Activity"},
-                {"var_name": f"{artist_var}", "var_label": "ecrm:E21_Person"},
-                {"var_name": f"{artist_name_var}", "var_label": ""}]
+                "filter_st": performer_filters
             }
             await qc.add_module(perf_module)
         
@@ -554,8 +524,7 @@ async def query_artist(
             "type": "query_builder",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st,
-            "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}]
+            "filter_st": filter_st
         }
         await qc.add_module(name_module)
 
@@ -573,8 +542,7 @@ async def query_artist(
                         "pred": create_triple_element("birthPlaceCountry", "schema:birthPlace / geonames:countryCode", "uri"),
                         "obj": create_triple_element(country_code, nationality, "literal")
                     }
-                ],
-                "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}]
+                ]
              }
              await qc.add_module(nat_module)
          else:
@@ -601,12 +569,7 @@ async def query_artist(
             "type": "query_builder",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st,
-            "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}],
-            "defined_vars": [
-                {"var_name": "bp", "var_label": ""},
-                {"var_name": "bpLabel", "var_label": ""}
-            ]
+            "filter_st": filter_st
         }
         await qc.add_module(bp_module)
 
@@ -631,12 +594,7 @@ async def query_artist(
             "type": "query_builder",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st,
-            "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}],
-            "defined_vars": [
-                {"var_name": "dp", "var_label": ""},
-                {"var_name": "dpLabel", "var_label": ""}
-            ]
+            "filter_st": filter_st
         }
         await qc.add_module(dp_module)
 
@@ -676,13 +634,7 @@ async def query_artist(
             "type": "query_builder",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st,
-            "required_vars": [{"var_name": "artist", "var_label": "ecrm:E21_Person"}],
-            "defined_vars": [
-                {"var_name": "performanceWork", "var_label": "efrbroo:F28_Expression_Creation"},
-                {"var_name": "expression", "var_label": "efrbroo:F22_Self-Contained_Expression"},
-                {"var_name": "workTitle", "var_label": ""}
-            ]
+            "filter_st": filter_st
         }
         await qc.add_module(work_module)
 

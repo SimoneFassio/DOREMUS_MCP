@@ -56,21 +56,54 @@ class QueryContainer:
         self.variable_registry: Dict[str, Dict[str, Any]] = {}
         self.track_dep: bool = True
 
-    #-----------------------
-    # EXTRACT NEW VARIABLES
-    # -----------------------
-    def extract_defined_variables(self, triples: Dict[str, Any]) -> List[Dict[str, str]]:
-        new_vars = []
-        for t in triples:
-            subj = t["subj"]
-            if subj["type"] == "var":
-                if subj["var_name"] not in [new_var["var_name"] for new_var in new_vars]:
-                    new_vars.append({"var_name": subj["var_name"], "var_label": subj["var_label"]})
-            obj = t["obj"]
-            if obj["type"] == "var":
-                if obj["var_name"] not in [new_var["var_name"] for new_var in new_vars] and isinstance(obj["var_name"], str):
-                    new_vars.append({"var_name": obj["var_name"], "var_label": obj["var_label"]}) 
-        return new_vars  
+
+    def _auto_categorize_variables(self, module: Dict[str, Any]) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
+        """
+        Automatically categorize variables in the module into required (existing) and defined (new).
+        """
+        vars_in_module = {} # name -> label
+        
+        # 1. Scan Triples
+        if "triples" in module:
+            for t in module["triples"]:
+                for part in ["subj", "pred", "obj"]:
+                    elem = t.get(part)
+                    if elem and elem.get("type") == "var":
+                        name = elem["var_name"]
+                        label = elem.get("var_label", "")
+                        # Store label if present/not empty, or keep existing
+                        if name not in vars_in_module:
+                            vars_in_module[name] = label
+                        elif label:
+                            vars_in_module[name] = label
+                            
+        # 2. Scan Filters
+        if "filter_st" in module:
+            for fl in module["filter_st"]:
+                for arg in fl.get("args", []):
+                    # args are strings like "?title" or "'value'"
+                    # Extract variables starting with ?
+                    matches = re.findall(r'\?(\w+)', arg)
+                    for match in matches:
+                        if match not in vars_in_module:
+                            vars_in_module[match] = "" # filter vars might not have label available here
+        
+        required_vars = []
+        defined_vars = []
+        
+        for name, label in vars_in_module.items():
+            if name in self.variable_registry:
+                # Existing variable -> Required (Connection)
+                # Use the label from registry to ensure consistency if module didn't provide one
+                reg_label = self.variable_registry[name]["var_label"]
+                required_vars.append({"var_name": name, "var_label": reg_label})
+            else:
+                # Not in registry -> Defined (New)
+                if not label:
+                    logger.warning(f"Variable ?{name} is being defined without a semantic label (URI). This may prevent correct variable linking.")
+                defined_vars.append({"var_name": name, "var_label": label})
+                
+        return required_vars, defined_vars  
 
     # ----------------------
     # MODULE MANAGEMENT
@@ -101,6 +134,12 @@ class QueryContainer:
             error_msg = f"Invalid module structure for ID: {module.get('id', 'unknown')}"
             logger.error(error_msg)
             raise Exception(error_msg)
+
+        # Auto-categorize variables if not explicitly provided
+        if "required_vars" not in module and "defined_vars" not in module:
+            required_vars, defined_vars = self._auto_categorize_variables(module)
+            module["required_vars"] = required_vars
+            module["defined_vars"] = defined_vars
 
         # BACKUP STATE
         state_backup = {
