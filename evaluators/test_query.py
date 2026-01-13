@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import logging
+import httpx
 from dotenv import load_dotenv
 
 # Add src to path for local development
@@ -61,17 +62,38 @@ async def main():
         messages = response.get("messages", [])
         #print(f"Messages: {messages}")
         generated_query = None
+        query_id = None
+        sampling_requests = []
 
         for message in messages:
             messContent = message.content if hasattr(message, "content") else ""
-            if hasattr(message, "name") and message.name == "execute_query":
-                try:
-                    content_json = json.loads(messContent)
-                    if "generated_query" in content_json and content_json["generated_query"]:
-                        generated_query = content_json["generated_query"]
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error in execute_query message: {e}")
-        return {"generated_query": generated_query or ""}
+            try:
+                content_json = json.loads(messContent)
+                if "generated_query" in content_json and content_json["generated_query"]:
+                    generated_query = content_json["generated_query"]
+                if "query_id" in content_json:
+                    query_id = content_json["query_id"]
+            except json.JSONDecodeError as e:
+                continue
+        
+        # Fetch Sampling Logs if query_id exists
+        if query_id:
+            try:
+                port = os.getenv("PORT", "8000")
+                host = os.getenv("HOST", "0.0.0.0")
+                # If host is 0.0.0.0, use localhost for client
+                if host == "0.0.0.0":
+                    host = "localhost"
+                    
+                url = f"http://{host}:{port}/sampling/{query_id}"
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(url, timeout=2.0)
+                    if resp.status_code == 200:
+                        sampling_requests = resp.json()
+            except Exception as e:
+                print(f"Failed to fetch sampling logs: {e}")
+
+        return {"generated_query": generated_query or "", "sampling_requests": sampling_requests}
 
     async def accuracy(outputs: dict, reference_outputs: dict) -> float:
         """Check the percentage of correct values returned by the query."""
@@ -138,30 +160,44 @@ async def main():
         ref_uris = extract_uri_values(reference_output)
         output_uris = extract_uri_values(query_output)
         
+        # Special case: If there are no URI detected in one of the two results, try to match directly all possible combination of rows and columns.
+        if not ref_uris or not output_uris:
+            def extract_all_values(results):
+                vals = set()
+                if not results: return vals
+                for row in results:
+                    for v in row.values():
+                        if v: vals.add(str(v))
+                return vals
+
+            ref_vals = extract_all_values(reference_output)
+            out_vals = extract_all_values(query_output)
+            
+            if not out_vals:
+                percentage_correct = 100.0 if not ref_vals else 0.0
+            else:
+                correct = len(out_vals.intersection(ref_vals))
+                percentage_correct = (correct / len(out_vals)) * 100.0
+
+            print(f" Percentage of correct values (fallback): {percentage_correct:.2f}%")
+            return round(percentage_correct/100, 3)
+        
         query_total_uris = 0
         query_correct_uris = 0
+        for uri in output_uris:
+            query_total_uris += 1
+            if uri in ref_uris:
+                query_correct_uris += 1
         
-        if not output_uris:
-            # If empty query results
-            if len(reference_output) == 0:
+        if query_total_uris > 0:
+            percentage_correct = (query_correct_uris / query_total_uris) * 100.0
+        else:
+            # No URIs returned, but maybe expected? 
+            # If reference also has no URIs, then it's a match (100%), otherwise 0%
+            if len(ref_uris) == 0:
                 percentage_correct = 100.0
             else:
                 percentage_correct = 0.0
-        else:
-            for uri in output_uris:
-                query_total_uris += 1
-                if uri in ref_uris:
-                    query_correct_uris += 1
-            
-            if query_total_uris > 0:
-                percentage_correct = (query_correct_uris / query_total_uris) * 100.0
-            else:
-                # No URIs returned, but maybe expected? 
-                # If reference also has no URIs, then it's a match (100%), otherwise 0%
-                if len(ref_uris) == 0:
-                    percentage_correct = 100.0
-                else:
-                    percentage_correct = 0.0
         
         ending_ref = "...]" if len(reference_output) > 2 else ""
         ending_que = "...]" if len(query_output) > 2 else ""
