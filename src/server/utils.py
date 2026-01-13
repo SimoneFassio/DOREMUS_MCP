@@ -44,7 +44,9 @@ def get_entity_label(uri: str) -> str:
     SELECT ?label
     WHERE {{
         <{uri}> rdfs:label | skos:prefLabel | foaf:name ?label .
+        BIND(IF(LANG(?label) = "en", 1, IF(LANG(?label) = "", 2, 3)) AS ?priority)
     }}
+    ORDER BY ASC(?priority)
     """
     result = execute_sparql_query(query, 1)
     
