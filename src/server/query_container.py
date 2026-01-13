@@ -535,10 +535,6 @@ You should select an option different to 0 ONLY if the variable represent a new 
         Connectivity is already checked in add_module, so this checks buildability.
         Also executes the query with LIMIT 1 to check for 0 results or errors.
         """
-        if not self.select:
-            logger.warning("Dry Run Failed: No SELECT variables defined.")
-            raise Exception("Dry Run Failed: No SELECT variables defined.")
-        
         if not self.where:
             logger.warning("Dry Run Failed: WHERE clause is empty.")
             raise Exception("Dry Run Failed: WHERE clause is empty.")
@@ -560,6 +556,52 @@ You should select an option different to 0 ONLY if the variable represent a new 
             raise Exception("Dry Run Failed: Query returned 0 results.")
 
         return True
+
+    def _count_variable_usage(self) -> Dict[str, int]:
+        counts = {}
+        
+        def inc(name):
+            counts[name] = counts.get(name, 0) + 1
+            
+        # Select
+        for s in self.select:
+            inc(s["var_name"])
+            
+        # Group By
+        for g in self.group_by:
+            inc(g["var_name"])
+            
+        # Order By
+        for o in self.order_by:
+            inc(o["var_name"])
+            
+        # Having (vars inside aggregation)
+        for h in self.having:
+             if "variable" in h and h["variable"]:
+                 inc(h["variable"])
+        
+        # Filters (extract from args)
+        for f in self.filter_st:
+            for arg in f.get("args", []):
+                matches = re.findall(r'\?(\w+)', arg)
+                for m in matches:
+                    inc(m)
+                    
+        # Triples
+        for mod in self.where:
+            if mod.get("scope") == "main":
+                for t in mod.get("triples", []):
+                    # Subj
+                    if t.get("subj", {}).get("type") == "var":
+                        inc(t["subj"]["var_name"])
+                    # Pred
+                    if t.get("pred", {}).get("type") == "var":
+                        inc(t["pred"]["var_name"])
+                    # Obj
+                    if t.get("obj", {}).get("type") == "var":
+                        inc(t["obj"]["var_name"])
+                        
+        return counts
 
     def to_string(self) -> str:
         """
@@ -585,7 +627,10 @@ You should select an option different to 0 ONLY if the variable represent a new 
                 elif item.get("aggregator"):
                     # Case 2: Variable has explicit aggregator
                     agg = item["aggregator"]
-                    select_vars_str.append(f"{agg}(?{var_name}) as ?{var_name}_{agg.lower()}")
+                    if agg.upper() == "COUNT":
+                        select_vars_str.append(f"{agg}(DISTINCT ?{var_name}) as ?{var_name}_{agg.lower()}")
+                    else:
+                        select_vars_str.append(f"{agg}(?{var_name}) as ?{var_name}_{agg.lower()}")
                 
                 else:
                     # Case 3: Variable is NOT grouped and NO aggregator -> Auto-SAMPLE
@@ -593,20 +638,26 @@ You should select an option different to 0 ONLY if the variable represent a new 
             
             else:
                 # No GROUP BY -> Select as is
-                # Note: If an aggregator is present but NO group by, strictly speaking it's valid RDF (implicit group of whole result),
-                # but usually mixed with non-aggregated vars it is invalid. 
-                # However, if user explicitly set aggregator, we respect it.
                 if item.get("aggregator"):
                     agg = item["aggregator"]
-                    select_vars_str.append(f"{agg}(?{var_name}) as ?{var_name}")
+                    if agg.upper() == "COUNT":
+                        select_vars_str.append(f"{agg}(DISTINCT ?{var_name}) as ?{var_name}")
+                    else:
+                        select_vars_str.append(f"{agg}(?{var_name}) as ?{var_name}")
                 else:
                     select_vars_str.append(f"?{var_name}")
+
+        if not select_vars_str:
+            select_vars_str.append("*")
         
         query_parts.append(f"SELECT {select_mod}{' '.join(select_vars_str)}")
         
         # Build Where string
         query_parts.append("WHERE {")
-        where_body = []
+        
+        # Calculate variable usage for dead code elimination
+        var_counts = self._count_variable_usage()
+
         for module in self.where:
             mod_id = module.get("id", "unnamed")
             query_parts.append(f"  # Module: {mod_id}")
@@ -617,6 +668,15 @@ You should select an option different to 0 ONLY if the variable represent a new 
                     if not all(k in t for k in ("subj", "pred", "obj")):
                         logger.warning(f"Module {mod_id} has malformed triple: {t}")
                         continue
+                    
+                    # DEAD CODE ELIMINATION CHECK
+                    # If object is a variable and it is used only once (here), skip it.
+                    if t.get("obj", {}).get("type") == "var":
+                        obj_name = t["obj"]["var_name"]
+                        if var_counts.get(obj_name, 0) <= 1:
+                            logger.info(f"Dead code elimination: Skipping triple {t} because variable {obj_name} is used only once.")
+                            continue
+
                     s_str = self._format_term(t.get("subj"))
                     p_str = self._format_term(t.get("pred"))
                     o_str = self._format_term(t.get("obj"))
