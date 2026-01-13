@@ -100,7 +100,7 @@ class QueryContainer:
         if not self._validate_module(module):
             error_msg = f"Invalid module structure for ID: {module.get('id', 'unknown')}"
             logger.error(error_msg)
-            return False
+            raise Exception(error_msg)
 
         # BACKUP STATE
         state_backup = {
@@ -125,17 +125,19 @@ class QueryContainer:
         
         elif module["scope"] == "optional":
             logger.warning("Optional modules not yet implemented.")
-            return False
+            raise Exception("Optional modules not yet implemented.")
 
         # 2. DRY RUN TEST
         if dry_run:
-            if not self.dry_run_test():
+            try:
+                self.dry_run_test()
+            except Exception as e:
                 # REVERT STATE
                 self.where = state_backup["where"]
                 self.filter_st = state_backup["filter_st"]
                 self.variable_registry = state_backup["variable_registry"]
                 self.select = state_backup["select"]
-                return False
+                raise e
         
         return True
 
@@ -433,18 +435,17 @@ You should select an option different to 0 ONLY if the variable represent a new 
         """Add a single variable to the SELECT list or update its aggregator."""
         existing = next((v for v in self.select if v["var_name"] == var_name), None)
         if var_name not in self.variable_registry.keys():
-            return {"success": False, "error": "Variable not found in registry"}
+            raise Exception(f"Variable {var_name} not found in varaible registry")
         
         if aggregator:
             aggregator = aggregator.upper()
             if aggregator not in ["COUNT", "SUM", "AVG", "MAX", "MIN"]:
-                return {"success": False, "error": "Invalid aggregator"}
+                raise Exception(f"Invalid aggregator {aggregator}")
         if existing:
             # Update aggregator
             existing["aggregator"] = aggregator
         else:
             self.select.append({"var_name": var_name, "var_label": var_label, "aggregator": aggregator})
-        return {"success": True}
 
     def set_limit(self, limit: int) -> None:
         self.limit = limit
@@ -470,11 +471,11 @@ You should select an option different to 0 ONLY if the variable represent a new 
         """
         if not self.select:
             logger.warning("Dry Run Failed: No SELECT variables defined.")
-            return False
+            raise Exception("Dry Run Failed: No SELECT variables defined.")
         
         if not self.where:
             logger.warning("Dry Run Failed: WHERE clause is empty.")
-            return False
+            raise Exception("Dry Run Failed: WHERE clause is empty.")
             
         # Execute Query with LIMIT 1
         current_limit = self.limit
@@ -486,11 +487,11 @@ You should select an option different to 0 ONLY if the variable represent a new 
         
         if not res["success"]:
             logger.warning(f"Dry Run Failed: Query execution error: {res.get('error')}")
-            return False
+            raise Exception(f"Dry Run Failed: Query execution error: {res.get('error')}")
         
         if res.get("count", 0) == 0:
             logger.warning("Dry Run Failed: Query returned 0 results.")
-            return False
+            raise Exception("Dry Run Failed: Query returned 0 results.")
 
         return True
 
