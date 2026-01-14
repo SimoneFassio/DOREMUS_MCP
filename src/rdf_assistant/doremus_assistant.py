@@ -58,7 +58,8 @@ def create_model(provider: str, model_name=None):
             model=model_name,
             client_kwargs={"headers": {"Authorization": f"Basic {os.getenv('OLLAMA_API_KEY')}"}},
             stream=True,
-            temperature=0
+            temperature=0,
+            num_ctx=32768,
             )
     else:
         raise ValueError(f"Unknown provider: {provider}")
