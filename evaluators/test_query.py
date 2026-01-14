@@ -20,6 +20,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 load_dotenv(".env")
 
 EXPERIMENT_PREFIX = os.getenv("EXPERIMENT_PREFIX", "")
+DOREMUS_MCP_URL = os.getenv("DOREMUS_MCP_URL", "http://localhost:8000")
 
 # Set to True to reload the dataset and update it
 RELOAD = False
@@ -98,15 +99,9 @@ async def main():
         # Fetch Sampling Logs if query_id exists
         if query_id:
             try:
-                port = os.getenv("PORT", "8000")
-                host = os.getenv("HOST", "0.0.0.0")
-                # If host is 0.0.0.0, use localhost for client
-                if host == "0.0.0.0":
-                    host = "localhost"
-                    
-                url = f"http://{host}:{port}/sampling/{query_id}"
+                url = f"{DOREMUS_MCP_URL[:-4]}/sampling/{query_id}"
                 async with httpx.AsyncClient() as client:
-                    resp = await client.get(url, timeout=2.0)
+                    resp = await client.get(url, timeout=4.0)
                     if resp.status_code == 200:
                         sampling_requests = resp.json()
             except Exception as e:
