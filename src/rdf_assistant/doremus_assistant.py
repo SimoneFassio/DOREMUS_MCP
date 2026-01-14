@@ -1,11 +1,13 @@
 import asyncio
 import os
 from dotenv import load_dotenv
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_anthropic import ChatAnthropic
 from langchain_ollama import ChatOllama
+from langchain.agents.middleware import wrap_tool_call
+from langchain.messages import ToolMessage
 
 from .prompts import agent_system_prompt
 from .extended_mcp_client import ExtendedMCPClient
@@ -60,10 +62,40 @@ def create_model(provider: str, model_name=None):
             )
     else:
         raise ValueError(f"Unknown provider: {provider}")
+
+@wrap_tool_call
+async def handle_tool_errors(request, handler):
+    """Handle tool execution errors with custom messages."""
+    try:
+        return await handler(request)
+    except Exception as e:
+        # Return a custom error message to the model
+        return ToolMessage(
+            content=f"Tool error: Please check your input and try again. ({str(e)})",
+            tool_call_id=request.tool_call["id"],
+            name=request.tool_call["name"]
+        )
     
 # AGENT LLM: Initialize the LLM, bind the tools from the MCP client
 async def initialize_agent():
     tools = await client.get_tools()
+    
+    # Patch tools to ignore 'runtime' argument injected by LangGraph
+    # functionality that conflicts with MCP tools
+    for tool in tools:
+        if hasattr(tool, "coroutine") and tool.coroutine:
+            original_coro = tool.coroutine
+            async def wrapped_coro(*args, original_coro=original_coro, **kwargs):
+                kwargs.pop("runtime", None)
+                return await original_coro(*args, **kwargs)
+            tool.coroutine = wrapped_coro
+            
+        if hasattr(tool, "func") and tool.func:
+            original_func = tool.func
+            def wrapped_func(*args, original_func=original_func, **kwargs):
+                kwargs.pop("runtime", None)
+                return original_func(*args, **kwargs)
+            tool.func = wrapped_func
     llm = create_model(provider, model_name)
 
     print("DOREMUS Assistant configuration:")
@@ -73,10 +105,11 @@ async def initialize_agent():
     print(f"  MCP server: {mcp_url}, transport type: {mcp_transport}\n")
 
     # Compile the agent using LangGraph's create_react_agent
-    agent = create_react_agent(
-        llm,
+    agent = create_agent(
+        model=llm,
         tools=tools,
-        state_modifier=agent_system_prompt
+        system_prompt=agent_system_prompt,
+        middleware=[handle_tool_errors],
     )
     return agent.with_config({"recursion_limit": recursion_limit})
 

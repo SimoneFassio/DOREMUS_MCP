@@ -5,6 +5,7 @@ import sys
 import logging
 import httpx
 from dotenv import load_dotenv
+from langgraph.errors import GraphRecursionError
 
 # Add src to path for local development
 sys.path.insert(0, 'src')
@@ -46,27 +47,45 @@ async def main():
 
         client.create_examples(dataset_id=dataset.id, inputs=inputs, outputs=outputs)
 
-    # EVALUATION FUNCTIONS
 
     async def target_doremus_assistant(inputs: dict) -> dict:
         """Process a user input through the doremus assistant and capture the generated query."""
+        messages = []
         try:
-            response = await doremus_assistant.ainvoke(
-                {"messages": [{"role": "user", "content": inputs["query_input"]}]}
-            )
+            # Use astream with stream_mode="values" to capture state updates
+            # This allows us to retain the latest messages even if recursion limit is hit
+            async for chunk in doremus_assistant.astream(
+                {"messages": [{"role": "user", "content": inputs["query_input"]}]},
+                stream_mode="values"
+            ):
+                if "messages" in chunk:
+                    messages = chunk["messages"]
+        except GraphRecursionError:
+            print(f"⚠️ Recursion Limit Hit for: {inputs.get('query_input', '')[:30]}... processing partial messages.")
         except Exception as e:
             print(f"Error during ainvoke: {e}")
-            return {"generated_query": ""}
 
-        # Check the messages field first
-        messages = response.get("messages", [])
-        #print(f"Messages: {messages}")
+        # messages variable holds the latest state (complete or partial)
         generated_query = None
         query_id = None
         sampling_requests = []
 
         for message in messages:
             messContent = message.content if hasattr(message, "content") else ""
+            # Handle case where content is a list
+            if isinstance(messContent, list):
+                if not messContent:
+                    messContent = ""
+                # If list of strings
+                elif all(isinstance(x, str) for x in messContent):
+                    messContent = "".join(messContent)
+                # If list of dicts (e.g. [{"text": "..."}])
+                elif all(isinstance(x, dict) for x in messContent):
+                    messContent = "".join(x.get("text", "") for x in messContent)
+                else:
+                    # Fallback string representation
+                    messContent = str(messContent)
+
             try:
                 content_json = json.loads(messContent)
                 if "generated_query" in content_json and content_json["generated_query"]:
