@@ -903,7 +903,7 @@ def execute_query_from_id_internal(query_id: str, limit: int) -> Dict[str, Any]:
                 f.write("SPARQL Query: \n" + qc.to_string())
                 f.write("LIMIT: " + str(limit))
             
-        return execute_sparql_query(qc.to_string(), limit)
+        return execute_sparql_query(qc.to_string(eliminate_dead_code=True), limit)
     except Exception as e:
         logger.error(f"Error executing query: {e}")
         return {

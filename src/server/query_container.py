@@ -533,7 +533,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
             raise Exception("Dry Run Failed: WHERE clause is empty.")
             
         # Execute Query with LIMIT 1
-        query_str = self.to_string()
+        query_str = self.to_string(eliminate_dead_code=True)
         res = execute_sparql_query(query_str, limit=1)
         
         if not res["success"]:
@@ -592,7 +592,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
                         
         return counts
 
-    def to_string(self) -> str:
+    def to_string(self, eliminate_dead_code: bool = False) -> str:
         """
         Compile the internal state into a valid SPARQL query string.
         """
