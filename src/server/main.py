@@ -113,20 +113,17 @@ async def build_query(question: str,
                 "composer_nationality": String,
                 "genre": String or URI, 
                 "place_of_composition": String or URI, 
-                "musical_key": String or URI,
-                "limit": Int
+                "musical_key": String or URI
             - For Performances:
                 "title": String,
                 "location": String or URI,
-                "carried_out_by": List of Strings or URIs,
-                "limit": Int
+                "carried_out_by": List of Strings or URIs
             - For Artists:
                 "name": String or URI,
                 "nationality": String,
                 "birth_place": String,
                 "death_place" : String,
-                "work_name" : String or URI,
-                "limit": Int
+                "work_name" : String or URI
             It may be possible that no filters are needed, in which case pass an empty dict or None.
 
     Returns:
@@ -391,7 +388,7 @@ async def add_select(
 
 
 @mcp.tool()
-async def execute_query(query_id: str) -> Dict[str, Any]:
+async def execute_query(query_id: str, limit: int = 50) -> Dict[str, Any]:
     """
     Execute a previously built SPARQL query by its ID.
 
@@ -403,7 +400,7 @@ async def execute_query(query_id: str) -> Dict[str, Any]:
     Returns:
         The results of the SPARQL query execution.
     """
-    return execute_query_from_id_internal(query_id)
+    return execute_query_from_id_internal(query_id, limit)
 
 
 @mcp.tool()

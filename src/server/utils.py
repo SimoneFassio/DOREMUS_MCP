@@ -72,6 +72,7 @@ def execute_sparql_query(query: str, limit: int = 100) -> Dict[str, Any]:
         # query = prefix_lines + "\n" + query
         if "LIMIT" not in query.upper():
             query = f"{query}\nLIMIT {limit}"
+        
 
         response = requests.get(
             SPARQL_ENDPOINT,

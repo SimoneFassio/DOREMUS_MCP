@@ -46,7 +46,6 @@ class QueryContainer:
         self.group_by: List[Dict[str, Any]] = []
         self.having: List[Dict[str, Any]] = []
         self.order_by: List[Dict[str, Any]] = []
-        self.limit: int = 50
 
         # Metadata
         self.question: str = question
@@ -513,12 +512,6 @@ You should select an option different to 0 ONLY if the variable represent a new 
         else:
             self.select.append({"var_name": var_name, "var_label": var_label, "aggregator": aggregator})
 
-    def set_limit(self, limit: int) -> None:
-        self.limit = limit
-    
-    def get_limit(self) -> int:
-        return self.limit
-
     def set_question(self, question: str) -> None:
         self.question = question
 
@@ -540,11 +533,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
             raise Exception("Dry Run Failed: WHERE clause is empty.")
             
         # Execute Query with LIMIT 1
-        current_limit = self.limit
-        self.limit = 1
         query_str = self.to_string()
-        self.limit = current_limit
-        
         res = execute_sparql_query(query_str, limit=1)
         
         if not res["success"]:
@@ -756,9 +745,6 @@ You should select an option different to 0 ONLY if the variable represent a new 
         if self.order_by:
             o_vars = [f"?{v['var_name']}" for v in self.order_by]
             query_parts.append(f"ORDER BY {' '.join(o_vars)}")
-        
-        # Build Limit
-        query_parts.append(f"LIMIT {self.limit}")
         
         return "\n".join(query_parts)
 

@@ -888,7 +888,7 @@ async def groupBy_having_internal(
 # EXECUTE QUERY INTERNALS
 #-------------------------------
 
-def execute_query_from_id_internal(query_id: str) -> Dict[str, Any]:
+def execute_query_from_id_internal(query_id: str, limit: int) -> Dict[str, Any]:
     try:
         qc = QUERY_STORAGE.get(query_id)
         if not qc:
@@ -901,9 +901,9 @@ def execute_query_from_id_internal(query_id: str) -> Dict[str, Any]:
                 f.write("Question: \n" + qc.get_question())
                 f.write("\n\n")
                 f.write("SPARQL Query: \n" + qc.to_string())
-                f.write("LIMIT: " + str(qc.get_limit()))
+                f.write("LIMIT: " + str(limit))
             
-        return execute_sparql_query(qc.to_string(), qc.get_limit())
+        return execute_sparql_query(qc.to_string(), limit)
     except Exception as e:
         logger.error(f"Error executing query: {e}")
         return {

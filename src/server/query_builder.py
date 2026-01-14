@@ -99,13 +99,11 @@ async def query_works(
     genre: Optional[str] = None,
     place_of_composition: Optional[str] = None,
     musical_key: Optional[str] = None,
-    limit: int = 50, 
 ) -> QueryContainer:
     """
     Initialize a QueryContainer with a baseline query for Musical Works.
     """
     qc = QueryContainer(query_id, question)
-    qc.set_limit(limit)
     
     # Define logging callback
     def log_sampling(log_data: Dict[str, Any]):
@@ -322,14 +320,12 @@ async def query_performance(
     question: str = "",
     title: Optional[str] = None,
     location: Optional[str] = None,
-    carried_out_by: Optional[List[str]] = None,
-    limit: int = 50
+    carried_out_by: Optional[List[str]] = None
 ) -> QueryContainer:
     """
     Initialize a QueryContainer with a baseline query for Performances.
     """
     qc = QueryContainer(query_id, question)
-    qc.set_limit(limit)
 
     # Define logging callback
     def log_sampling(log_data: Dict[str, Any]):
@@ -485,13 +481,11 @@ async def query_artist(
     birth_place: Optional[str] = None,
     death_place: Optional[str] = None,
     work_name: Optional[str] = None,
-    limit: int = 50
 ) -> QueryContainer:
     """
     Initialize a QueryContainer with a baseline query for Artists.
     """
     qc = QueryContainer(query_id, question)
-    qc.set_limit(limit)
     
     # Define logging callback
     def log_sampling(log_data: Dict[str, Any]):
