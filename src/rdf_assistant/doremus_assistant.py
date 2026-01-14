@@ -91,27 +91,52 @@ async def fix_hallucinated_json(request, handler):
         content = getattr(message, 'content', "")
 
         # 2. Check if it's "Hallucinated JSON" (Text that should have been a Tool Call)
-        if content and '{"name":' in content and not getattr(message, 'tool_calls', None):
+        if content and '"name":' in content and not getattr(message, 'tool_calls', None):
             print("🔧 Repairing hallucinated tool call...")
             
             # Extract the JSON block from the text
-            # (Simple version: assumes the whole content is the JSON)
             try:
-                # We try to parse the content to see if it's a valid tool structure
-                tool_data = json.loads(content)
+                # Find the start of the JSON-like structure
+                start_marker = '{'
+                start_pos = content.find(start_marker)
                 
+                if start_pos == -1:
+                    raise ValueError("No JSON tool call found")
+                    
+                json_candidate = content[start_pos:]
+                tool_data = None
+                
+                try:
+                    # First try parsing the substring to the end
+                    tool_data = json.loads(json_candidate)
+                except json.JSONDecodeError:
+                    # Heuristic: Find valid JSON by brace balancing
+                    balance = 0
+                    for i, char in enumerate(json_candidate):
+                        if char == '{':
+                            balance += 1
+                        elif char == '}':
+                            balance -= 1
+                            if balance == 0:
+                                tool_data = json.loads(json_candidate[:i+1])
+                                break
+                    
+                    if tool_data is None:
+                        raise ValueError("Could not extract valid JSON")
+
                 # 3. MANUALLY INJECT the tool call into the message
                 # This trick prevents the Graph from reaching __end__
                 message.tool_calls = [{
                     "name": tool_data.get("name"),
-                    "args": tool_data.get("arguments", tool_data.get("args", {})),
+                    "args": tool_data.get("arguments", tool_data.get("args", tool_data.get("parameters", {}))),
                     "id": f"call_{uuid.uuid4().hex[:12]}",
                     "type": "tool_call"
                 }]
-                # Clear the content so the model doesn't get confused later
-                message.content = "" 
                 
-            except json.JSONDecodeError:
+                # Clear the JSON from the content but keep the thought/reasoning
+                message.content = content[:start_pos].strip()
+                
+            except (json.JSONDecodeError, ValueError):
                 # If it's not valid JSON, we just append an error and let it end 
                 # (or the LLM will see the error if you manually loop)
                 message.content += "\n\nERROR: Invalid tool call format."
