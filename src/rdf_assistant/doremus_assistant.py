@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_anthropic import ChatAnthropic
 from langchain_ollama import ChatOllama
-from langchain.agents.middleware import wrap_tool_call
+from langchain.agents.middleware import wrap_tool_call, wrap_model_call
 from langchain.messages import ToolMessage
 
 from .prompts import agent_system_prompt
@@ -67,14 +67,59 @@ def create_model(provider: str, model_name=None):
 async def handle_tool_errors(request, handler):
     """Handle tool execution errors with custom messages."""
     try:
-        return await handler(request)
+        response = await handler(request)
+        return response
     except Exception as e:
         # Return a custom error message to the model
         return ToolMessage(
             content=f"Tool error: Please check your input and try again. ({str(e)})",
             tool_call_id=request.tool_call["id"],
-            name=request.tool_call["name"]
+            name=request.tool_call["name"],
+            status="error"
         )
+
+import json
+import uuid
+
+@wrap_model_call
+async def fix_hallucinated_json(request, handler):
+    response = await handler(request)
+    
+    try:
+        # 1. Extract the message
+        message = response.result[0] if hasattr(response, 'result') else response
+        content = getattr(message, 'content', "")
+
+        # 2. Check if it's "Hallucinated JSON" (Text that should have been a Tool Call)
+        if content and '{"name":' in content and not getattr(message, 'tool_calls', None):
+            print("🔧 Repairing hallucinated tool call...")
+            
+            # Extract the JSON block from the text
+            # (Simple version: assumes the whole content is the JSON)
+            try:
+                # We try to parse the content to see if it's a valid tool structure
+                tool_data = json.loads(content)
+                
+                # 3. MANUALLY INJECT the tool call into the message
+                # This trick prevents the Graph from reaching __end__
+                message.tool_calls = [{
+                    "name": tool_data.get("name"),
+                    "args": tool_data.get("arguments", tool_data.get("args", {})),
+                    "id": f"call_{uuid.uuid4().hex[:12]}",
+                    "type": "tool_call"
+                }]
+                # Clear the content so the model doesn't get confused later
+                message.content = "" 
+                
+            except json.JSONDecodeError:
+                # If it's not valid JSON, we just append an error and let it end 
+                # (or the LLM will see the error if you manually loop)
+                message.content += "\n\nERROR: Invalid tool call format."
+                
+    except Exception as e:
+        print(f"Middleware Error: {e}")
+        
+    return response
     
 # AGENT LLM: Initialize the LLM, bind the tools from the MCP client
 async def initialize_agent():
@@ -109,7 +154,7 @@ async def initialize_agent():
         model=llm,
         tools=tools,
         system_prompt=agent_system_prompt,
-        middleware=[handle_tool_errors],
+        middleware=[handle_tool_errors, fix_hallucinated_json],
     )
     return agent.with_config({"recursion_limit": recursion_limit})
 

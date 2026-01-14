@@ -20,7 +20,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 load_dotenv(".env")
 
 EXPERIMENT_PREFIX = os.getenv("EXPERIMENT_PREFIX", "")
-DOREMUS_MCP_URL = os.getenv("DOREMUS_MCP_URL", "http://localhost:8000")
+DOREMUS_MCP_URL = os.getenv("DOREMUS_MCP_URL", "http://localhost:8000/mcp")
 
 # Set to True to reload the dataset and update it
 RELOAD = False
