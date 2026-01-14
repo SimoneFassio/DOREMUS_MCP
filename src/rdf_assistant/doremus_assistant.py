@@ -8,6 +8,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_ollama import ChatOllama
 from langchain.agents.middleware import wrap_tool_call, wrap_model_call
 from langchain.messages import ToolMessage
+from langchain_core.rate_limiters import InMemoryRateLimiter
 
 from .prompts import agent_system_prompt
 from .extended_mcp_client import ExtendedMCPClient
@@ -26,7 +27,8 @@ evaluation_models = {
     "groq": "llama-3.3-70b-versatile", # "meta-llama/llama-4-scout-17b-16e-instruct", 
     "anthropic": "claude-sonnet-4-5-20250929", 
     "mistral": "mistral-7b-instant",
-    "ollama": "gpt-oss:120b"
+    "ollama": "gpt-oss:120b",
+    "cerebras": "llama3.1-70b"
 }
 
 connections = {
@@ -38,6 +40,12 @@ connections = {
 
 client = ExtendedMCPClient(
     connections=connections
+)
+
+cerebras_rate_limiter = InMemoryRateLimiter(
+    requests_per_second=0.4, 
+    check_every_n_seconds=0.1,
+    max_bucket_size=10,
 )
 
 # Helper function to create model based on provider
@@ -52,6 +60,14 @@ def create_model(provider: str, model_name=None):
         return ChatGroq(model=model_name, temperature=0)
     elif provider == "anthropic":
         return ChatAnthropic(model=model_name, temperature=0)
+    elif provider == "cerebras":
+        return ChatOpenAI(
+            base_url="https://api.cerebras.ai/v1",
+            api_key=os.getenv("CEREBRAS_API_KEY"),
+            model=model_name,
+            temperature=0,
+            rate_limiter=cerebras_rate_limiter
+        )
     elif provider == "ollama":
         return ChatOllama(
             base_url=os.getenv("OLLAMA_API_URL"),
