@@ -254,29 +254,26 @@ class GraphSchemaExplorer:
             str: A Markdown-formatted string of the relevant schema subgraph,
                  ready for an LLM to understand.
         """
-        try:
-            if not path.startswith("/"):
-                return "Error: Invalid path. Path must start with /"
+        if not path.startswith("/"):
+            raise ValueError("Error: Invalid path. Path must start with /")
 
-            if path == "/":
-                return self._get_summary_subgraph()
+        if path == "/":
+            return self._get_summary_subgraph()
+        
+        else:
+            # Path is '/{ClassName}'
+            class_name = path[1:]
             
-            else:
-                # Path is '/{ClassName}'
-                class_name = path[1:]
+            # Validate depth
+            if depth not in [1, 2]:
+                raise ValueError("Error: Invalid depth. Must be 1 or 2.")
+            
+            # Check if class exists before exploring
+            if class_name not in self.nodes_count:
+                raise ValueError(f"Error: Class '{class_name}' not found in the graph's node list.")
+            
+            return self._get_neighborhood_subgraph(class_name, depth)
                 
-                # Validate depth
-                if depth not in [1, 2]:
-                    return f"Error: Invalid depth. Must be 1 or 2."
-                
-                # Check if class exists before exploring
-                if class_name not in self.nodes_count:
-                    return f"Error: Class '{class_name}' not found in the graph's node list."
-                
-                return self._get_neighborhood_subgraph(class_name, depth)
-                
-        except Exception as e:
-            return f"An internal error occurred: {str(e)}"
 
 
     def class_has_property(self, class_name: str, property: str) -> bool:

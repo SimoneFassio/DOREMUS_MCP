@@ -18,7 +18,6 @@ from server.tools_internal import (
     graph,
     find_candidate_entities_internal,
     get_entity_properties_internal,
-    get_ontology_internal,
     build_query_internal,
     execute_query_from_id_internal,
     associate_to_N_entities_internal,
@@ -433,53 +432,10 @@ async def find_candidate_entities(
 @mcp.tool()
 async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     """
-    It shows all direct properties of a specific entity.
-
-    Args:
-        entity_uri: The full URI of the entity (e.g., "http://data.doremus.org/artist/...")
-
-    Returns:
-        Dictionary with:
-        - entity_uri: The requested entity
-        - entity_label: Human-readable name
-        - entity_type: Class of the entity
-        - properties: All properties as key-value pairs
+    It shows all direct properties of a specific entity (e.g., "http://data.doremus.org/artist/...") or of a class (e.g., "ecrm:E21_Person").
     """
     return get_entity_properties_internal(entity_uri)
 
-
-# @mcp.tool()
-def get_ontology(path: str) -> str:
-    """
-    Explore the DOREMUS ontology graph schema hierarchically.
-
-    This tool helps you understand the structure of the knowledge graph by providing
-    a hierarchical view of node types (classes) and their relationships (edges).
-
-    Use this tool to:
-    - Get an overview of the most important node types and connections (path='/')
-    - Explore a specific class and its direct relationships
-
-    Args:
-        path: Navigation path for exploration:
-            - '/' - Get a high-level summary of the top 15 most important node types
-                   and their top 20 most common relationships
-            - '/{ClassName}' - Explore a specific class (e.g., '/efrbroo:F28_Expression_Creation')
-
-    Returns:
-        Markdown-formatted visualization of the ontology subgraph, showing:
-        - Node types (classes) in the knowledge graph
-        - Edge types (predicates/relationships) connecting them
-        - Hierarchical structure for easy understanding
-
-    Examples:
-        - get_ontology('/')
-          Returns overview of the most important 15 nodes and their relationships
-
-        - get_ontology('/efrbroo:F22_Self-Contained_Expression')
-          Shows what properties and relationships a musical work has
-    """
-    return get_ontology_internal(path=path, depth=1)
 
 # # Documentation tools
 

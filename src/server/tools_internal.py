@@ -4,6 +4,7 @@ import os
 import re 
 from nanoid import generate
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 from typing import Any, Optional, Dict, List
 from difflib import get_close_matches
 from server.find_paths import load_graph
@@ -46,11 +47,7 @@ def find_candidate_entities_internal(
     try:
         return find_candidate_entities_utils(name, entity_type)
     except Exception as e:
-        logger.error(f"Error finding candidate entities: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise ToolError(f"Error finding candidate entities: {e}")
 
 
 def find_linked_entities(subject: str, obj: str) -> List[str] | None:
@@ -64,79 +61,74 @@ def get_entity_properties_internal(
     entity_uri: str
 ) -> Dict[str, Any]:
     try:
-        query = f"""
-        SELECT DISTINCT ?property ?value
-        WHERE {{
-            <{entity_uri}> ?property ?value .
-            FILTER (
-                !(?property = rdfs:comment) || lang(?value) = "en"
-            )
-        }}
-        """
-        result = execute_sparql_query(query, limit=50)
-        
-        if not result["success"]:
-            return result
-        
-        # Organize all properties
-        properties = {}
-        entity_label = None
-        entity_type = None
-        for binding in result["results"]:
-            prop = binding.get("property", "")
-            value = binding.get("value", "")
-            # Contract URIs to prefixes
-            prop_prefixed = contract_uri_restrict(prop) # If uri not present in PREFIXES ignore the property
+        if entity_uri.startswith("http://") or entity_uri.startswith("https://"):
+            query = f"""
+            SELECT DISTINCT ?property ?value
+            WHERE {{
+                <{entity_uri}> ?property ?value .
+                FILTER (
+                    !(?property = rdfs:comment) || lang(?value) = "en"
+                )
+            }}
+            """
+            result = execute_sparql_query(query, limit=50)
             
-            if prop_prefixed is None:
-                continue
-            if prop_prefixed.endswith(":label") and not entity_label:
-                entity_label = value
-                continue
-            if prop_prefixed.endswith("type") and not entity_type:
-                entity_type = contract_uri_restrict(value)
-                continue
+            if not result["success"]:
+                raise ToolError(f"Error getting entity properties: {result['error']}")
             
-            # Get label for linked URIs
-            if value.startswith("http://") or value.startswith("https://"): 
-                label = get_entity_label(value)
-                if label:
-                    value += f"  ({label})"
-                    
-            # Store property
-            if prop_prefixed not in properties:
-                properties[prop_prefixed] = []
-            properties[prop_prefixed].append(value)
-        
-        for key, prop in properties.items():
-            if len(prop)==1:
-                properties[key] = prop[0]
-            else:
-                properties[key] = ""
-                for p in prop:
-                    properties[key] += f"{p}, "
+            # Organize all properties
+            properties = {}
+            entity_label = None
+            entity_type = None
+            for binding in result["results"]:
+                prop = binding.get("property", "")
+                value = binding.get("value", "")
+                # Contract URIs to prefixes
+                prop_prefixed = contract_uri_restrict(prop) # If uri not present in PREFIXES ignore the property
+                
+                if prop_prefixed is None:
+                    continue
+                if prop_prefixed.endswith(":label") and not entity_label:
+                    entity_label = value
+                    continue
+                if prop_prefixed.endswith("type") and not entity_type:
+                    entity_type = contract_uri_restrict(value)
+                    continue
+                
+                # Get label for linked URIs
+                if value.startswith("http://") or value.startswith("https://"): 
+                    label = get_entity_label(value)
+                    if label:
+                        value += f"  ({label})"
+                        
+                # Store property
+                if prop_prefixed not in properties:
+                    properties[prop_prefixed] = []
+                properties[prop_prefixed].append(value)
             
-        response = {
-            "entity_uri": entity_uri,
-            "entity_label": entity_label,
-            "entity_type": entity_type,
-            "properties": properties
-        }
-        return response
+            for key, prop in properties.items():
+                if len(prop)==1:
+                    properties[key] = prop[0]
+                else:
+                    properties[key] = ""
+                    for p in prop:
+                        properties[key] += f"{p}, "
+                
+            response = {
+                "entity_uri": entity_uri,
+                "entity_label": entity_label,
+                "entity_type": entity_type,
+                "properties": properties
+            }
+            return response
+        else:
+            path = '/' + entity_uri
+            answer = explorer.explore_graph_schema(path=path)
+            return {
+                "properties": answer
+            }
     except Exception as e:
-        logger.error(f"Error getting entity properties: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-    
-
-def get_ontology_internal(path: str, depth: int = 1) -> str:
-    try:
-        return explorer.explore_graph_schema(path=path, depth=depth)
-    except Exception as e:
-        logger.error(f"Error exploring ontology: {str(e)}")
-        return f"Error exploring ontology: {str(e)}"
+        raise ToolError(f"Error getting entity properties: {e}")
 
 #-------------------------------
 # QUERY BUILDER INTERNALS
@@ -186,18 +178,13 @@ async def build_query_internal(
         QUERY_STORAGE[query_id] = qc
         
         return {
-            "success": True,
             "query_id": query_id,
             "generated_sparql": sparql_query,
             "message": "Query built successfully. Review the SPARQL. It is strongly suggested to follow this strategy:\n"+strategy+ "\nIf correct, then use execute_query(query_id) to run it."
         }
         
     except Exception as e:
-        logger.error(f"Error building query: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise ToolError(f"Error building query: {e}")
 
 #-------------------------------
 # ASSOCIATE N ENTITIES INTERNALS
@@ -253,11 +240,7 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
     try:
         return await _associate_to_N_entities_internal_impl(subject, obj, query_id, N)
     except Exception as e:
-        logger.error(f"Error associating N entities: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise ToolError(f"Error associating N entities: {e}")
 
 async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_id: str, N: int | None) -> List[dict]:
     #-------------------------------
@@ -649,17 +632,12 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         await qc.add_module(module)
         
         return {
-            "success": True,
             "query_id": query_id,
             "generated_sparql": qc.to_string(),
             "message": "Quantity filter added."
         }
     except Exception as e:
-        logger.error(f"Error checking quantity filter: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise ToolError(f"Error checking quantity filter: {e}")
 
     
 
@@ -704,18 +682,13 @@ async def add_triplet_internal(
         await qc.add_module(module, dry_run=True)
         
         return {
-            "success": True,
             "query_id": query_id,
             "generated_sparql": qc.to_string(),
             "message": "Triplet added successfully."
         }
 
     except Exception as e:
-        logger.error(f"Error adding triplet: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise ToolError(f"Error adding triplet: {e}")
 
 #-------------------------------
 # ADD SELECT VARIABLE INTERNALS
@@ -747,17 +720,12 @@ async def add_select_variable_internal(
         qc.add_select(variable, var_label, aggregator=aggregator)
         
         return {
-            "success": True,
             "query_id": query_id,
             "generated_sparql": qc.to_string(),
             "message": f"Variable ?{variable} added to SELECT list."
         }
     except Exception as e:
-        logger.error(f"Error adding selection variable: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise ToolError(f"Error adding selection variable: {e}")
 
 #-------------------------------
 # GROUP BY HAVING INTERNALS
@@ -872,17 +840,12 @@ async def groupBy_having_internal(
                 qc.add_having(having_clause)
 
         return {
-            "success": True, 
             "query_id": query_id, 
             "generated_sparql": qc.to_string(),
             "message": "Group By and Having clauses applied successfully."
         }
     except Exception as e:
-        logger.error(f"Error applying Group By/Having: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise ToolError(f"Error applying Group By/Having: {e}")
 
 #-------------------------------
 # EXECUTE QUERY INTERNALS
@@ -905,11 +868,7 @@ def execute_query_from_id_internal(query_id: str, limit: int) -> Dict[str, Any]:
             
         return execute_sparql_query(qc.to_string(for_execution=True), limit)
     except Exception as e:
-        logger.error(f"Error executing query: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise ToolError(f"Error executing query: {e}")
 
 
 if __name__ == "__main__":
