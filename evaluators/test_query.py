@@ -66,40 +66,79 @@ async def main():
         except Exception as e:
             print(f"Error during ainvoke: {e}")
 
-        # messages variable holds the latest state (complete or partial)
-        generated_query = None
-        query_id = None
+        # State tracking
+        query_map = {} # query_id -> generated_query content
+        last_generated_query = None
+        last_query_id = None
+        executed_query_id = None
+        final_answer = ""
         sampling_requests = []
 
         for message in messages:
-            messContent = message.content if hasattr(message, "content") else ""
-            # Handle case where content is a list
-            if isinstance(messContent, list):
-                if not messContent:
-                    messContent = ""
-                # If list of strings
-                elif all(isinstance(x, str) for x in messContent):
-                    messContent = "".join(messContent)
-                # If list of dicts (e.g. [{"text": "..."}])
-                elif all(isinstance(x, dict) for x in messContent):
-                    messContent = "".join(x.get("text", "") for x in messContent)
-                else:
-                    # Fallback string representation
-                    messContent = str(messContent)
+            # 1. Capture Final Answer (Text from AI)
+            # We assume the last message with text content from AI is the final answer
+            if message.type == "ai" and message.content:
+                if isinstance(message.content, str):
+                   final_answer = message.content
+            
+            # 2. Capture Execute Query Tool Calls
+            if hasattr(message, "tool_calls") and message.tool_calls:
+                for tool_call in message.tool_calls:
+                    if tool_call.get("name") == "execute_query":
+                        args = tool_call.get("args", {})
+                        if "query_id" in args:
+                            executed_query_id = args["query_id"]
 
+            # 3. Capture Generated Queries from Tool Outputs
+            messContent = message.content if hasattr(message, "content") else ""
+            
+            # Helper to normalize content to string
+            content_str = ""
+            if isinstance(messContent, str):
+                content_str = messContent
+            elif isinstance(messContent, list):
+                if not messContent:
+                    content_str = ""
+                elif all(isinstance(x, str) for x in messContent):
+                    content_str = "".join(messContent)
+                elif all(isinstance(x, dict) for x in messContent):
+                    content_str = "".join(x.get("text", "") for x in messContent)
+                else:
+                    content_str = str(messContent)
+            
             try:
-                content_json = json.loads(messContent)
-                if "generated_query" in content_json and content_json["generated_query"]:
-                    generated_query = content_json["generated_query"]
-                if "query_id" in content_json:
-                    query_id = content_json["query_id"]
-            except json.JSONDecodeError as e:
+                content_json = json.loads(content_str)
+                # Check for generated_query in the output
+                if isinstance(content_json, dict):
+                    if "generated_query" in content_json and content_json["generated_query"]:
+                        g_query = content_json["generated_query"]
+                        last_generated_query = g_query
+                        
+                        if "query_id" in content_json:
+                            q_id = content_json["query_id"]
+                            last_query_id = q_id
+                            query_map[q_id] = g_query
+            except (json.JSONDecodeError, TypeError):
                 continue
         
+        # DECISION LOGIC:
+        final_query = ""
+        final_query_id = None
+
+        if executed_query_id and executed_query_id in query_map:
+            # Priority 1: The query that was actually executed
+            final_query = query_map[executed_query_id]
+            final_query_id = executed_query_id
+        else:
+            # Fallback: The last generated query
+            final_query = last_generated_query or ""
+            final_query_id = last_query_id
+
+
         # Fetch Sampling Logs if query_id exists
-        if query_id:
+        if final_query_id:
             try:
-                url = f"{DOREMUS_MCP_URL[:-4]}/sampling/{query_id}"
+                url = f"{DOREMUS_MCP_URL[:-4]}/sampling/{final_query_id}"
                 async with httpx.AsyncClient() as client:
                     resp = await client.get(url, timeout=4.0)
                     if resp.status_code == 200:
@@ -107,7 +146,11 @@ async def main():
             except Exception as e:
                 print(f"Failed to fetch sampling logs: {e}")
 
-        return {"generated_query": generated_query or "", "sampling_requests": sampling_requests}
+        return {
+            "generated_query": final_query,
+            "final_answer": final_answer,
+            "sampling_requests": sampling_requests
+        }
 
     async def accuracy(outputs: dict, reference_outputs: dict) -> float:
         """Check the percentage of correct values returned by the query."""

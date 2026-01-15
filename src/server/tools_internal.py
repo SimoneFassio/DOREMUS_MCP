@@ -179,7 +179,7 @@ async def build_query_internal(
         
         return {
             "query_id": query_id,
-            "generated_sparql": sparql_query,
+            "generated_query": sparql_query,
             "message": "Query built successfully. Review the SPARQL. It is strongly suggested to follow this strategy:\n"+strategy+ "\nIf correct, then use execute_query(query_id) to run it."
         }
         
@@ -446,7 +446,7 @@ The options available are:
     return {
             "success": True,
             "query_id": query_id,
-            "generated_sparql": sparql_query,
+            "generated_query": sparql_query,
             "message": "Query pattern added successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
         }
 
@@ -633,7 +633,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         
         return {
             "query_id": query_id,
-            "generated_sparql": qc.to_string(),
+            "generated_query": qc.to_string(),
             "message": "Quantity filter added."
         }
     except Exception as e:
@@ -683,7 +683,7 @@ async def add_triplet_internal(
         
         return {
             "query_id": query_id,
-            "generated_sparql": qc.to_string(),
+            "generated_query": qc.to_string(),
             "message": "Triplet added successfully."
         }
 
@@ -721,7 +721,7 @@ async def add_select_variable_internal(
         
         return {
             "query_id": query_id,
-            "generated_sparql": qc.to_string(),
+            "generated_query": qc.to_string(),
             "message": f"Variable ?{variable} added to SELECT list."
         }
     except Exception as e:
@@ -841,7 +841,7 @@ async def groupBy_having_internal(
 
         return {
             "query_id": query_id, 
-            "generated_sparql": qc.to_string(),
+            "generated_query": qc.to_string(),
             "message": "Group By and Having clauses applied successfully."
         }
     except Exception as e:

@@ -129,7 +129,7 @@ async def build_query(question: str,
         Dict containing:
         - "success": boolean
         - "query_id": The ID to use with `execute_query`
-        - "generated_sparql": The generated SPARQL string for review
+        - "generated_query": The generated SPARQL string for review
         - "message": The query output and a set of few-shot examples to follow
     """
 
@@ -218,7 +218,7 @@ async def associate_to_N_entities(
            - Pass `None` if the user just asks for the *presence* of the object without a specific count ("for violin").
 
     Returns:
-        Dict: {"success": bool, "query_id": str, "generated_sparql": str}
+        Dict: {"success": bool, "query_id": str, "generated_query": str}
     
     **FEW-SHOT EXAMPLES:**
 
@@ -281,7 +281,7 @@ async def groupBy_having(
         valueEnd: The upper bound number. ONLY used if logic_type is 'range'.
 
     Returns:
-        Dict: {"success": bool, "query_id": str, "generated_sparql": str}
+        Dict: {"success": bool, "query_id": str, "generated_query": str}
 
     **FEW-SHOT EXAMPLES:**
     
@@ -326,9 +326,9 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
 
     Examples:
         - Input: subject="expression", property="mus:U78_estimated_duration", type="less", value="900", valueEnd="", query_id="..."
-          Output: generated_sparql="... FILTER ( ?quantity_val <= 900) ..."
+          Output: generated_query="... FILTER ( ?quantity_val <= 900) ..."
         - Input: subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1870", valueEnd="1913", query_id="..."
-          Output: generated_sparql="... FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear) ..."
+          Output: generated_query="... FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear) ..."
     """
     return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
 
