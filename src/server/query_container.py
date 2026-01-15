@@ -2,7 +2,7 @@ from typing import Any, Optional, List, Dict
 import logging
 import re
 from server.tool_sampling import tool_sampling_request
-from server.utils import execute_sparql_query, validate_doremus_uri, get_entity_label
+from server.utils import execute_sparql_query, validate_doremus_uri, get_entity_label, find_equivalent_uris
 
 logger = logging.getLogger("doremus-mcp")
 
@@ -177,6 +177,20 @@ class QueryContainer:
             # Process variable renaming (if needed for uniqueness or linking)
             processed_module = await self._process_variables(module)
             
+            # --- URI EXPANSION LOGIC ---
+            if processed_module.get("triples"):
+                for t in processed_module["triples"]:
+                    p_str = self._format_term(t.get("pred"))
+                    # Check if predicate is VALUES and object is URI
+                    if p_str == "VALUES" and t.get("obj", {}).get("type") == "uri":
+                        orig_uri = t["obj"].get("var_label")
+                        # If label is already a list, skip (already expanded)
+                        if isinstance(orig_uri, str):
+                            expanded_uris = find_equivalent_uris(orig_uri)
+                            if len(expanded_uris) > 0:
+                                t["obj"]["var_label"] = expanded_uris
+            # ---------------------------
+
             if processed_module.get("filter_st"):
                 for fl in processed_module.get("filter_st", []):
                     self.filter_st.append(fl)
@@ -533,7 +547,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
             raise Exception("Dry Run Failed: WHERE clause is empty.")
             
         # Execute Query with LIMIT 1
-        query_str = self.to_string(eliminate_dead_code=True)
+        query_str = self.to_string(for_execution=True)
         res = execute_sparql_query(query_str, limit=1)
         
         if not res["success"]:
@@ -592,7 +606,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
                         
         return counts
 
-    def to_string(self, eliminate_dead_code: bool = False) -> str:
+    def to_string(self, for_execution: bool = False) -> str:
         """
         Compile the internal state into a valid SPARQL query string.
         """
@@ -660,15 +674,15 @@ You should select an option different to 0 ONLY if the variable represent a new 
                     
                     # DEAD CODE ELIMINATION CHECK
                     # If object is a variable and it is used only once (here), skip it.
-                    if t.get("obj", {}).get("type") == "var":
+                    if for_execution and t.get("obj", {}).get("type") == "var":
                         obj_name = t["obj"]["var_name"]
                         if var_counts.get(obj_name, 0) <= 1:
                             logger.info(f"Dead code elimination: Skipping triple {t} because variable {obj_name} is used only once.")
                             continue
 
-                    s_str = self._format_term(t.get("subj"))
-                    p_str = self._format_term(t.get("pred"))
-                    o_str = self._format_term(t.get("obj"))
+                    s_str = self._format_term(t.get("subj"), for_execution=for_execution)
+                    p_str = self._format_term(t.get("pred"), for_execution=for_execution)
+                    o_str = self._format_term(t.get("obj"), for_execution=for_execution)
                     
                     if p_str == "VALUES":
                         # Special handling for VALUES clause
@@ -748,7 +762,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         
         return "\n".join(query_parts)
 
-    def _format_term(self, term: Dict[str, Any]) -> str:
+    def _format_term(self, term: Dict[str, Any], for_execution: bool = False) -> str:
         """
         Helper to format a Subject/Predicate/Object dictionary into a SPARQL string.
         
@@ -776,6 +790,27 @@ You should select an option different to 0 ONLY if the variable represent a new 
             if not val:
                 logger.error(f"URI term missing 'var_label': {term}")
                 return ""
+            
+            # Handle List of URIs (VALUES expansion)
+            if isinstance(val, list):
+                if not for_execution:
+                    # Display/LLM mode: Return only one representative URI
+                    # Prefer data.doremus.org
+                    doremus_candidates = [v for v in val if "data.doremus.org" in v]
+                    chosen = doremus_candidates[0] if doremus_candidates else val[0]
+                    if chosen.startswith("http"):
+                        return f"<{chosen}>"
+                    return chosen
+
+                # Execution mode: Format all URIs in the list
+                formatted_uris = []
+                for v in val:
+                    if v.startswith("http"):
+                        formatted_uris.append(f"<{v}>")
+                    else:
+                        formatted_uris.append(v)
+                return " ".join(formatted_uris)
+
             if val.startswith("http"):
                 return f"<{val}>"
             return val # It might be a prefixed URI like mus:U13...
