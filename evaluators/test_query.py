@@ -110,14 +110,15 @@ async def main():
                 content_json = json.loads(content_str)
                 # Check for generated_query in the output
                 if isinstance(content_json, dict):
-                    if "generated_query" in content_json and content_json["generated_query"]:
+                    if "generated_query" in content_json and isinstance(content_json["generated_query"], str):
                         g_query = content_json["generated_query"]
                         last_generated_query = g_query
                         
                         if "query_id" in content_json:
                             q_id = content_json["query_id"]
-                            last_query_id = q_id
-                            query_map[q_id] = g_query
+                            if isinstance(q_id, str):
+                                last_query_id = q_id
+                                query_map[q_id] = g_query
             except (json.JSONDecodeError, TypeError):
                 continue
         
@@ -125,7 +126,7 @@ async def main():
         final_query = ""
         final_query_id = None
 
-        if executed_query_id and executed_query_id in query_map:
+        if executed_query_id and isinstance(executed_query_id, str) and executed_query_id in query_map:
             # Priority 1: The query that was actually executed
             final_query = query_map[executed_query_id]
             final_query_id = executed_query_id
