@@ -58,6 +58,23 @@ class QueryContainer:
         # Sampling Logs
         self.sampling_logs: List[Dict[str, Any]] = []
 
+    
+    #-----------------------
+    # EXTRACT NEW VARIABLES
+    # -----------------------
+    def extract_defined_variables(self, triples: Dict[str, Any]) -> List[Dict[str, str]]:
+        new_vars = []
+        for t in triples:
+            subj = t["subj"]
+            if subj["type"] == "var":
+                if subj["var_name"] not in [new_var["var_name"] for new_var in new_vars]:
+                    new_vars.append({"var_name": subj["var_name"], "var_label": subj["var_label"]})
+            obj = t["obj"]
+            if obj["type"] == "var":
+                if obj["var_name"] not in [new_var["var_name"] for new_var in new_vars] and isinstance(obj["var_name"], str):
+                    new_vars.append({"var_name": obj["var_name"], "var_label": obj["var_label"]}) 
+        return new_vars
+
 
     def _auto_categorize_variables(self, module: Dict[str, Any]) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
         """
@@ -400,10 +417,11 @@ class QueryContainer:
             # Check on required variables
             if "required_vars" in module.keys():
                 for req_elem in module["required_vars"]:
-                    if req_elem["var_name"] not in [v["var_name"] for v in self.select]:
-                        for sel_elem in self.select:
-                            if sel_elem["var_label"] == req_elem["var_label"]:
-                                self._modify_var(new_module, req_elem["var_name"], sel_elem["var_name"])
+                    # Check against the full variable registry, not just selected variables
+                    if req_elem["var_name"] not in self.variable_registry:
+                        for reg_name, reg_info in self.variable_registry.items():
+                            if reg_info["var_label"] == req_elem["var_label"]:
+                                self._modify_var(new_module, req_elem["var_name"], reg_name)
                                 break
             # Check on defined variables
             if "defined_vars" in module.keys():

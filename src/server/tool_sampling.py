@@ -16,6 +16,7 @@ logger = logging.getLogger("doremus-mcp")
 sampling_models = {
     "openai": "gpt-5.2",
     "groq": "llama-3.3-70b-versatile",
+    "cerebras": "llama-3.3-70b",
     "ollama": "gpt-oss:120b"
 }
 load_dotenv()
@@ -32,6 +33,11 @@ if sampling_provider == "openai":
     fallback_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 elif sampling_provider == "groq":
     fallback_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+elif sampling_provider == "cerebras":
+    fallback_client = OpenAI(
+        api_key=os.getenv("CEREBRAS_API_KEY"),
+        base_url="https://api.cerebras.ai/v1"
+    )
 else:
     fallback_client = Client(
         host=os.getenv("OLLAMA_API_URL"),
@@ -142,7 +148,7 @@ Based on the user's intent, select the most appropriate option by its index numb
 You MUST reply with exactly one token: the integer index only — nothing else, no punctuation, no commentary.
             """
             
-            if sampling_provider == "openai" or sampling_provider == "groq":
+            if sampling_provider == "openai" or sampling_provider == "groq" or sampling_provider == "cerebras":
                 response = fallback_client.chat.completions.create(
                     model=sampling_model,
                     messages=[
