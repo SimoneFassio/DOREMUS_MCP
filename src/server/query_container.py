@@ -556,7 +556,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         
         if res.get("count", 0) == 0:
             logger.warning("Dry Run Failed: Query returned 0 results.")
-            raise Exception("Dry Run Failed: Query returned 0 results.")
+            raise Exception("Dry Run Failed: Query returned 0 results. Here the executed_query for debug purposes: \n" + query_str)
 
         return True
 
@@ -795,9 +795,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
             if isinstance(val, list):
                 if not for_execution:
                     # Display/LLM mode: Return only one representative URI
-                    # Prefer data.doremus.org
-                    doremus_candidates = [v for v in val if "data.doremus.org" in v]
-                    chosen = doremus_candidates[0] if doremus_candidates else val[0]
+                    chosen = val[0]
                     if chosen.startswith("http"):
                         return f"<{chosen}>"
                     return chosen

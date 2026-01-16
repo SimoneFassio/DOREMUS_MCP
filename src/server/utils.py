@@ -209,7 +209,7 @@ def find_candidate_entities_utils(
 def find_equivalent_uris(uri: str) -> List[str]:
     """
     Find all equivalent URIs for a given URI using skos:exactMatch, owl:sameAs and their inverses.
-    Returns a list of unique URIs including the original one.
+    Returns a list of unique URIs including the original one in the first position of the list.
     """
     # Only expand DOREMUS URIs or known namespaces
     if not (uri.startswith("http://") or uri.startswith("https://")):
@@ -229,14 +229,16 @@ def find_equivalent_uris(uri: str) -> List[str]:
     result = execute_sparql_query(query, limit=10)
     
     equivalents = [uri]
+    seen = {uri}
+    
     if result["success"]:
         for binding in result.get("results", []):
             eq_val = binding.get("equivalent")
-            if eq_val and eq_val != uri:
+            if eq_val and eq_val not in seen:
                 equivalents.append(eq_val)
+                seen.add(eq_val)
     
-    # Remove duplicates just in case
-    return list(set(equivalents))
+    return equivalents
 
 # helper that recieves the link to a property and retuns the label version of it
 def extract_label(full_uri: str) -> str | None:

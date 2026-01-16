@@ -261,6 +261,10 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
     if not subject_uri:
         raise Exception(f"Subject variable ?{subject} not found in query.")
     
+    # TYPE GUARD: obj must be a string
+    if not isinstance(obj, str):
+        raise Exception(f"Invalid argument type: 'obj' must be a string (the entity name, e.g., 'violin'). Received: {type(obj).__name__} ({obj}). If you meant to specify a quantity, use the 'n' parameter.")
+
     # RETRIEVE OBJECT URI
     if obj.startswith("http://") or obj.startswith("https://"):
         obj_uri = obj

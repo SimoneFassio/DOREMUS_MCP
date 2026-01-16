@@ -402,20 +402,6 @@ async def query_performance(
             "filter_st": location_filters
         }
         await qc.add_module(loc_module)
-    else:
-        # Optional location for SELECT
-        location_triples.append({
-            "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
-            "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
-            "obj": create_triple_element("locationName", "", "var")
-        })
-        loc_opt_module = {
-            "id": "performance_location_optional",
-            "type": "query_builder",
-            "scope": "optional",
-            "triples": location_triples
-        }
-        await qc.add_module(loc_opt_module)
 
     # Performer Filter (carried_out_by)
     if carried_out_by:
