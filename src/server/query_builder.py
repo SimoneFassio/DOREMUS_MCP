@@ -2,7 +2,6 @@ from typing import Optional, List, Dict, Any, Union, Callable
 import logging
 import re
 from server.query_container import QueryContainer, create_triple_element
-# ...
 from server.utils import find_candidate_entities_utils
 from server.tool_sampling import tool_sampling_request
 from fastmcp import Context

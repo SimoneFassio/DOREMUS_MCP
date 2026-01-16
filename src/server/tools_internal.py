@@ -271,7 +271,7 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
         obj = (obj.split("/")[-1]).strip().lower()
     else:
         obj = obj.strip().lower()
-        res_obj = find_candidate_entities_internal(obj, "vocabulary")
+        res_obj = find_candidate_entities_internal(obj, "vocabulary") #TODO migrate to _resolve_entity
         if res_obj['matches_found']==0:
             res_obj = find_candidate_entities_internal(obj, "others")
             if res_obj['matches_found']>0:
@@ -417,6 +417,15 @@ The options available are:
     
     # Impose subject at the beginning of the path
     selected_path[0] = (subject, subject_uri)
+    
+    # Check for name collision: if target variable name (obj) is used in intermediate nodes
+    target_var_name = obj
+    intermediate_vars = {selected_path[i][0] for i in range(0, len(selected_path)-1, 2)}
+    if target_var_name in intermediate_vars:
+        target_var_name = f"{obj}_target"
+        # Update path
+        selected_path[-1] = (target_var_name, obj_uri)
+
     triples = []
     for i in range(0, len(selected_path)-2, 2):
         triples.append({
@@ -434,9 +443,10 @@ The options available are:
                 "pred": create_triple_element(convert_to_variable_name(quantity_property), quantity_property, "uri"),
                 "obj": create_triple_element(N, "", "literal")
             })
-
+    def_vars = qc.extract_defined_variables(triples)
+    logger.info(f"Defined vars after adding triples: {def_vars}")
     triples.append({
-        "subj": create_triple_element(obj, obj_uri, "var"),
+        "subj": create_triple_element(target_var_name, obj_uri, "var"),
         "pred": create_triple_element("VALUES", "VALUES", "uri"),
         "obj": create_triple_element(obj_uri, obj_uri, "uri")
     })
@@ -444,7 +454,9 @@ The options available are:
             "id": f"associate_N_entities_module_{selected_path[-1][0]}",
             "type": "associate_N_entities",
             "scope": "main",
-            "triples": triples
+            "triples": triples,
+            "required_vars": [create_triple_element(subject, subject_uri, "var")],
+            "defined_vars": def_vars[1:] # Exclude subject from defined vars
     })
     sparql_query = qc.to_string()
     return {
@@ -496,6 +508,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         propery = property.strip()
         triples = []
         filter_st = []
+        defined_vars = []
         
         # Value processing (dates vs numbers)
         # Check if property implies date
@@ -544,6 +557,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                 "pred": create_triple_element("ecrm:P4_has_time-span", "ecrm:P4_has_time-span", "uri"),
                 "obj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var")
             })
+            defined_vars.append({"var_name": ts_var, "var_label": "ecrm:E52_Time-Span"})
             
             # We add triples for start/end based on filter type to be efficient?
             # Or always add them? 
@@ -560,6 +574,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                      "pred": create_triple_element("time:hasBeginning / time:inXSDDate", "time:hasBeginning / time:inXSDDate", "uri"),
                      "obj": create_triple_element(start_var, "", "var")
                  })
+                 defined_vars.append({"var_name": start_var, "var_label": ""})
             
             if type in ["less", "range", "equal"]:
                  end_var = "end"
@@ -568,6 +583,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                      "pred": create_triple_element("time:hasEnd / time:inXSDDate", "time:hasEnd / time:inXSDDate", "uri"),
                      "obj": create_triple_element(end_var, "", "var")
                  })
+                 defined_vars.append({"var_name": end_var, "var_label": ""})
             target_var = None
             
         else:
@@ -579,6 +595,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                 "pred": create_triple_element(propery, propery, "uri"),
                 "obj": create_triple_element(qty_var, "", "var")
             })
+            defined_vars.append({"var_name": qty_var, "var_label": ""}) 
             target_var = f"?{qty_var}"
 
         # 3. Construct Filters
@@ -630,7 +647,9 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
             "type": "has_quantity_of",
             "scope": "main",
             "triples": triples,
-            "filter_st": filter_st
+            "filter_st": filter_st,
+            "required_vars": [{"var_name": subject_var, "var_label": subject_label if subject_label else ""}],
+            "defined_vars": defined_vars
         }
 
         await qc.add_module(module)

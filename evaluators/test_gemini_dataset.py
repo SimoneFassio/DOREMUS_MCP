@@ -7,6 +7,7 @@ import subprocess
 import time
 import logging
 from pathlib import Path
+import httpx
 from dotenv import load_dotenv
 
 # Add src to path
@@ -14,6 +15,7 @@ sys.path.insert(0, 'src')
 
 from server.utils import execute_sparql_query
 from rdf_assistant.eval.doremus_dataset import examples_queries
+from rdf_assistant.prompts import agent_system_prompt
 
 # Import LangChain models for the judge
 try:
@@ -25,7 +27,9 @@ except ImportError:
     print("Warning: LangChain libraries not found. LLM evaluation might fail.")
 
 # Load environment variables
+# Load environment variables
 load_dotenv(".env")
+DOREMUS_MCP_URL = os.getenv("DOREMUS_MCP_URL", "http://localhost:8000/mcp")
 
 # Configuration for Judge LLM
 provider = os.getenv("LLM_EVAL_PROVIDER", "ollama")
@@ -223,7 +227,7 @@ async def llm_is_correct(outputs: dict, reference_outputs: dict) -> dict:
         return {"score": 0, "comment": f"Evaluation failed: {e}"}
 
 
-from rdf_assistant.prompts import agent_system_prompt
+
 
 def run_gemini_query(prompt: str, max_tool_calls: int = 10):
     """
@@ -239,6 +243,7 @@ def run_gemini_query(prompt: str, max_tool_calls: int = 10):
     result = {
         "final_text_response": "",
         "generated_query": None,
+        "query_id": None,
         "raw_events": [],
         "called_tools": []
     }
@@ -287,6 +292,10 @@ def run_gemini_query(prompt: str, max_tool_calls: int = 10):
                         "id": t_id,
                         "status": "called"
                     })
+
+                    # Extract query_id from args if available
+                    if "query_id" in t_args and t_args["query_id"]:
+                         result["query_id"] = t_args["query_id"]
                     
                     if len(result["called_tools"]) > max_tool_calls:
                         print(f"⚠️ Max tool calls ({max_tool_calls}) exceeded. Terminating Gemini CLI.")
@@ -310,13 +319,15 @@ def run_gemini_query(prompt: str, max_tool_calls: int = 10):
                     except (json.JSONDecodeError, TypeError):
                         t_output = t_output_str
 
-                    # Check for generated_query in the output of the tool
+                    # Check for generated_query and query_id in the output of the tool
                     if isinstance(t_output, dict):
                         if "generated_query" in t_output:
                              # We update generated_query. 
                              # Later tools might overwrite earlier ones (e.g. build_query -> add_select -> execute_query)
                              # This is desired as we want the final version.
                              result["generated_query"] = t_output["generated_query"]
+                        if "query_id" in t_output and t_output["query_id"]:
+                             result["query_id"] = t_output["query_id"]
 
             except json.JSONDecodeError:
                 pass
@@ -329,41 +340,19 @@ def run_gemini_query(prompt: str, max_tool_calls: int = 10):
 
 async def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--test-mozart", action="store_true", help="Run only the Mozart test case")
+    parser.add_argument("--question", type=str, help="Run with custom question")
     args = parser.parse_args()
 
     examples_to_run = []
     
-    # Always include Mozart test if specific flag is set OR if we are running normally
-    # But user asked: "Make some test with the example question 'give 10 works composed by mozart'"
-    # We will prepend it to the list if it's not there, or filter for it.
-    
-    mozart_example = {
-        "inputs": {"query_input": "give 10 works composed by mozart"},
-        "outputs": {"rdf_query": "SELECT ?s WHERE { ?s a mus:M43_Summary_of_Expression . ?s mus:U13_has_casting ?casting . ?casting mus:U23_has_casting_detail ?detail . ?detail mus:U2_foresees_use_of_specific_medium_of_performance/skos:prefLabel ?instrument . FILTER(REGEX(?instrument, 'mozart', 'i')) } LIMIT 10"} 
-        # Note: The above SPARQL is a dummy/guess for Mozart. 
-        # Real evaluator requires a ground truth. 
-        # The user says "Make some test with the example question...". 
-        # If I don't have the ground truth, I can't calculate metrics.
-        # But maybe I just run it and show output?
-        # I'll rely on the dataset for ground truth if possible.
-        # If "give 10 works composed by mozart" is NOT in the dataset, I can't effectively evaluate it with `accuracy` without ground truth.
-        # I will search if it is in the dataset.
-    }
-    
-    # Find Mozart in dataset
-    found_mozart = False
-    for ex in examples_queries:
-        if "mozart" in ex["inputs"]["query_input"].lower():
-             # We found a similar one, use it?
-             # User asked for "give 10 works composed by mozart".
-             pass
-
-    if args.test_mozart:
+    if args.question:
         # Just run this one custom case. 
         # Since we might not have ground truth, evaluation metrics might be 0 or skipped.
         # We will set a dummy reference query to avoid crashes, but warn.
-        examples_to_run = [mozart_example] 
+        examples_to_run = [{
+            "inputs": {"query_input": args.question},
+            "outputs": {"rdf_query": ""}
+        }] 
     else:
         examples_to_run = examples_queries
 
@@ -393,6 +382,20 @@ User's question: "{question}"
         gemini_result = run_gemini_query(prompt, max_tool_calls=max_tool_calls)
         duration = time.time() - start_time
         
+        # Fetch Sampling Logs
+        sampling_requests = []
+        if gemini_result["query_id"]:
+             try:
+                # Assumes DOREMUS_MCP_URL ends with /mcp, so we strip it to get base url
+                base_url = DOREMUS_MCP_URL[:-4] if DOREMUS_MCP_URL.endswith("/mcp") else DOREMUS_MCP_URL
+                url = f"{base_url}/sampling/{gemini_result['query_id']}"
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(url, timeout=4.0)
+                    if resp.status_code == 200:
+                        sampling_requests = resp.json()
+             except Exception as e:
+                print(f"Failed to fetch sampling logs: {e}")
+
         # Evaluate
         metrics = {
             "accuracy": 0.0,
@@ -418,7 +421,8 @@ User's question: "{question}"
             "tool_calls": gemini_result["called_tools"],
             "final_answer": gemini_result["final_text_response"],
             "duration": duration,
-            "raw_events": gemini_result["raw_events"] 
+            "raw_events": gemini_result["raw_events"],
+            "sampling_requests": sampling_requests
         }
         
         full_results.append(record)
@@ -429,7 +433,7 @@ User's question: "{question}"
         print(f"  > LLM Score: {metrics['llm_score']['score']}")
         print(f"  > Is Correct: {metrics['llm_is_correct']['score']}")
         
-        # Save individually or in batch? Batch is fine for now but maybe save progress.
+        # Save individually
         with open(RESULTS_DIR / f"result_{i}.json", "w") as f:
             json.dump(record, f, indent=2)
 
