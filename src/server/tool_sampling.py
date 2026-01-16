@@ -14,7 +14,7 @@ logger = logging.getLogger("doremus-mcp")
 
 # Sampling-specific provider/model selection
 sampling_models = {
-    "openai": "gpt-4o",
+    "openai": "gpt-5.2",
     "groq": "llama-3.3-70b-versatile",
     "ollama": "gpt-oss:120b"
 }
@@ -149,7 +149,7 @@ You MUST reply with exactly one token: the integer index only — nothing else, 
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message}
                     ],
-                    max_tokens=20,
+                    max_completion_tokens=20,
                     temperature=0
                 )
                 llm_response = response.choices[0].message.content

@@ -372,6 +372,35 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
             sorted_paths = sorted(pruned_paths, key=len)
             reduced_paths.extend(sorted_paths[:5])
         possible_paths = sorted(reduced_paths, key=len)
+
+        # Exclude the paths that lead to zero results dry run
+        for k, path in enumerate(possible_paths):
+            triples = []
+            for i in range(0, len(path)-2, 2):
+                triples.append({
+                    "subj": create_triple_element(path[i][0], path[i][1], "var"),
+                    "pred": create_triple_element(path[i+1][0], path[i+1][1], "uri"),
+                    "obj": create_triple_element(path[i+2][0], path[i+2][1], "var")
+                })
+            # Add VALUES for object
+            triples.append({
+                "subj": create_triple_element(obj, obj_uri, "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(obj_uri, obj_uri, "uri")
+            })
+            module = {
+                "id": f"dry_run_path_module_{k}",
+                "type": "pattern",
+                "scope": "main",
+                "triples": triples
+            }
+            try:
+                await qc.add_module(module, dry_run=True)
+                # If dry run passes, keep the path but remove the module afterwards
+                qc.remove_module(module)
+            except Exception as e:
+                logger.info(f"Excluding path {path} due to dry run failure: {e}")
+                possible_paths.remove(path)
         
         path_options_text = format_paths_for_llm(possible_paths)
 
@@ -869,7 +898,7 @@ def execute_query_from_id_internal(query_id: str, limit: int) -> Dict[str, Any]:
                 f.write("\n\n")
                 f.write("SPARQL Query: \n" + qc.to_string())
                 f.write("LIMIT: " + str(limit))
-            
+        logger.info(f"Executing query : {qc.to_string(for_execution=True)} with limit {limit}")        
         return execute_sparql_query(qc.to_string(for_execution=True), limit)
     except Exception as e:
         raise ToolError(f"Error executing query: {e}")

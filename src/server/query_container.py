@@ -215,6 +215,22 @@ class QueryContainer:
                 raise e
         
         return True
+    
+    def remove_module(self, module: Dict[str, Any]) -> bool:
+        """
+        Remove a module from the query container by its ID.
+        
+        Args:
+            module_id: The ID of the module to remove.
+        """
+        if module["scope"] == "main":
+            if module.get("triples"):
+                self.where = [m for m in self.where if m.get("id") != module.get("id")]
+            if module.get("filter_st"):
+                for fl in module.get("filter_st", []):
+                    if fl in self.filter_st:
+                        self.filter_st.remove(fl)
+
 
     def set_order_by(self, variables: List[Dict[str, Any]]) -> None:
         self.order_by = variables
@@ -353,7 +369,7 @@ class QueryContainer:
 
         return "\n".join(query_parts)
 
-    async def _process_variables(self, module: Dict[str, Any]) -> Dict[str, Any]:
+    async def _process_variables(self, module: Dict[str, Any], dry_run: bool = False) -> Dict[str, Any]:
         """
         Handle variable naming conventions and collision resolution.
 
@@ -365,11 +381,20 @@ class QueryContainer:
         
         Args:
             module: The module to be processed.
+            dry_run: If True, the method will simulate the processing without making permanent changes.
         Returns:
             The processed module with variables renamed as needed.
         """
 
         new_module = module.copy()
+        # BACKUP STATE
+        state_backup_v = {
+            "where": self.where.copy(),
+            "filter_st": self.filter_st.copy(),
+            "variable_registry": {k: v.copy() for k, v in self.variable_registry.items()},
+            # deeply copy select to avoid issues with modifications
+            "select": [s.copy() for s in self.select] 
+        }
 
         if self.track_dep:
             # Check on required variables
@@ -410,11 +435,52 @@ class QueryContainer:
                         count = self.variable_registry[var_name]["count"]
                         working_query = self._parse_for_llm(module, def_elem)
                         option_list = []
-                        for reg_var_name, reg_var_el in self.variable_registry.items():
+                        initial_var_list = self.variable_registry.items() + [(f"{var_name}_{count}", {"var_label": var_label})] 
+                        for reg_var_name, reg_var_el in initial_var_list:
                             if reg_var_el["var_label"] == var_label:
-                                option_list.append(reg_var_name)
+                                # Perform Dry Run to ensure variable can be used
+                                if dry_run:
+                                    self._modify_var(new_module, var_name, reg_var_name)
+                                    # --- URI EXPANSION LOGIC ---
+                                    if new_module.get("triples"):
+                                        for t in new_module["triples"]:
+                                            p_str = self._format_term(t.get("pred"))
+                                            # Check if predicate is VALUES and object is URI
+                                            if p_str == "VALUES" and t.get("obj", {}).get("type") == "uri":
+                                                orig_uri = t["obj"].get("var_label")
+                                                # If label is already a list, skip (already expanded)
+                                                if isinstance(orig_uri, str):
+                                                    expanded_uris = find_equivalent_uris(orig_uri)
+                                                    if len(expanded_uris) > 0:
+                                                        t["obj"]["var_label"] = expanded_uris
+                                    # ---------------------------
+
+                                    if new_module.get("filter_st"):
+                                        for fl in new_module.get("filter_st", []):
+                                            self.filter_st.append(fl)
+                                        
+                                    if new_module.get("triples"):
+                                        self.where.append(new_module)
+            
+                                    elif module["scope"] == "optional":
+                                        logger.warning("Optional modules not yet implemented.")
+                                        raise Exception("Optional modules not yet implemented.")
+
+                                    # 2. DRY RUN TEST
+                                    try:
+                                        self.dry_run_test()
+                                        option_list.append(reg_var_name)
+                                    except Exception as e:
+                                        # REVERT STATE
+                                        logger.info(f"Dry run failed when testing variable '{reg_var_name}' for conflict resolution: {e}")
+                                    # Revert state after dry run
+                                    self.where = state_backup_v["where"]
+                                    self.filter_st = state_backup_v["filter_st"]
+                                    self.variable_registry = state_backup_v["variable_registry"]
+                                    self.select = state_backup_v["select"]
+                                else:                                    
+                                    option_list.append(reg_var_name)
                         options = "\n".join([f"- Option {i}: '{opt}'" for i, opt in enumerate(option_list)])
-                        options += f"\n- Option {len(option_list)}: Rename to '{var_name}_{count}'"
                         pattern_intent = f"""solving the conflict for '{var_name}' by determining whether to 
 rename it or use one of the existing variables.
 
