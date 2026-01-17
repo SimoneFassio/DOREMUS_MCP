@@ -236,13 +236,13 @@ def recur_domain(current_entity: str, target_entity: str, graph, depth: int, pat
     return results
         
     
-async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str, N: int | None) -> List[dict]:
+async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str, n: int | None) -> List[dict]:
     try:
-        return await _associate_to_N_entities_internal_impl(subject, obj, query_id, N)
+        return await _associate_to_N_entities_internal_impl(subject, obj, query_id, n)
     except Exception as e:
         raise ToolError(f"Error associating N entities: {e}")
 
-async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_id: str, N: int | None) -> List[dict]:
+async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_id: str, n: int | None) -> List[dict]:
     #-------------------------------
     # CHECK IF QUERY EXISTS
     #-------------------------------
@@ -382,6 +382,7 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
                     "pred": create_triple_element(path[i+1][0], path[i+1][1], "uri"),
                     "obj": create_triple_element(path[i+2][0], path[i+2][1], "var")
                 })
+            def_vars = qc.extract_defined_variables(triples)
             # Add VALUES for object
             triples.append({
                 "subj": create_triple_element(obj, obj_uri, "var"),
@@ -392,12 +393,13 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
                 "id": f"dry_run_path_module_{k}",
                 "type": "pattern",
                 "scope": "main",
-                "triples": triples
+                "triples": triples,
+                "required_vars": [create_triple_element(subject, subject_uri, "var")],
+                "defined_vars": def_vars[1:]
             }
             try:
-                await qc.add_module(module, dry_run=True)
+                await qc.test_add_module(module)
                 # If dry run passes, keep the path but remove the module afterwards
-                qc.remove_module(module)
             except Exception as e:
                 logger.info(f"Excluding path {path} due to dry run failure: {e}")
                 possible_paths.remove(path)
@@ -413,7 +415,7 @@ DOREMUS is based on the CIDOC-CRM ontology, using the EFRBROO (Work-Expression-M
 Work -> conceptual idea (idea of a sonata)
 Expression -> musical realization (written notation of the sonata, with his title, composer, etc.)
 Event -> performance or recording"""
-        pattern_intent = f"""which of these paths is the best for associating '{subject}' to {N} '{obj}'/s, 
+        pattern_intent = f"""which of these paths is the best for associating '{subject}' to {n} '{obj}'/s, 
 given that the current question being asked is: '{qc.get_question()}'.
 
 The current query is:
@@ -463,14 +465,24 @@ The options available are:
             "obj": create_triple_element(selected_path[i+2][0], selected_path[i+2][1], "var")
         })
     logger.info(f"Selected path for associating {subject} to {obj} is: {triples}")
-    if N is not None:
+
+    logger.info(f"associate_to_N_entities called with raw n={n!r}")
+    if n is not None:
+        try:
+            n = int(n)
+        except Exception:
+            raise Exception(f"Invalid n: expected integer, got {n!r}")
+        if n <= 0:
+            raise Exception(f"Invalid n={n}. n must be a positive integer (or omit it).")
+    
+    if n is not None:
         quantity_property = get_quantity_property(selected_path[-3][1])
         logger.info(f"Quantity property for entity {selected_path[-3][1]} is {quantity_property}")
         if quantity_property:
             triples.append({
                 "subj": create_triple_element(selected_path[-3][0], selected_path[-3][1], "var"),
                 "pred": create_triple_element(convert_to_variable_name(quantity_property), quantity_property, "uri"),
-                "obj": create_triple_element(N, "", "literal")
+                "obj": create_triple_element(n, "", "literal")
             })
     def_vars = qc.extract_defined_variables(triples)
     logger.info(f"Defined vars after adding triples: {def_vars}")

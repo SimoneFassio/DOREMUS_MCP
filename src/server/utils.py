@@ -55,7 +55,7 @@ def get_entity_label(uri: str) -> str:
     else:
         return None
     
-def execute_sparql_query(query: str, limit: int = 100) -> Dict[str, Any]:
+def execute_sparql_query(query: str, limit: int = 100, timeout: Optional[int] = None) -> Dict[str, Any]:
     """
     Execute a SPARQL query against the DOREMUS endpoint.
     
@@ -78,7 +78,7 @@ def execute_sparql_query(query: str, limit: int = 100) -> Dict[str, Any]:
             SPARQL_ENDPOINT,
             params={"query": query},
             headers={"Accept": "application/sparql-results+json"},
-            timeout=REQUEST_TIMEOUT
+            timeout=(timeout if timeout is not None else REQUEST_TIMEOUT)
         )
         try:
             response.raise_for_status()

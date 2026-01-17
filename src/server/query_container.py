@@ -1,6 +1,11 @@
+from email.mime import base
+from os import name
 from typing import Any, Optional, List, Dict
 import logging
 import re
+import copy
+
+from requests import options
 from server.tool_sampling import tool_sampling_request
 from server.utils import execute_sparql_query, validate_doremus_uri, get_entity_label, find_equivalent_uris
 
@@ -27,6 +32,11 @@ class QueryContainer:
     WHERE clause patterns, and structure (GROUP BY, LIMIT, etc.). It handles
     variable naming conflicts and ensures consistency between modules.
     """
+
+    _PREFERRED_URI_PREFIXES = (
+        "http://www.mimo-db.eu/InstrumentsKeywords/",
+        "http://data.doremus.org/vocabulary/iaml/mop/",
+    )
     
     def __init__(self, query_id: str, question: str = ""):
         self.query_id = query_id
@@ -127,6 +137,70 @@ class QueryContainer:
     # ----------------------
     # MODULE MANAGEMENT
     # ----------------------
+    async def test_add_module(self, module: Dict[str, Any]) -> bool:
+        """
+        Test if a module can be added to the query without permanently modifying the state.
+        Checks that among all the variable combinations there is one that allows the query to be valid.
+        
+        Args:
+            module: Dictionary containing module definition.
+        """
+        # Validate module structure
+        if not self._validate_module(module):
+            error_msg = f"Invalid module structure for ID: {module.get('id', 'unknown')}"
+            logger.error(error_msg)
+            raise Exception(error_msg)
+
+        # Validate DOREMUS URIs to prevent hallucinations
+        if "triples" in module:
+            for t in module["triples"]:
+                for part in ["subj", "pred", "obj"]:
+                    elem = t.get(part)
+                    if elem:
+                        val = elem.get("var_name", "")
+                        if isinstance(val, str) and (val.startswith("http://") or val.startswith("https://")):
+                            if not validate_doremus_uri(val):
+                                error_msg = f"Hallucinated URI detected: {val}"
+                                logger.error(error_msg)
+                                raise Exception(error_msg)
+                            else:
+                                try:
+                                    label_found = get_entity_label(val)
+                                    if label_found:
+                                        elem["hum_readable_label"] = label_found
+                                except Exception as e:
+                                    logger.warning(f"Could not fetch label for {val}: {e}")
+
+        # Auto-categorize variables if not explicitly provided
+        if "required_vars" not in module and "defined_vars" not in module:
+            required_vars, defined_vars = self._auto_categorize_variables(module)
+            module["required_vars"] = required_vars
+            module["defined_vars"] = defined_vars
+        
+        # BACKUP STATE
+        state_backup = {
+            "where": copy.deepcopy(self.where),
+            "filter_st": copy.deepcopy(self.filter_st),
+            "variable_registry": copy.deepcopy(self.variable_registry),
+            "select": copy.deepcopy(self.select)
+        }
+
+        # 1. ADD MODULE (TEMPORARILY)
+        if module["scope"] == "main":
+            # Process variable renaming (if needed for uniqueness or linking)
+            try:
+                processed_module = await self._process_variables(module, dry_run=True)
+                return True
+            except Exception as e:
+                raise e
+            
+            
+        elif module["scope"] == "optional":
+            logger.warning("Optional modules not yet implemented.")
+            raise Exception("Optional modules not yet implemented.")
+        
+        return True
+    
     async def add_module(self, module: Dict[str, Any], dry_run: bool = True) -> bool:
         """
         Add a query module to the container after validation and connectivity checks.
@@ -161,7 +235,7 @@ class QueryContainer:
                     elem = t.get(part)
                     if elem:
                         val = elem.get("var_name", "")
-                        if val.startswith("http://") or val.startswith("https://"):
+                        if isinstance(val, str) and (val.startswith("http://") or val.startswith("https://")):
                             if not validate_doremus_uri(val):
                                 error_msg = f"Hallucinated URI detected: {val}"
                                 logger.error(error_msg)
@@ -182,30 +256,20 @@ class QueryContainer:
 
         # BACKUP STATE
         state_backup = {
-            "where": self.where.copy(),
-            "filter_st": self.filter_st.copy(),
-            "variable_registry": {k: v.copy() for k, v in self.variable_registry.items()},
-            # deeply copy select to avoid issues with modifications
-            "select": [s.copy() for s in self.select] 
+            "where": copy.deepcopy(self.where),
+            "filter_st": copy.deepcopy(self.filter_st),
+            "variable_registry": copy.deepcopy(self.variable_registry),
+            "select": copy.deepcopy(self.select)
         }
 
-        # 1. ADD MODULE (TEMPORARILY)
+        # 1. ADD MODULE
         if module["scope"] == "main":
             # Process variable renaming (if needed for uniqueness or linking)
             processed_module = await self._process_variables(module)
+            logger.info(f"Module has form: {processed_module['triples'] if 'triples' in processed_module else 'No triples'}")
             
             # --- URI EXPANSION LOGIC ---
-            if processed_module.get("triples"):
-                for t in processed_module["triples"]:
-                    p_str = self._format_term(t.get("pred"))
-                    # Check if predicate is VALUES and object is URI
-                    if p_str == "VALUES" and t.get("obj", {}).get("type") == "uri":
-                        orig_uri = t["obj"].get("var_label")
-                        # If label is already a list, skip (already expanded)
-                        if isinstance(orig_uri, str):
-                            expanded_uris = find_equivalent_uris(orig_uri)
-                            if len(expanded_uris) > 0:
-                                t["obj"]["var_label"] = expanded_uris
+            self._expand_values_uris_in_module(processed_module, max_uris=4)
             # ---------------------------
 
             if processed_module.get("filter_st"):
@@ -214,6 +278,7 @@ class QueryContainer:
             
             if processed_module.get("triples"):
                 self.where.append(processed_module)
+            logger.info(f"Module {processed_module.get('id', 'unknown')} added successfully.")
         
         elif module["scope"] == "optional":
             logger.warning("Optional modules not yet implemented.")
@@ -229,24 +294,10 @@ class QueryContainer:
                 self.filter_st = state_backup["filter_st"]
                 self.variable_registry = state_backup["variable_registry"]
                 self.select = state_backup["select"]
+                logger.info(f"Module {processed_module.get('id', 'unknown')} reverted due to dry run failure.")
                 raise e
         
         return True
-    
-    def remove_module(self, module: Dict[str, Any]) -> bool:
-        """
-        Remove a module from the query container by its ID.
-        
-        Args:
-            module_id: The ID of the module to remove.
-        """
-        if module["scope"] == "main":
-            if module.get("triples"):
-                self.where = [m for m in self.where if m.get("id") != module.get("id")]
-            if module.get("filter_st"):
-                for fl in module.get("filter_st", []):
-                    if fl in self.filter_st:
-                        self.filter_st.remove(fl)
 
 
     def set_order_by(self, variables: List[Dict[str, Any]]) -> None:
@@ -385,6 +436,256 @@ class QueryContainer:
         query_parts.append("  }")
 
         return "\n".join(query_parts)
+    
+    def _base_var_name(self, name: str) -> str:
+        """Strip a trailing _<digits> suffix: castingDetail_1 -> castingDetail."""
+        return re.sub(r"_\d+$", "", name)
+
+    def _next_free_var_name(self, base: str) -> str:
+        """
+        Return base if unused, else base_1, base_2, ... not present in variable_registry.
+        """
+        if base not in self.variable_registry:
+            return base
+        i = 1
+        while f"{base}_{i}" in self.variable_registry:
+            i += 1
+        return f"{base}_{i}"
+    
+    def _prune_equivalent_uris(self, orig_uri: str, expanded_uris: List[str], max_uris: int = 6) -> List[str]:
+        """
+        Keep only a few equivalent URIs, restricted to preferred namespaces.
+        Always returns at least [orig_uri].
+        """
+        # Dedup while preserving order (orig first)
+        seen = set()
+        candidates: List[str] = []
+        for u in [orig_uri, *expanded_uris]:
+            if isinstance(u, str) and u not in seen:
+                seen.add(u)
+                candidates.append(u)
+        preferred = [u for u in candidates if u.startswith(self._PREFERRED_URI_PREFIXES)]
+        pruned = preferred[:max_uris] if preferred else [orig_uri]
+
+        if len(candidates) != len(pruned):
+            logger.info(
+                f"Pruned URI expansion for VALUES: {orig_uri} "
+                f"from {len(candidates)} to {len(pruned)} (preferred-only={bool(preferred)})."
+            )
+        return pruned
+
+    def _expand_values_uris_in_module(self, module: Dict[str, Any], max_uris: int = 6) -> None:
+        """
+        Expand VALUES object URI into a pruned list of equivalent URIs.
+        Mutates module in-place.
+        """
+        if not module.get("triples"):
+            return
+
+        for t in module["triples"]:
+            p_str = self._format_term(t.get("pred"))
+            if p_str != "VALUES":
+                continue
+
+            obj = t.get("obj", {})
+            if obj.get("type") != "uri":
+                continue
+            orig_uri = obj.get("var_label")
+            if not isinstance(orig_uri, str):
+                # already expanded or malformed
+                continue
+            expanded = find_equivalent_uris(orig_uri) or []
+            pruned = self._prune_equivalent_uris(orig_uri, expanded, max_uris=max_uris)
+
+            # store as list so execution-mode can emit multiple URIs
+            obj["var_label"] = pruned
+
+    
+    def _recursive_variable_dry_run(self, new_module: Dict[str, Any], def_elem: Dict[str, Any], def_var: List[Dict[str, Any]], state_backup_v: Dict[str, Any], depth: int = 0) -> bool:
+        # TERMINATION CONDITION: we reach depth equal to length of defined variables
+        if depth >= len(def_var):
+            # --- URI EXPANSION LOGIC ---
+            self._expand_values_uris_in_module(new_module, max_uris=4)
+            # ---------------------------
+
+            if new_module.get("filter_st"):
+                for fl in new_module.get("filter_st", []):
+                    self.filter_st.append(fl)
+                                        
+            if new_module.get("triples"):
+                self.where.append(new_module)
+
+            logger.info(f"Testing module {new_module.get('id', 'unknown')} in dry run.")
+
+            try:
+                self.dry_run_test()
+                return True
+            except Exception as e:
+                logger.error(e)
+                return False
+            finally:
+                # ALWAYS revert container state
+                self.where = copy.deepcopy(state_backup_v["where"])
+                self.filter_st = copy.deepcopy(state_backup_v["filter_st"])
+                self.variable_registry = copy.deepcopy(state_backup_v["variable_registry"])
+                self.select = copy.deepcopy(state_backup_v["select"])
+                logger.info(f"Testing module {new_module.get('id', 'unknown')} removed after dry run.")
+            
+
+        var_name = def_elem["var_name"]
+        var_label = def_elem["var_label"]
+        next_var = def_var[depth + 1] if depth + 1 < len(def_var) else None
+
+        # New variable: we don't have to modify the module
+        if var_name not in self.variable_registry:
+            return self._recursive_variable_dry_run(
+                copy.deepcopy(new_module),
+                next_var,
+                def_var,
+                state_backup_v,
+                depth + 1
+            )
+        # Collision: try reusing any registry var with same label
+        for reg_var_name, reg_var_el in self.variable_registry.items():
+            if reg_var_el["var_label"] == var_label:
+                candidate_module = copy.deepcopy(new_module)
+                self._modify_var(candidate_module, var_name, reg_var_name)
+
+                if self._recursive_variable_dry_run(
+                    candidate_module,
+                    next_var,
+                    def_var,
+                    state_backup_v,
+                    depth + 1
+                ):
+                    return True
+                logger.info(
+                    f"Dry run failed when testing variable '{reg_var_name}' "
+                    f"for conflict resolution at depth {depth}."
+                )
+
+        # Collision: try renaming (base + next free)
+        base = self._base_var_name(var_name)
+        new_var_name = self._next_free_var_name(base)
+
+        candidate_module = copy.deepcopy(new_module)
+        self._modify_var(candidate_module, var_name, new_var_name)
+
+        if self._recursive_variable_dry_run(
+            candidate_module,
+            next_var,
+            def_var,
+            state_backup_v,
+            depth + 1
+        ):
+            return True
+
+        logger.info(
+            f"Dry run failed when testing renamed variable '{new_var_name}' "
+            f"for conflict resolution at depth {depth}."
+        )
+        return False
+    
+    def _recursive_variable_retr_opt(self, new_module: Dict[str, Any], def_elem: Dict[str, Any], def_var: List[Dict[str, Any]], state_backup_v: Dict[str, Any], options: Dict[str, Any], current_config: Dict[str, str], depth: int = 0,) -> Dict[str, Any]:
+        # TERMINATION CONDITION: we reach depth equal to length of defined variables
+        if depth >= len(def_var):
+            # --- URI EXPANSION LOGIC ---
+            self._expand_values_uris_in_module(new_module, max_uris=4)
+            # ---------------------------
+
+            if new_module.get("filter_st"):
+                for fl in new_module.get("filter_st", []):
+                    self.filter_st.append(fl)
+                                        
+            if new_module.get("triples"):
+                self.where.append(new_module)
+            
+            logger.info(f"Testing module {new_module.get('id', 'unknown')} in retrieval of options.")
+            try:
+                self.dry_run_test()
+                for var_name, assigned_name in current_config.items():
+                    if assigned_name not in options[var_name]:
+                        options[var_name].append(assigned_name)
+            except Exception as e:
+                logger.error(e)
+            finally:
+                # ALWAYS revert container state
+                self.where = copy.deepcopy(state_backup_v["where"])
+                self.filter_st = copy.deepcopy(state_backup_v["filter_st"])
+                self.variable_registry = copy.deepcopy(state_backup_v["variable_registry"])
+                self.select = copy.deepcopy(state_backup_v["select"])
+                logger.info(f"Testing module {new_module.get('id', 'unknown')} removed after retrieval of options.")
+
+            return options
+            
+
+        var_name = def_elem["var_name"]
+        var_label = def_elem["var_label"]
+        next_var = def_var[depth + 1] if depth + 1 < len(def_var) else None
+
+        # New variable: we don't have to modify the module
+        if var_name not in self.variable_registry.keys():
+            cfg = dict(current_config)
+            cfg[var_name] = var_name
+            logger.info(f"Variable '{var_name}' is new, proceeding without modification.")
+            return self._recursive_variable_retr_opt(
+                copy.deepcopy(new_module),
+                next_var,
+                def_var,
+                state_backup_v,
+                options,
+                cfg,
+                depth + 1,
+            )
+        # Handle collision: branch over reuse candidates (same var_label)
+        for reg_var_name, reg_var_el in self.variable_registry.items():
+            if reg_var_el["var_label"] == var_label:
+                candidate_module = copy.deepcopy(new_module)
+                self._modify_var(candidate_module, var_name, reg_var_name)
+
+                cfg = dict(current_config)
+                cfg[var_name] = reg_var_name
+
+                options = self._recursive_variable_retr_opt(
+                    candidate_module,
+                    next_var,
+                    def_var,
+                    state_backup_v,
+                    options,
+                    cfg,
+                    depth + 1,
+                )
+        # Collision: branch over rename option
+        base = self._base_var_name(var_name)
+        new_var_name = self._next_free_var_name(base)
+
+        candidate_module = copy.deepcopy(new_module)
+        self._modify_var(candidate_module, var_name, new_var_name)
+
+        cfg = dict(current_config)
+        cfg[var_name] = new_var_name
+
+        options = self._recursive_variable_retr_opt(
+            candidate_module,
+            next_var,
+            def_var,
+            state_backup_v,
+            options,
+            cfg,
+            depth + 1,
+        )
+
+        return options
+    
+    def _find_var_in_module_by_label(self, module: Dict[str, Any], var_label: str) -> Optional[str]:
+        """
+        Return the current var_name in `module` that corresponds to `var_label`
+        (e.g. 'casting_1' for label 'mus:M6_Casting').
+        """
+        for elem in module.get("defined_vars", []) or []:
+            if elem.get("var_label") == var_label:
+                return elem.get("var_name")
+        return None
 
     async def _process_variables(self, module: Dict[str, Any], dry_run: bool = False) -> Dict[str, Any]:
         """
@@ -403,14 +704,13 @@ class QueryContainer:
             The processed module with variables renamed as needed.
         """
 
-        new_module = module.copy()
+        new_module = copy.deepcopy(module)
         # BACKUP STATE
         state_backup_v = {
-            "where": self.where.copy(),
-            "filter_st": self.filter_st.copy(),
-            "variable_registry": {k: v.copy() for k, v in self.variable_registry.items()},
-            # deeply copy select to avoid issues with modifications
-            "select": [s.copy() for s in self.select] 
+            "where": copy.deepcopy(self.where),
+            "filter_st": copy.deepcopy(self.filter_st),
+            "variable_registry": copy.deepcopy(self.variable_registry),
+            "select": copy.deepcopy(self.select)
         }
 
         if self.track_dep:
@@ -425,81 +725,42 @@ class QueryContainer:
                                 break
             # Check on defined variables
             if "defined_vars" in module.keys():
-                for def_elem in module["defined_vars"]:
-                    var_name = def_elem["var_name"]
-                    var_label = def_elem["var_label"]
-                    # New variable -> register and update the count of all the others with same URI
-                    if var_name not in self.variable_registry.keys():
-                        if var_label not in [v["var_label"] for v in self.variable_registry.values()]:
-                            self.variable_registry[var_name] = {"var_label": var_label, "count": 1}
-                        else:
-                            for existing_var, var_info in self.variable_registry.items():
-                                if var_info["var_label"] == var_label:
-                                    # Maintain count
-                                    count = var_info["count"]
-                                    self.variable_registry[var_name] = {"var_label": var_label, "count": count}
-                                    self._update_variable_counter(var_label)
-                                    break
-                    # Do not change name for query builder generated variables, TODO it works but logic is not most efficient
-                    elif "query_builder" in module["type"]:
-                        option_list = []
-                        for reg_var_name, reg_var_el in self.variable_registry.items():
-                            if reg_var_el["var_label"] == var_label:
-                                option_list.append(reg_var_name)
-                        chosen_var = option_list[0]
-                        self._modify_var(new_module, var_name, chosen_var)
-                    # Handle collision using LLM-based sampling
+                if dry_run:
+                    if not self._recursive_variable_dry_run(new_module, new_module["defined_vars"][0], new_module["defined_vars"], state_backup_v):
+                        raise Exception("Dry run variable conflict resolution failed.")
                     else:
-                        count = self.variable_registry[var_name]["count"]
-                        working_query = self._parse_for_llm(module, def_elem)
-                        option_list = []
-                        initial_var_list = self.variable_registry.items() + [(f"{var_name}_{count}", {"var_label": var_label})] 
-                        for reg_var_name, reg_var_el in initial_var_list:
-                            if reg_var_el["var_label"] == var_label:
-                                # Perform Dry Run to ensure variable can be used
-                                if dry_run:
-                                    self._modify_var(new_module, var_name, reg_var_name)
-                                    # --- URI EXPANSION LOGIC ---
-                                    if new_module.get("triples"):
-                                        for t in new_module["triples"]:
-                                            p_str = self._format_term(t.get("pred"))
-                                            # Check if predicate is VALUES and object is URI
-                                            if p_str == "VALUES" and t.get("obj", {}).get("type") == "uri":
-                                                orig_uri = t["obj"].get("var_label")
-                                                # If label is already a list, skip (already expanded)
-                                                if isinstance(orig_uri, str):
-                                                    expanded_uris = find_equivalent_uris(orig_uri)
-                                                    if len(expanded_uris) > 0:
-                                                        t["obj"]["var_label"] = expanded_uris
-                                    # ---------------------------
+                        return new_module
+                else:
+                    options_dict = {var_name : [] for var_name in [def_elem["var_name"] for def_elem in module["defined_vars"]]}
+                    current_config = {var_name : "" for var_name in [def_elem["var_name"] for def_elem in module["defined_vars"]]}
+                    logger.info(f"The defined variables are {module['defined_vars']}")
+                    logger.info(f"The options for conflict resolution are: {options_dict}")
+                    options_dict = self._recursive_variable_retr_opt(new_module, new_module["defined_vars"][0], new_module["defined_vars"], state_backup_v, options_dict, current_config)
+                    logger.info(f"The final options for conflict resolution are: {options_dict}")
+                    
+                    final_module = copy.deepcopy(new_module)
+                    
+                    for var_name, opts in options_dict.items():
+                        # Find metadata (label) from ORIGINAL module, because it's stable
+                        def_elem = None
+                        for d in module.get("defined_vars", []):
+                            if d.get("var_name") == var_name:
+                                def_elem = d
+                                break
+                        if def_elem is None:
+                            raise Exception(f"Defined variable '{var_name}' not found in module during conflict resolution.")
 
-                                    if new_module.get("filter_st"):
-                                        for fl in new_module.get("filter_st", []):
-                                            self.filter_st.append(fl)
-                                        
-                                    if new_module.get("triples"):
-                                        self.where.append(new_module)
-            
-                                    elif module["scope"] == "optional":
-                                        logger.warning("Optional modules not yet implemented.")
-                                        raise Exception("Optional modules not yet implemented.")
-
-                                    # 2. DRY RUN TEST
-                                    try:
-                                        self.dry_run_test()
-                                        option_list.append(reg_var_name)
-                                    except Exception as e:
-                                        # REVERT STATE
-                                        logger.info(f"Dry run failed when testing variable '{reg_var_name}' for conflict resolution: {e}")
-                                    # Revert state after dry run
-                                    self.where = state_backup_v["where"]
-                                    self.filter_st = state_backup_v["filter_st"]
-                                    self.variable_registry = state_backup_v["variable_registry"]
-                                    self.select = state_backup_v["select"]
-                                else:                                    
-                                    option_list.append(reg_var_name)
-                        options = "\n".join([f"- Option {i}: '{opt}'" for i, opt in enumerate(option_list)])
-                        pattern_intent = f"""solving the conflict for '{var_name}' by determining whether to 
+                        var_label = def_elem["var_label"]
+                        if len(opts) == 0:
+                            logger.error(f"No valid options found for variable '{var_name}' during conflict resolution.")
+                            raise Exception(f"No valid options found for variable '{var_name}' during conflict resolution.")
+                        if len(opts) == 1:
+                            chosen_var = opts[0]
+                        else:
+                            working_query = self._parse_for_llm(new_module, def_elem)
+                            count = self.variable_registry[var_name]["count"]
+                            options = "\n".join([f"- Option {i}: '{opt}'" for i, opt in enumerate(opts)])
+                            pattern_intent = f"""solving the conflict for '{var_name}' by determining whether to 
 rename it or use one of the existing variables.
 
 This is the current query structure, where:
@@ -514,40 +775,58 @@ The current query is asking about: '{self.question}'
 
 Therefore, the current options to put in place of '<<{var_name}>>' are:
 {options}
-                        """
-                        system_prompt = """You are an expert SPARQL query builder assisting in variable naming.
+                            """
+                            system_prompt = """You are an expert SPARQL query builder assisting in variable naming.
 You are given a SPARQL query and a list of options to replace a variable in the query.
 You must choose one of the options and return the index of the chosen option.
 You should select an option different to 0 ONLY if the variable represent a new entity of the same class of the one in the query, used for example for comparison or for checking relations.
 """
-                        # Define callback to capture sampling logs
-                        def log_sampling(log_data: Dict[str, Any]):
-                            self.sampling_logs.append(log_data)
-                            
-                        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling)
-                        try:
-                            match = re.search(r'\d+', llm_answer)
-                            if match:
-                                index = int(match.group())
-                            else:
-                                index = len(option_list)
-                            if index == len(option_list):
-                                # Rename + add to registry
-                                new_var_name = f"{var_name}_{count}"
-                                self._modify_var(new_module, var_name, new_var_name)
-                                self._update_variable_counter(var_label)
-                            else:
-                                # Use existing variable
-                                chosen_var = option_list[index]
-                                self._modify_var(new_module, var_name, chosen_var)
-                        except (ValueError, IndexError):
-                            logger.error(f"LLM returned invalid index '{llm_answer}' for variable conflict resolution.")
-                            # Default to renaming
-                            new_var_name = f"{var_name}_{count}"
-                            self._modify_var(new_module, var_name, new_var_name)
+                            # Define callback to capture sampling logs
+                            def log_sampling(log_data: Dict[str, Any]):
+                                self.sampling_logs.append(log_data)
+                                
+                            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling)
+                            try:
+                                match = re.search(r'\d+', llm_answer)
+                                if match:
+                                    index = int(match.group())
+                                    # Use existing variable
+                                    chosen_var = opts[index]
+                                    logger.info(f"The options were: {opts}, LLM chose index: {index} corresponding to variable '{chosen_var}'")
+                                else:
+                                    # DEFAULTING
+                                    index = len(opts)
+                                    # Rename + add to registry
+                                    chosen_var = f"{var_name}_{count}"
+                                    logger.warning(f"LLM response did not contain a valid index. Defaulting to renaming with '{chosen_var}'")
+                            except (ValueError, IndexError):
+                                logger.error(f"LLM returned invalid index '{llm_answer}' for variable conflict resolution.")
+                                # Default to renaming
+                                chosen_var = f"{var_name}_{count}"
+                        
+                        # KEY CHANGE: replace the *current* var name in the module, not the original logical name
+                        current_var_in_module = self._find_var_in_module_by_label(final_module, var_label)
+
+                        if current_var_in_module is None:
+                            # fallback: if defined_vars isn't updated, scan triples for exact var_name
+                            current_var_in_module = var_name
+
+                        logger.info(
+                            f"Applying resolution for '{var_name}' ({var_label}): "
+                            f"current='{current_var_in_module}' -> chosen='{chosen_var}'"
+                        )
+
+                        self._modify_var(final_module, current_var_in_module, chosen_var)
+                        if chosen_var not in self.variable_registry:
                             self._update_variable_counter(var_label)
-                    
-        return new_module
+                            self.variable_registry[chosen_var] = {
+                                "var_label": var_label,
+                                "count": 1
+                            }
+                        else:
+                            self._update_variable_counter(var_label)
+        logger.info(f"Final module after variable processing: {final_module['triples'] if 'triples' in final_module else 'No triples'}")     
+        return final_module
     
     def get_variable_uri(self, var_name: str) -> Optional[str]:
         """Retrieve variable info from the registry."""
@@ -556,7 +835,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         return None
 
     def get_varName_from_uri(self, var_uri: str) -> Optional[str]:
-        for var, val in self.variable_registry:
+        for var, val in self.variable_registry.items():
             if val["var_label"] == var_uri:
                 return var
         return None
@@ -598,7 +877,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         """Add a single variable to the SELECT list or update its aggregator."""
         existing = next((v for v in self.select if v["var_name"] == var_name), None)
         if var_name not in self.variable_registry.keys():
-            raise Exception(f"Variable {var_name} not found in varaible registry")
+            raise Exception(f"Variable {var_name} not found in variable registry")
         
         if aggregator:
             aggregator = aggregator.upper()
@@ -632,7 +911,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
             
         # Execute Query with LIMIT 1
         query_str = self.to_string(for_execution=True)
-        res = execute_sparql_query(query_str, limit=1)
+        res = execute_sparql_query(query_str, limit=1, timeout=15)
         
         if not res["success"]:
             logger.warning(f"Dry Run Failed: Query execution error: {res.get('error')}")

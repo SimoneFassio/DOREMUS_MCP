@@ -146,16 +146,23 @@ async def build_query(question: str,
         
         *Example:* "Works written for violin, clarinet and piano (strictly)"
         -> build_query(...)
-        -> associate_to_N_entities(expression, violin, q_id)
-        -> associate_to_N_entities(expression, clarinet, q_id)
-        -> associate_to_N_entities(expression, piano, q_id)
+        -> find_candidate_entities("violin", "vocabulary") -> violin_uri
+        -> find_candidate_entities("clarinet", "vocabulary") -> clarinet_uri
+        -> find_candidate_entities("piano", "vocabulary") -> piano_uri
+        -> associate_to_N_entities(expression, violin_uri, q_id)
+        -> associate_to_N_entities(expression, clarinet_uri, q_id)
+        -> associate_to_N_entities(expression, piano_uri, q_id)
         -> groupBy(casting, q_id, castingDetail, COUNT, equal, 3) 
         (Note: Logic is 'equal 3' because we have 3 distinct instrument parts)
         
         *Example:* "Works for String Quartet" (2 Violins, 1 Viola, 1 Cello = 3 distinct parts usually)
-        -> associate_to_N_entities(expression, violin, q_id, 2)
-        -> associate_to_N_entities(expression, viola, q_id, 1)
-        -> associate_to_N_entities(expression, cello, q_id, 1)
+        -> build_query(...)
+        -> find_candidate_entities("violin", "vocabulary") -> violin_uri
+        -> find_candidate_entities("viola", "vocabulary") -> viola_uri
+        -> find_candidate_entities("cello", "vocabulary") -> cello_uri
+        -> associate_to_N_entities(expression, violin_uri, q_id, 2)
+        -> associate_to_N_entities(expression, viola_uri, q_id, 1)
+        -> associate_to_N_entities(expression, cello_uri, q_id, 1)
         -> groupBy(casting, q_id, castingDetail, COUNT, equal, 3)
         """
 
@@ -171,8 +178,10 @@ async def build_query(question: str,
         
         *Example:* "Works written for oboe and orchestra after 1900"
         -> build_query(..., filters={})
-        -> associate_to_N_entities(expression, oboe, q_id)
-        -> associate_to_N_entities(expression, orchestra, q_id)
+        -> find_candidate_entities("oboe", "vocabulary") -> oboe_uri
+        -> find_candidate_entities("orchestra", "vocabulary") -> orchestra_uri
+        -> associate_to_N_entities(expression, oboe_uri, q_id)
+        -> associate_to_N_entities(expression, orchestra_uri, q_id)
         -> has_quantity_of(expCreation, time-span, more, "01-01-1900", q_id)
         """
 
