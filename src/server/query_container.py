@@ -724,7 +724,7 @@ class QueryContainer:
                                 self._modify_var(new_module, req_elem["var_name"], reg_name)
                                 break
             # Check on defined variables
-            if "defined_vars" in module.keys():
+            if "defined_vars" in module.keys() and len(module["defined_vars"]) > 0:
                 if dry_run:
                     if not self._recursive_variable_dry_run(new_module, new_module["defined_vars"][0], new_module["defined_vars"], state_backup_v):
                         raise Exception("Dry run variable conflict resolution failed.")
@@ -819,6 +819,8 @@ You should select an option different to 0 ONLY if the variable represent a new 
                             }
                         else:
                             self._update_variable_counter(var_label)
+            else:
+                final_module = new_module
         logger.info(f"Final module after variable processing: {final_module['triples'] if 'triples' in final_module else 'No triples'}")     
         return final_module
     
