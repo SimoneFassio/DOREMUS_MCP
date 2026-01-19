@@ -467,13 +467,6 @@ The options available are:
     logger.info(f"Selected path for associating {subject} to {obj} is: {triples}")
 
     logger.info(f"associate_to_N_entities called with raw n={n!r}")
-    if n is not None:
-        try:
-            n = int(n)
-        except Exception:
-            raise Exception(f"Invalid n: expected integer, got {n!r}")
-        if n <= 0:
-            raise Exception(f"Invalid n={n}. n must be a positive integer (or omit it).")
     
     if n is not None:
         quantity_property = get_quantity_property(selected_path[-3][1])

@@ -248,6 +248,13 @@ async def associate_to_N_entities(
         query_id="current_id"
     )
     """
+    if n is not None:
+        try:
+            n = int(n)
+        except Exception:
+            raise Exception(f"Invalid n: expected integer, got {n!r}")
+        if n <= 0:
+            raise Exception(f"Invalid n={n}. n must be a positive integer (or omit it).")
 
     return await associate_to_N_entities_internal(subject, obj, query_id, n)
 
