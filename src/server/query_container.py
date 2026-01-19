@@ -725,7 +725,18 @@ class QueryContainer:
                                 break
             # Check on defined variables
             if "defined_vars" in module.keys() and len(module["defined_vars"]) > 0:
-                if dry_run:
+                if all(def_elem["var_name"] not in self.variable_registry for def_elem in module["defined_vars"]):
+                    # No conflicts, simply register all defined variables
+                    for def_elem in module["defined_vars"]:
+                        var_name = def_elem["var_name"]
+                        var_label = def_elem["var_label"]
+                        self._update_variable_counter(var_label)
+                        self.variable_registry[var_name] = {
+                            "var_label": var_label,
+                            "count": 1
+                        }
+                    final_module = new_module
+                elif dry_run:
                     if not self._recursive_variable_dry_run(new_module, new_module["defined_vars"][0], new_module["defined_vars"], state_backup_v):
                         raise Exception("Dry run variable conflict resolution failed.")
                     else:

@@ -176,13 +176,13 @@ async def build_query(question: str,
         3. `has_quantity_of` if a date/time is mentioned.
         4. DO NOT use `groupBy` (we allow other instruments to be present).
         
-        *Example:* "Works written for oboe and orchestra after 1900"
+        *Example:* "Works written for oboe and orchestra in 1900"
         -> build_query(..., filters={})
         -> find_candidate_entities("oboe", "vocabulary") -> oboe_uri
         -> find_candidate_entities("orchestra", "vocabulary") -> orchestra_uri
         -> associate_to_N_entities(expression, oboe_uri, q_id)
         -> associate_to_N_entities(expression, orchestra_uri, q_id)
-        -> has_quantity_of(expCreation, time-span, more, "01-01-1900", q_id)
+        -> has_quantity_of(expCreation, time-span, range, "01-01-1900", "31-12-1900", q_id)
         """
 
     # CATEGORY 1: simple metadata queries that can be asked with query builder -> default
