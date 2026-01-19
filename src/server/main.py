@@ -330,7 +330,7 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
     For ecrm:P4_has_time-span, input format YYYY-MM-DD or YYYY is supported.
 
     Args:
-        subject: The subject entity variable name (e.g., "expression")
+        subject: The subject entity variable name (e.g., "expCreation")
         property: The property uri (e.g., "mus:U78_estimated_duration" or "time-span")
         type: "less", "more", "equal", or "range"
         value: value (number or date), in case of "range" type, it is the start value
@@ -341,8 +341,8 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
         Dict containing success status and generated SPARQL.
 
     Examples:
-        - Input: subject="expression", property="mus:U78_estimated_duration", type="less", value="900", valueEnd="", query_id="..."
-          Output: generated_query="... FILTER ( ?quantity_val <= 900) ..."
+        - Input: subject="expression", property="mus:U78_estimated_duration", type="less", value="PT1H10M", valueEnd="", query_id="..."
+          Output: generated_query="... FILTER ( ?quantity_val <= "PT1H10M"^^xsd:duration) ..." (ISO 8601 duration format)
         - Input: subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1870", valueEnd="1913", query_id="..."
           Output: generated_query="... FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear) ..."
     """

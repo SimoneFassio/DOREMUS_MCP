@@ -1,12 +1,12 @@
 # category: "Publications"
 # question: "Give me all the recordings of opera whose duration is greater than 1 hour"
 # query:
-SELECT DISTINCT ?t
+SELECT DISTINCT ?t ?duration
 WHERE {
   ?t mus:U51_is_partial_or_full_recording_of / mus:U54_is_performed_expression_of ?work.
   ?work mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/op> .
 
   ?t mus:U53_has_duration ?duration.
 
-  FILTER(?duration > 36000)
+  FILTER(xsd:dayTimeDuration(str(?duration))> "PT1H"^^xsd:duration)
 }

@@ -547,10 +547,18 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         # Value processing (dates vs numbers)
         # Check if property implies date
         is_date = "time-span" in propery
+        is_duration = "duration" in propery
         
         def format_value(val):
             if is_date:
                 return _process_date(val)
+            elif is_duration:
+                # ISO 8601 Duration check (Regex)
+                # Matches PnYnMnDTnHnMnS format, allowing optional parts but ensuring structure.
+                iso8601_pattern = r"^P(?!$)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?!$)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$"
+                if not re.match(iso8601_pattern, val):
+                    raise Exception("Duration value must be in valid ISO 8601 format (e.g. 'PT1H', 'P10M').")
+                return f'"{val}"^^xsd:duration'
             else:
                 # Check if number
                 if val.replace('.', '', 1).isdigit():
@@ -634,6 +642,14 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
 
         # 3. Construct Filters
         # Filter ops: <=, >=, =, and logical combinations
+        
+        # Helpler for duration comparison syntax
+        def fmt_cmp(var, op, val):
+            if is_duration:
+                return f"xsd:dayTimeDuration(str({var})) {op} {val}"
+            else:
+                return f"{var} {op} {val}"
+
         if type == "less":
             # <= valueStart
             # If time-span: usually "end time is before X" ?
@@ -643,7 +659,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                  # Usually "written before 1900" -> End date < 1900.
                  filter_st.append({'function': '', 'args': [f'?end <= {val_start_fmt}']})
             else:
-                 filter_st.append({'function': '', 'args': [f'{target_var} <= {val_start_fmt}']})
+                 filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '<=', val_start_fmt)]})
                  
         elif type == "more":
             # >= valueStart
@@ -651,7 +667,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
             if is_date:
                 filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt}']})
             else:
-                filter_st.append({'function': '', 'args': [f'{target_var} >= {val_start_fmt}']})
+                filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '>=', val_start_fmt)]})
                 
         elif type == "equal":
             # = valueStart
@@ -662,7 +678,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                 # But here user says "equal". 
                 filter_st.append({'function': '', 'args': [f'?start = {val_start_fmt}']})
             else:
-                filter_st.append({'function': '', 'args': [f'{target_var} = {val_start_fmt}']})
+                filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '=', val_start_fmt)]})
                 
         elif type == "range":
             # >= valueStart AND <= valueEnd
@@ -673,7 +689,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                 # ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear
                 filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt} AND ?end <= {val_end_fmt}']})
             else:
-                filter_st.append({'function': '', 'args': [f'{target_var} >= {val_start_fmt} AND {target_var} <= {val_end_fmt}']})
+                filter_st.append({'function': '', 'args': [f'{fmt_cmp(target_var, ">=", val_start_fmt)} AND {fmt_cmp(target_var, "<=", val_end_fmt)}']})
 
         # 4. Add Module
         module = {
