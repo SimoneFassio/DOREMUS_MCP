@@ -111,7 +111,7 @@ async def query_works(
     # 2. Variable Resolvers
     resolved_composer = await _resolve_entity(composer_name, "artist", question, log_sampling) if composer_name else None
     resolved_genre = await _resolve_entity(genre, "vocabulary", question, log_sampling) if genre else None
-    resolved_place = await _resolve_entity(place_of_composition, "others", question, log_sampling) if place_of_composition else None
+    resolved_place = await _resolve_entity(place_of_composition, "place", question, log_sampling) if place_of_composition else None
     resolved_key = await _resolve_entity(musical_key, "vocabulary", question, log_sampling) if musical_key else None
 
     # 3. Core Module: Expression & Title
@@ -376,7 +376,7 @@ async def query_performance(
     
     # Location Filter
     if location:
-        resolved_uri = await _resolve_entity(location, "others", question, log_sampling)
+        resolved_uri = await _resolve_entity(location, "place", question, log_sampling)
         if resolved_uri:
             location_triples.append({
                 "subj": create_triple_element("place", "ecrm:E53_Place", "var"),

@@ -135,12 +135,13 @@ def find_candidate_entities_utils(
     limit: int = 15
 ) -> Dict[str, Any]:
     normalized_type = (entity_type or "").strip().lower()
-    if normalized_type not in {"artist", "vocabulary", "others"}:
+    if normalized_type not in {"artist", "vocabulary", "place", "others"}:
         normalized_type = "others"
 
     label_predicates = {
         "artist": "foaf:name",
         "vocabulary": "skos:prefLabel",
+        "place": "geonames:name",
         "others": "rdfs:label",
     }
 

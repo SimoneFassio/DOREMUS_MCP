@@ -425,6 +425,7 @@ async def find_candidate_entities(
         entity_type: Search scope. Options:
             - "artist": Broad artist bucket covering people, ensembles, broadcasters, etc. Use COMPLETE names
             - "vocabulary": SKOS concepts such as genres, media of performance(instruments, etc.), keys (skos:Concept)
+            - "place": ECRM places and geonames (ecrm:E53_Place)
             - "others": Everything else; falls back to rdfs:label search (default)
 
     Returns:
@@ -433,7 +434,7 @@ async def find_candidate_entities(
     Examples:
         - find_candidate_entities("Ludwig van Beethoven", "artist")
         - find_candidate_entities("violin", "vocabulary")
-        - find_candidate_entities("Berlin", "others")
+        - find_candidate_entities("Berlin", "place")
     """
     return find_candidate_entities_internal(name, entity_type)
 
