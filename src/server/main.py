@@ -342,7 +342,7 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
     return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def add_triplet(
     subject: str, 
     subject_class: str, 
