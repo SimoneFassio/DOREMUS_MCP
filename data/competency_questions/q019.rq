@@ -15,4 +15,4 @@ WHERE {
           schema:deathDate ?death .
 
   FILTER ( year(?compositionDate) - year(?death) <= 5 )
-} ORDER BY ?compositionDate
+}

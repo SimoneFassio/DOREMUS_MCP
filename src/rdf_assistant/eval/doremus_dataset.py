@@ -20,9 +20,13 @@ def load_rq_files(directory):
         question = ""
         query_lines = []
         is_query_body = False
+        skip = False
         
         for line in content.splitlines():
-            if line.startswith("# question:"):
+            if line.startswith("# category2: \"Impossible\""):
+                skip = True
+                break
+            elif line.startswith("# question:"):
                 # Extract question content, handling quotes
                 match = re.search(r'# question:\s*"(.*)"', line)
                 if match:
@@ -38,7 +42,7 @@ def load_rq_files(directory):
             
         query = "\n".join(query_lines).strip()
         
-        if question and query:
+        if question and query and not skip:
             examples.append({
                 "inputs": {"query_input": question},
                 "outputs": {"rdf_query": query}

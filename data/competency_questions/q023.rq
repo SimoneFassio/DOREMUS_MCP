@@ -1,27 +1,22 @@
 # category: "Works and Expressions"
-# question: "Give me all the works for piano connected to other musical works"
+# question: "Give me pairs of works and components that together share a single piano casting."
 # query:
-SELECT DISTINCT ?work, SAMPLE(?title) as ?title, ?link, ?work2, SAMPLE(?title2) as ?title2
+SELECT ?expression (SAMPLE(?title) AS ?title) ?work2 (SAMPLE(?title2) AS ?title2)
 WHERE {
-  ?work ?link ?work2.
+  ?expression a efrbroo:F22_Self-Contained_Expression ;
+              rdfs:label ?title ;
+              mus:U13_has_casting ?casting .
 
-  ?work a efrbroo:F14_Individual_Work;
-        efrbroo:R9_is_realised_in ?expression .
+  ?work efrbroo:R9_is_realised_in ?expression ;
+        a efrbroo:F14_Individual_Work ;
+        ecrm:P148_has_component ?work2 .
 
-  ?expression rdfs:label ?title ;
-        mus:U13_has_casting ?casting .
+  ?casting mus:U23_has_casting_detail ?cDet .
+  ?cDet mus:U2_foresees_use_of_medium_of_performance / skos:exactMatch* <http://data.doremus.org/vocabulary/iaml/mop/kpf> .
 
-  { SELECT ?casting
-    WHERE {
-    ?casting mus:U23_has_casting_detail / mus:U2_foresees_use_of_medium_of_performance / skos:exactMatch* <http://data.doremus.org/vocabulary/iaml/mop/kpf> ;
-          mus:U23_has_casting_detail ?cDet .
-    } GROUP BY ?casting
-    HAVING (COUNT(?cDet) = 1)
-  }
-
-  ?work2 a efrbroo:F14_Individual_Work;
-        efrbroo:R9_is_realised_in / rdfs:label ?title2 .
+  ?work2 a efrbroo:F14_Individual_Work ;
+         efrbroo:R9_is_realised_in ?expression2 .
+  ?expression2 rdfs:label ?title2 .
 }
-ORDER BY ?title
-
-# Note: so far, we have in the database only link of type ecrm:P148_has_component
+GROUP BY ?expression ?work2 ?casting
+HAVING (COUNT(DISTINCT ?cDet) = 1)

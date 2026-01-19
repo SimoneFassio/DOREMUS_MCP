@@ -26,6 +26,3 @@ WHERE {
 
   FILTER ( ?start >= "1800"^^xsd:gYear AND ?end <= "1850"^^xsd:gYear )
 }
-ORDER BY ?start
-
-# Note: we have not the information about the composer nationality. We use the birth place

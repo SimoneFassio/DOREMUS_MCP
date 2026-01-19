@@ -8,6 +8,8 @@ WHERE {
   ?part ecrm:P14_carried_out_by ?artist ;
       mus:U1_used_medium_of_performance / skos:exactMatch* <http://www.mimo-db.eu/InstrumentsKeywords/4232> .
 
+  VALUES (?oboe) { ( <http://data.doremus.org/vocabulary/iaml/mop/wob> ) ( <http://www.mimo-db.eu/InstrumentsKeywords/4232> ) }
+
   ?artist rdfs:label ?name .
-  OPTIONAL { ?artist schema:birthDate ?birthDate }
-} ORDER BY ?artist
+  ?artist schema:birthDate ?birthDate
+}

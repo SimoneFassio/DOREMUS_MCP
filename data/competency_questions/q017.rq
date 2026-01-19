@@ -4,7 +4,7 @@
 # associate_to_N_entities(subject="expression", obj="dedicatee", query_id=query_id)
 # associate_to_N_entities(subject="expression", obj="performance", query_id=query_id)
 # query:
-SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?dedicatee, ?performance
+SELECT DISTINCT ?expression, SAMPLE(?title) as ?title
 WHERE {
   ?expression a efrbroo:F22_Self-Contained_Expression ;
           rdfs:label ?title ;

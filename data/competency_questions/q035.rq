@@ -1,5 +1,5 @@
 # category: "Recordings"
-# question: "Give me the cutting of all the recordings of Don Giovanni by Mozart"
+# question: "Retrieve the tracks and corresponding tracksets for all recordings of the opera Don Giovanni by Mozart"
 # query:
 SELECT DISTINCT ?trackset ?track
 WHERE {

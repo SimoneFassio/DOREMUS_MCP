@@ -12,4 +12,4 @@ WHERE {
   ?catalogue mus:U40_has_catalogue_name / modsrdf:identifier "BWV";
             mus:U41_has_catalogue_number ?catNum .
   FILTER (?catNum >= 30 and ?catNum <= 70 )
-} ORDER BY ?catNum
+}

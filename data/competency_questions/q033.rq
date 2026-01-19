@@ -1,4 +1,5 @@
 # category: "Recordings"
+# category2: "Impossible"
 # question: "Give me the name of the vocal soloist most recorded by Radio France in 2014"
 # query:
 SELECT DISTINCT ?artist SAMPLE(?artistName) as ?name COUNT(DISTINCT ?rec) as ?recording_num

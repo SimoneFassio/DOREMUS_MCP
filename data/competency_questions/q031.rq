@@ -1,7 +1,8 @@
 # category: "Performances"
+# category2: "Impossible"
 # question: "Give me all the works interpreted on at least one mop different from the casting of the work"
 # query:
-SELECT DISTINCT ?expression, ?performance, ?mop, group_concat(DISTINCT ?mopWork, ", ") AS ?mopWork
+SELECT DISTINCT ?expression, ?performance, ?mop
 WHERE {
   ?performance a mus:M42_Performed_Expression_Creation ;
     efrbroo:R17_created / mus:U54_is_performed_expression_of ?expression ;

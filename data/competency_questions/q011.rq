@@ -1,13 +1,13 @@
 # category: "Works and Expressions"
-# question: "Give me all the melodies for average voice between 1870 and 1913."
-# build_query(question="Give me all the melodies written for average voice between 1870 and 1913", template="Works", filters={"genre": "melody"})
+# question: "Give me all the melodies for baritone voice between 1870 and 1913."
+# build_query(question="Give me all the melodies written for baritone voice between 1870 and 1913", template="Works", filters={"genre": "melody"})
 # # associated_to_N_entities(expression, baritone)
 # # OR
 # # associated_to_N_entities(expression, midSoprano)
 # has_quantity_of(subject="expCreation", property="time-span", type="range", value="01-01-1870", valueEnd="01-01-1914", query_id=query_id)
 # groupBy_having(subject="expression", query_id=query_id)
 # query:
-SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?voix
+SELECT DISTINCT ?expression SAMPLE(?title) as ?title
 WHERE {
   ?expression a efrbroo:F22_Self-Contained_Expression ;
           rdfs:label ?title ;
@@ -15,17 +15,14 @@ WHERE {
           mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/mld> .
 
   ?casting mus:U23_has_casting_detail / mus:U2_foresees_use_of_medium_of_performance ?avgVoice .
-  ?avgVoice skos:prefLabel ?voix.
 
   ?expCreation efrbroo:R17_created ?expression ;
           ecrm:P4_has_time-span ?ts.
   ?ts time:hasEnd / time:inXSDDate ?end ;
                 time:hasBeginning / time:inXSDDate ?start .
 
-  FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear AND lang(?voix) = "en" )
+  FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear )
 
-  VALUES ?avgVoice { <http://data.doremus.org/vocabulary/iaml/mop/vbr> <http://data.doremus.org/vocabulary/iaml/mop/vms> }
+  VALUES ?avgVoice { <http://data.doremus.org/vocabulary/iaml/mop/vbr> }
 
-} GROUP BY ?expression ?voix
-
-# Note: we have not the information on the language of the text
+}

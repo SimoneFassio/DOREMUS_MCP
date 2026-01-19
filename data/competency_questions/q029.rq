@@ -1,7 +1,7 @@
 # category: "Performances"
 # question: "Give me the list of concerts given at the Philharmonie de Paris in which the orchestra is directed by the solo violin"
 # query:
-SELECT DISTINCT ?concert ?conductor ?note
+SELECT DISTINCT ?concert
 WHERE {
   ?concert ecrm:P9_consists_of / ecrm:P9_consists_of* ?activityDir ;
       ecrm:P9_consists_of / ecrm:P9_consists_of* ?activityMus ;
@@ -12,6 +12,4 @@ WHERE {
 
   ?activityMus ecrm:P14_carried_out_by ?conductor ;
     mus:U1_used_medium_of_performance / skos:exactMatch* <http://www.mimo-db.eu/InstrumentsKeywords/3573> .
-
-  OPTIONAL { ?concert mus:U205_has_cast_detail ?note }
 }

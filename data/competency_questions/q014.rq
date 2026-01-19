@@ -10,13 +10,15 @@ WHERE {
           rdfs:label ?title ;
           mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/op> .
 
-  ?expCreation efrbroo:R17_created ?expression ;
-          ecrm:P9_consists_of [ ecrm:P14_carried_out_by ?composer  ;
-                                 mus:U31_had_function <http://data.doremus.org/vocabulary/function/composer>
-                               ] ,
-                               [ ecrm:P14_carried_out_by ?composer  ;
-                                    mus:U31_had_function <http://data.doremus.org/vocabulary/function/librettist>
-                               ] .
-
+  ?expCreation efrbroo:R17_created ?expression .
+  
+  ?expCreation ecrm:P9_consists_of ?activity1 .
+  ?activity1 ecrm:P14_carried_out_by ?composer ;
+             mus:U31_had_function <http://data.doremus.org/vocabulary/function/composer> .
+              
+  ?expCreation ecrm:P9_consists_of ?activity2 .
+  ?activity2 ecrm:P14_carried_out_by ?composer ;                
+             mus:U31_had_function <http://data.doremus.org/vocabulary/function/librettist> .
+  
   ?composer foaf:name ?composerName .
 }

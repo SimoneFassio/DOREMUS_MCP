@@ -15,6 +15,4 @@ WHERE {
                 time:hasBeginning / time:inXSDDate ?start .
 
   FILTER ( ?start >= "1900"^^xsd:gYear AND ?end < "2000"^^xsd:gYear )
-} ORDER BY ?start
-
-# Note: we have not the information about the topic
+}

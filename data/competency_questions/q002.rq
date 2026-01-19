@@ -15,8 +15,3 @@ WHERE {
 
   FILTER ( ?start <= "1836"^^xsd:gYear AND ?end >= "1836"^^xsd:gYear )
 }
-ORDER BY ?start
-
-
-# note: I restricted the query to 1 graph (http://data.doremus.org/philharmonie) because it is very slow.
-# Comment the FROM for the full answer

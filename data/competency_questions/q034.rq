@@ -1,5 +1,5 @@
 # category: "Recordings"
-# question: "Give me the list of all the concerts recorded by Radio France at the Cité de la Musique between 1995 and 2014"
+# question: "Give me the list of all the concerts recorded by Radio France at the Philharmonie de Paris between 1995 and 2014"
 # query:
 SELECT DISTINCT ?concert SAMPLE(?title) year(?time)
 WHERE {
@@ -10,7 +10,6 @@ WHERE {
        efrbroo:R20_recorded ?concert .
 
  <http://data.doremus.org/place/bd21be9c-3f2b-3aa3-a460-114d579eabe6> owl:sameAs ?place.
-
 
  ?concert a efrbroo:F31_Performance;
   rdfs:label ?title.

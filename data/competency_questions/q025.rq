@@ -1,5 +1,5 @@
 # category: "Works and Expressions"
-# question: "Give me all the works related to popular music"
+# question: "Find musical works that are specifically categorized by their geographical or regional origin."
 # query:
 SELECT * WHERE {
    ?expression rdfs:label ?label ;
