@@ -199,7 +199,7 @@ async def query_works(
                     "obj": create_triple_element(code, composer_nationality, "literal")
                 })
             else:
-                logger.warning(f"Unknown nationality code for: {composer_nationality}")
+                raise ValueError(f"Unknown nationality: {composer_nationality}, available: {COUNTRY_CODES.keys()}")
         
         composer_module = {
             "id": "work_composer_filter",
@@ -330,7 +330,6 @@ async def query_performance(
     def log_sampling(log_data: Dict[str, Any]):
         qc.sampling_logs.append(log_data)
     
-    
     # Core Module: Performance Entity
     core_module = {
         "id": "performance_core",
@@ -364,19 +363,19 @@ async def query_performance(
             ]
         }
         await qc.add_module(title_filter_module)
-
-    location_triples = []
-    location_filters = []
-
-    location_triples.append({
-        "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
-        "pred": create_triple_element("ecrm:P7_took_place_at", "ecrm:P7_took_place_at", "uri"),
-        "obj": create_triple_element("place", "ecrm:E53_Place", "var")
-    })
     
     # Location Filter
     if location:
+        location_triples = []
+        location_filters = []
+
+        location_triples.append({
+            "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
+            "pred": create_triple_element("ecrm:P7_took_place_at", "ecrm:P7_took_place_at", "uri"),
+            "obj": create_triple_element("place", "ecrm:E53_Place", "var")
+        })
         resolved_uri = await _resolve_entity(location, "place", question, log_sampling)
+
         if resolved_uri:
             location_triples.append({
                 "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
@@ -538,23 +537,33 @@ async def query_artist(
              }
              await qc.add_module(nat_module)
          else:
-             logger.warning(f"Unknown nationality code for: {nationality}")
+             raise ValueError(f"Unknown nationality: {nationality}, list of available nationalities: {list(COUNTRY_CODES.keys())}")
 
     # Birth Place: ?artist schema:birthPlace ?bp . ?bp rdfs:label ?bpLabel
     if birth_place:
+        resolved_bp = await _resolve_entity(birth_place, "place", question, log_sampling)
         triples = [
             {
             "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
             "pred": create_triple_element("schema:birthPlace", "schema:birthPlace", "uri"),
             "obj": create_triple_element("bp", "", "var")
-            },
-            {
-            "subj": create_triple_element("bp", "", "var"),
-            "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
-            "obj": create_triple_element("bpLabel", "", "var")
             }
         ]
-        filter_st = [{'function': 'REGEX', 'args': ['?bpLabel', f"\'{birth_place}\'", "\'i\'"]}]
+        filter_st = []
+
+        if resolved_bp:
+            triples.append({
+                "subj": create_triple_element("bp", "", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_bp, resolved_bp, "uri")
+            })
+        else:
+            triples.append({
+                "subj": create_triple_element("bp", "", "var"),
+                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "obj": create_triple_element("bpLabel", "", "var")
+            })
+            filter_st = [{'function': 'REGEX', 'args': ['?bpLabel', f"\'{birth_place}\'", "\'i\'"]}]
         
         bp_module = {
             "id": "artist_birth_place_filter",
@@ -567,19 +576,27 @@ async def query_artist(
 
     # Death Place: ?artist schema:deathPlace ?dp . ?dp rdfs:label ?dpLabel
     if death_place:
-        triples = [
-            {
+        resolved_dp = await _resolve_entity(death_place, "place", question, log_sampling)
+        triples = [{
             "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
             "pred": create_triple_element("schema:deathPlace", "schema:deathPlace", "uri"),
             "obj": create_triple_element("dp", "", "var")
-            },
-            {
-            "subj": create_triple_element("dp", "", "var"),
-            "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
-            "obj": create_triple_element("dpLabel", "", "var")
-            }
-        ]
-        filter_st = [{'function': 'REGEX', 'args': ['?dpLabel', f"\'{death_place}\'", "\'i\'"]}]
+            }]
+        filter_st = []
+
+        if resolved_dp:
+            triples.append({
+                "subj": create_triple_element("dp", "", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_dp, resolved_dp, "uri")
+            })
+        else:
+            triples.append({
+                "subj": create_triple_element("dp", "", "var"),
+                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "obj": create_triple_element("dpLabel", "", "var")
+            })
+            filter_st = [{'function': 'REGEX', 'args': ['?dpLabel', f"\'{death_place}\'", "\'i\'"]}]
         
         dp_module = {
             "id": "artist_death_place_filter",
