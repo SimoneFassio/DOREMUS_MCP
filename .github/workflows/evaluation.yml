@@ -40,6 +40,7 @@ jobs:
       env:
         LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
         LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT }}
+        LANGSMITH_ENDPOINT: ${{ vars.LANGSMITH_ENDPOINT }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
