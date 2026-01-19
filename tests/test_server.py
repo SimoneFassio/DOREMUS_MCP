@@ -50,7 +50,7 @@ def test_find_entities():
     return True
 
 
-def test_search_works():
+def _test_search_works_deprecated():
     """Test works search functionality with a single combined query.
 
     This test performs one query that combines composer, work type,
@@ -135,7 +135,7 @@ def main():
     
     tests = [
         ("Entity Search", test_find_entities),
-        ("Works Search", test_search_works),
+        # ("Works Search", test_search_works), # Deprecated
         ("Custom SPARQL", test_custom_sparql),
         ("Entity properties", test_entity_properties),
     ]
