@@ -547,7 +547,7 @@ class QueryContainer:
             )
         # Collision: try reusing any registry var with same label
         for reg_var_name, reg_var_el in self.variable_registry.items():
-            if reg_var_el["var_label"] == var_label:
+            if reg_var_el["var_label"] == var_label and var_label != "":
                 candidate_module = copy.deepcopy(new_module)
                 self._modify_var(candidate_module, var_name, reg_var_name)
 
@@ -639,7 +639,7 @@ class QueryContainer:
             )
         # Handle collision: branch over reuse candidates (same var_label)
         for reg_var_name, reg_var_el in self.variable_registry.items():
-            if reg_var_el["var_label"] == var_label:
+            if reg_var_el["var_label"] == var_label and var_label != "":
                 candidate_module = copy.deepcopy(new_module)
                 self._modify_var(candidate_module, var_name, reg_var_name)
 
@@ -742,6 +742,7 @@ class QueryContainer:
                     
                     for var_name, opts in options_dict.items():
                         # Find metadata (label) from ORIGINAL module, because it's stable
+                        current_var_in_module = copy.deepcopy(var_name)
                         def_elem = None
                         for d in module.get("defined_vars", []):
                             if d.get("var_name") == var_name:
@@ -803,13 +804,6 @@ You should select an option different to 0 ONLY if the variable represent a new 
                                 logger.error(f"LLM returned invalid index '{llm_answer}' for variable conflict resolution.")
                                 # Default to renaming
                                 chosen_var = f"{var_name}_{count}"
-                        
-                        # KEY CHANGE: replace the *current* var name in the module, not the original logical name
-                        current_var_in_module = self._find_var_in_module_by_label(final_module, var_label)
-
-                        if current_var_in_module is None:
-                            # fallback: if defined_vars isn't updated, scan triples for exact var_name
-                            current_var_in_module = var_name
 
                         logger.info(
                             f"Applying resolution for '{var_name}' ({var_label}): "
