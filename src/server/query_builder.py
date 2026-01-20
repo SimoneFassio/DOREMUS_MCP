@@ -580,3 +580,301 @@ async def query_artist(
         await qc.add_module(work_module)
 
     return qc
+
+async def query_recording_event(
+    query_id: str,
+    question: str = "",
+    carried_out_by: Optional[str] = None,
+    location: Optional[str] = None,
+    recorded_performance: Optional[str] = None
+) -> QueryContainer:
+    """
+    Initialize a QueryContainer with a baseline query for Recording Events.
+    """
+    qc = QueryContainer(query_id, question)
+    
+    # Define logging callback
+    def log_sampling(log_data: Dict[str, Any]):
+        qc.sampling_logs.append(log_data)
+    
+    # Core Module: Recording Event Entity
+    core_module = {
+        "id": "recording_event_core",
+        "type": "query_builder",
+        "scope": "main",
+        "triples": [
+            {
+                "subj": create_triple_element("recordingEvent", "efrbroo:F29_Recording_Event", "var"),
+                "pred": create_triple_element("a", "a", "uri"),
+                "obj": create_triple_element("recording_event_type", "efrbroo:F29_Recording_Event", "uri")
+            },
+            {
+                "subj": create_triple_element("recordingEvent", "efrbroo:F29_Recording_Event", "var"),
+                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "obj": create_triple_element("title", "", "var")
+            }
+        ],
+    }
+    await qc.add_module(core_module)
+    qc.add_select("recordingEvent", "efrbroo:F29_Recording_Event")
+    
+    # Filter: carried_out_by (performer/organization)
+    if carried_out_by:
+        performer_triples = []
+        performer_filters = []
+        
+        # Pattern: ?recordingEvent ecrm:P9_consists_of / ecrm:P14_carried_out_by ?performer
+        performer_triples.append({
+            "subj": create_triple_element("recordingEvent", "efrbroo:F29_Recording_Event", "var"),
+            "pred": create_triple_element("ecrm:P9_consists_of / ecrm:P14_carried_out_by", "ecrm:P9_consists_of / ecrm:P14_carried_out_by", "uri"),
+            "obj": create_triple_element("performer", "ecrm:E39_Actor", "var")
+        })
+        
+        # Try to resolve as URI
+        resolved_uri = await resolve_entity_uri(carried_out_by, "artist", question, log_sampling) #TODO organizations like Radio France are not artist but organization(others)
+        
+        if resolved_uri:
+            performer_triples.append({
+                "subj": create_triple_element("performer", "ecrm:E39_Actor", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_uri, resolved_uri, "uri")
+            })
+        else:
+            # Fallback to name matching
+            performer_triples.append({
+                "subj": create_triple_element("performer", "ecrm:E39_Actor", "var"),
+                "pred": create_triple_element("foaf:name", "foaf:name", "uri"),
+                "obj": create_triple_element("performerName", "", "var")
+            })
+            performer_filters.append({'function': 'REGEX', 'args': ['?performerName', f"'{carried_out_by}'", "'i'"]})
+        
+        performer_module = {
+            "id": "recording_event_performer_filter",
+            "type": "query_builder",
+            "scope": "main",
+            "triples": performer_triples,
+            "filter_st": performer_filters
+        }
+        await qc.add_module(performer_module)
+    
+    # Filter: location (P7_took_place_at)
+    if location:
+        location_triples = []
+        location_filters = []
+        
+        location_triples.append({
+            "subj": create_triple_element("recordingEvent", "efrbroo:F29_Recording_Event", "var"),
+            "pred": create_triple_element("ecrm:P7_took_place_at", "ecrm:P7_took_place_at", "uri"),
+            "obj": create_triple_element("place", "ecrm:E53_Place", "var")
+        })
+        
+        resolved_uri = await resolve_entity_uri(location, "place", question, log_sampling)
+        
+        if resolved_uri:
+            location_triples.append({
+                "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_uri, resolved_uri, "uri")
+            })
+        else:
+            location_triples.append({
+                "subj": create_triple_element("place", "ecrm:E53_Place", "var"),
+                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "obj": create_triple_element("placeName", "", "var")
+            })
+            location_filters.append({'function': 'REGEX', 'args': ['?placeName', f"'{location}'", "'i'"]})
+        
+        location_module = {
+            "id": "recording_event_location_filter",
+            "type": "query_builder",
+            "scope": "main",
+            "triples": location_triples,
+            "filter_st": location_filters
+        }
+        await qc.add_module(location_module)
+    
+    # Filter: recorded_performance (R20_recorded)
+    if recorded_performance:
+        performance_triples = []
+        performance_filters = []
+        
+        performance_triples.append({
+            "subj": create_triple_element("recordingEvent", "efrbroo:F29_Recording_Event", "var"),
+            "pred": create_triple_element("efrbroo:R20_recorded", "efrbroo:R20_recorded", "uri"),
+            "obj": create_triple_element("performance", "efrbroo:F31_Performance", "var")
+        })
+        
+        # Try to resolve as URI
+        resolved_uri = await resolve_entity_uri(recorded_performance, "others", question, log_sampling)
+        
+        if resolved_uri:
+            performance_triples.append({
+                "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_uri, resolved_uri, "uri")
+            })
+        else:
+            # Fallback to label matching
+            performance_triples.append({
+                "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
+                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "obj": create_triple_element("performanceLabel", "", "var")
+            })
+            performance_filters.append({'function': 'REGEX', 'args': ['?performanceLabel', f"'{recorded_performance}'", "'i'"]})
+        
+        performance_module = {
+            "id": "recording_event_performance_filter",
+            "type": "query_builder",
+            "scope": "main",
+            "triples": performance_triples,
+            "filter_st": performance_filters
+        }
+        await qc.add_module(performance_module)
+    
+    return qc
+
+
+async def query_trackset(
+    query_id: str,
+    question: str = "",
+    work_title: Optional[str] = None,
+    composer_name: Optional[str] = None,
+    genre: Optional[str] = None
+) -> QueryContainer:
+    """
+    Initialize a QueryContainer with a baseline query for Tracks/Tracksets.
+    """
+    qc = QueryContainer(query_id, question)
+    
+    # Define logging callback
+    def log_sampling(log_data: Dict[str, Any]):
+        qc.sampling_logs.append(log_data)
+    
+    # Core Module: Track Entity with Performance and Work links
+    core_module = {
+        "id": "track_core",
+        "type": "query_builder",
+        "scope": "main",
+        "triples": [
+            {
+                "subj": create_triple_element("track", "mus:M24_Track", "var"),
+                "pred": create_triple_element("a", "a", "uri"),
+                "obj": create_triple_element("track_type", "mus:M24_Track", "uri")
+            },
+            {
+                "subj": create_triple_element("track", "mus:M24_Track", "var"),
+                "pred": create_triple_element("mus:U51_is_partial_or_full_recording_of", "mus:U51_is_partial_or_full_recording_of", "uri"),
+                "obj": create_triple_element("performance", "efrbroo:F31_Performance", "var")
+            },
+            {
+                "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
+                "pred": create_triple_element("mus:U54_is_performed_expression_of", "mus:U54_is_performed_expression_of", "uri"),
+                "obj": create_triple_element("work", "efrbroo:F22_Self-Contained_Expression", "var")
+            },
+            {
+                "subj": create_triple_element("work", "efrbroo:F22_Self-Contained_Expression", "var"),
+                "pred": create_triple_element("rdfsLabel", "rdfs:label", "uri"),
+                "obj": create_triple_element("workTitle", "", "var")
+            }
+        ],
+    }
+    await qc.add_module(core_module)
+    qc.add_select("track", "mus:M24_Track")
+    
+    # Filter: work_title
+    if work_title:
+        title_filter_module = {
+            "id": "track_work_title_filter",
+            "type": "query_builder",
+            "scope": "main",
+            "triples": [],
+            "filter_st": [
+                {'function': 'REGEX', 'args': ['?workTitle', f"'{work_title}'", "'i'"]}
+            ]
+        }
+        await qc.add_module(title_filter_module)
+    
+    # Filter: composer_name
+    if composer_name:
+        composer_triples = []
+        composer_filters = []
+        
+        # Pattern from q035-q036
+        composer_triples.extend([
+            {
+                "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
+                "pred": create_triple_element("efrbroo:R17_created", "efrbroo:R17_created", "uri"),
+                "obj": create_triple_element("work", "efrbroo:F22_Self-Contained_Expression", "var")
+            },
+            {
+                "subj": create_triple_element("expCreation", "efrbroo:F28_Expression_Creation", "var"),
+                "pred": create_triple_element("ecrm:P9_consists_of / ecrm:P14_carried_out_by", "ecrm:P9_consists_of / ecrm:P14_carried_out_by", "uri"),
+                "obj": create_triple_element("composer", "ecrm:E21_Person", "var")
+            },
+            {
+                "subj": create_triple_element("composer", "ecrm:E21_Person", "var"),
+                "pred": create_triple_element("foaf:name", "foaf:name", "uri"),
+                "obj": create_triple_element("composerName", "", "var")
+            }
+        ])
+        
+        # Try to resolve composer URI
+        resolved_composer = await resolve_entity_uri(composer_name, "artist", question, log_sampling)
+        
+        if resolved_composer:
+            composer_triples.append({
+                "subj": create_triple_element("composer", "ecrm:E21_Person", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_composer, resolved_composer, "uri")
+            })
+        else:
+            composer_filters.append({'function': 'REGEX', 'args': ['?composerName', f"'{composer_name}'", "'i'"]})
+        
+        composer_module = {
+            "id": "track_composer_filter",
+            "type": "query_builder",
+            "scope": "main",
+            "triples": composer_triples,
+            "filter_st": composer_filters
+        }
+        await qc.add_module(composer_module)
+    
+    # Filter: genre
+    if genre:
+        genre_triples = []
+        genre_filters = []
+        
+        genre_triples.append({
+            "subj": create_triple_element("work", "efrbroo:F22_Self-Contained_Expression", "var"),
+            "pred": create_triple_element("mus:U12_has_genre", "mus:U12_has_genre", "uri"),
+            "obj": create_triple_element("genre", "", "var")
+        })
+        
+        # Try to resolve genre URI
+        resolved_genre = await resolve_entity_uri(genre, "vocabulary", question, log_sampling)
+        
+        if resolved_genre:
+            genre_triples.append({
+                "subj": create_triple_element("genre", "", "var"),
+                "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                "obj": create_triple_element(resolved_genre, resolved_genre, "uri")
+            })
+        else:
+            # Fallback to label matching
+            genre_triples.append({
+                "subj": create_triple_element("genre", "", "var"),
+                "pred": create_triple_element("skos:prefLabel", "skos:prefLabel", "uri"),
+                "obj": create_triple_element("genreLabel", "", "var")
+            })
+            genre_filters.append({'function': 'REGEX', 'args': ['?genreLabel', f"'{genre}'", "'i'"]})
+        
+        genre_module = {
+            "id": "track_genre_filter",
+            "type": "query_builder",
+            "scope": "main",
+            "triples": genre_triples,
+            "filter_st": genre_filters
+        }
+        await qc.add_module(genre_module)
+    
+    return qc

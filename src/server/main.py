@@ -105,6 +105,10 @@ async def build_query(question: str,
                               Focuses on *when* and *where* something happened.
             - "artists": For finding artists (names, instruments, birth places...)
                          Use this to find *people*, not their works.
+            - "recording_events": For recording sessions/events (performers, locations, recorded performances)
+                                  Use when asking about *recording sessions* by broadcasters or organizations.
+            - "tracksets" or "tracks": For recorded tracks (works, composers, genres)
+                                       Use when asking about *recordings of works* or track metadata.
         filters: A dictionary of filters to apply.
             - For Works: 
                 "title": String or URI, 
@@ -123,6 +127,14 @@ async def build_query(question: str,
                 "birth_place": String,
                 "death_place" : String,
                 "work_name" : String or URI
+            - For Recording Events:
+                "carried_out_by": String or URI (performer/organization),
+                "location": String or URI (recording venue),
+                "recorded_performance": String or URI
+            - For Tracksets:
+                "work_title": String or URI,
+                "composer_name": String or URI,
+                "genre": String or URI
             It may be possible that no filters are needed, in which case pass an empty dict or None.
 
     Returns:

@@ -10,7 +10,7 @@ from difflib import get_close_matches
 from server.find_paths import load_graph, find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
 from server.graph_schema_explorer import GraphSchemaExplorer
 from server.query_container import QueryContainer, create_triple_element
-from server.query_builder import query_works, query_performance, query_artist
+from server.query_builder import query_works, query_performance, query_artist, query_recording_event, query_trackset
 from server.utils import (
     execute_sparql_query,
     contract_uri,
@@ -170,8 +170,20 @@ async def build_query_internal(
                 question=question,
                 **filters
             )
+        elif template == "recording_events":
+            qc = await query_recording_event(
+                query_id=query_id,
+                question=question,
+                **filters
+            )
+        elif template == "tracksets" or template == "tracks":
+            qc = await query_trackset(
+                query_id=query_id,
+                question=question,
+                **filters
+            )
         else:
-            raise Exception(f"Unknown template: {template}. Supported templates: Works, Performances, Artists")
+            raise Exception(f"Unknown template: {template}. Supported templates: Works, Performances, Artists, Recording_Events, Tracksets")
 
         sparql_query = qc.to_string()
         qc.set_question(question)
