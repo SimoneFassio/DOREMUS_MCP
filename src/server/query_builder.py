@@ -1,9 +1,8 @@
-from typing import Optional, List, Dict, Any, Union, Callable
+from typing import Optional, List, Dict, Any, Union
 import logging
 import re
 from server.query_container import QueryContainer, create_triple_element
-from server.utils import find_candidate_entities_utils
-from server.tool_sampling import tool_sampling_request
+from server.utils import resolve_entity_uri
 from fastmcp import Context
 
 logger = logging.getLogger("doremus-mcp")
@@ -21,73 +20,6 @@ COUNTRY_CODES = {
     "swedish": "SE", "sweden": "SE",
     "spanish": "ES", "spain": "ES",
 }
-
-async def _resolve_entity(name: str, entity_type: str, question: str = "", log_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> Optional[str]:
-    """
-    Helper to resolve a name to a URI using internal tools with LLM sampling.
-    Returns the most relevant matching URI or None.
-    """
-    
-    # Check if name is already an uri
-    if name.startswith("http:") or name.startswith("https:"):
-        return name
-    
-    try:
-        result = find_candidate_entities_utils(name, entity_type)
-
-        if result.get("matches_found", 0) > 0:
-            entities = result["entities"]
-            
-            # If only one match, return it directly
-            if len(entities) == 1:
-                return entities[0].get("entity")
-            
-            # Multiple matches: use sampling to choose best one
-            entity_options_text = "\n".join([
-                f"{i}. {entity.get('label', 'N/A')} ({entity.get('entity', 'N/A')}) ({entity.get('type', 'N/A')})"
-                for i, entity in enumerate(entities)
-            ])
-            
-            # Add REGEX fallback option as the last choice
-            regex_option_index = len(entities)
-            entity_options_text += f"\n{regex_option_index}. None of the above - use REGEX pattern matching instead"
-            
-            system_prompt = f"""You are an expert in entity resolution for the DOREMUS music knowledge base.
-Choose the most semantically relevant entity that matches the user's query intent.
-If none of the specific entities match well, choose the REGEX option to use pattern matching instead."""
-            
-            pattern_intent = f"""Which of these entities best represents '{name}' (type: {entity_type})?
-{f"Given the question: '{question}'" if question else ""}
-
-The options available are:
-{entity_options_text}
-
-Return only the number (index) of the best match."""
-            
-            # Send Sampling request to LLM
-            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_callback)
-            
-            try:
-                # Extract the number
-                match = re.search(r'\d+', llm_answer)
-                if match:
-                    index = int(match.group())
-                    # Check if LLM chose the REGEX option
-                    if index == regex_option_index:
-                        logger.info(f"LLM chose REGEX fallback for '{name}'")
-                        return None
-                    elif 0 <= index < len(entities):
-                        return entities[index].get("entity")
-                # Fallback to first if invalid index
-                return entities[0].get("entity")
-            except (IndexError, ValueError):
-                # Fallback to first on error
-                return entities[0].get("entity")
-            
-    except Exception as e:
-        logger.warning(f"Failed to resolve entity {name}: {e}")
-    
-    return None
 
 async def query_works(
     query_id: str,
@@ -109,10 +41,10 @@ async def query_works(
         qc.sampling_logs.append(log_data)
     
     # 2. Variable Resolvers
-    resolved_composer = await _resolve_entity(composer_name, "artist", question, log_sampling) if composer_name else None
-    resolved_genre = await _resolve_entity(genre, "vocabulary", question, log_sampling) if genre else None
-    resolved_place = await _resolve_entity(place_of_composition, "place", question, log_sampling) if place_of_composition else None
-    resolved_key = await _resolve_entity(musical_key, "vocabulary", question, log_sampling) if musical_key else None
+    resolved_composer = await resolve_entity_uri(composer_name, "artist", question, log_sampling) if composer_name else None
+    resolved_genre = await resolve_entity_uri(genre, "vocabulary", question, log_sampling) if genre else None
+    resolved_place = await resolve_entity_uri(place_of_composition, "place", question, log_sampling) if place_of_composition else None
+    resolved_key = await resolve_entity_uri(musical_key, "vocabulary", question, log_sampling) if musical_key else None
 
     # 3. Core Module: Expression & Title
     core_module = {
@@ -374,7 +306,7 @@ async def query_performance(
             "pred": create_triple_element("ecrm:P7_took_place_at", "ecrm:P7_took_place_at", "uri"),
             "obj": create_triple_element("place", "ecrm:E53_Place", "var")
         })
-        resolved_uri = await _resolve_entity(location, "place", question, log_sampling)
+        resolved_uri = await resolve_entity_uri(location, "place", question, log_sampling)
 
         if resolved_uri:
             location_triples.append({
@@ -405,7 +337,7 @@ async def query_performance(
     if carried_out_by:
         for idx, person_name in enumerate(carried_out_by):
             # Resolve if possible
-            resolved_uri = await _resolve_entity(person_name, "artist", question, log_sampling)
+            resolved_uri = await resolve_entity_uri(person_name, "artist", question, log_sampling)
             # The pattern is recursive/deep: ?performance -> consists_of* -> activity -> carried_out_by -> artist
             # We use a path that covers both conductors and musicians
             
@@ -421,7 +353,7 @@ async def query_performance(
             # 1. Performance -> Activity (Recursive Path)
             performer_triples.append({
                 "subj": create_triple_element("performance", "efrbroo:F31_Performance", "var"),
-                "pred": create_triple_element("ecrm:P9_consists_of_plus", "ecrm:P9_consists_of+", "uri"),
+                "pred": create_triple_element("ecrm:P9_consists_of+", "ecrm:P9_consists_of+", "uri"),
                 "obj": create_triple_element(activity_var, "ecrm:E7_Activity", "var")
             })
             
@@ -497,7 +429,7 @@ async def query_artist(
     qc.add_select("artist", "ecrm:E21_Person")
     # Name Filter
     if name:
-        resolved_artist = await _resolve_entity(name, "artist", question, log_sampling)
+        resolved_artist = await resolve_entity_uri(name, "artist", question, log_sampling)
         triples = []
         filter_st = []
 
@@ -541,7 +473,7 @@ async def query_artist(
 
     # Birth Place: ?artist schema:birthPlace ?bp . ?bp rdfs:label ?bpLabel
     if birth_place:
-        resolved_bp = await _resolve_entity(birth_place, "place", question, log_sampling)
+        resolved_bp = await resolve_entity_uri(birth_place, "place", question, log_sampling)
         triples = [
             {
             "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
@@ -576,7 +508,7 @@ async def query_artist(
 
     # Death Place: ?artist schema:deathPlace ?dp . ?dp rdfs:label ?dpLabel
     if death_place:
-        resolved_dp = await _resolve_entity(death_place, "place", question, log_sampling)
+        resolved_dp = await resolve_entity_uri(death_place, "place", question, log_sampling)
         triples = [{
             "subj": create_triple_element("artist", "ecrm:E21_Person", "var"),
             "pred": create_triple_element("schema:deathPlace", "schema:deathPlace", "uri"),
@@ -609,7 +541,7 @@ async def query_artist(
 
     # Work Name Filter
     if work_name:
-        resolved_work = await _resolve_entity(work_name, "others", question, log_sampling)
+        resolved_work = await resolve_entity_uri(work_name, "others", question, log_sampling)
         triples = [
             {
             "subj": create_triple_element("performanceWork", "efrbroo:F28_Expression_Creation", "var"),

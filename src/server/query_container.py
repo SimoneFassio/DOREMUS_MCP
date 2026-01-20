@@ -797,7 +797,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
                             def log_sampling(log_data: Dict[str, Any]):
                                 self.sampling_logs.append(log_data)
                                 
-                            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling)
+                            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling, caller_tool_name="_process_variables")
                             try:
                                 match = re.search(r'\d+', llm_answer)
                                 if match:

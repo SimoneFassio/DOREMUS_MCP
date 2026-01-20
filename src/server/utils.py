@@ -1,7 +1,8 @@
 import logging
 import requests
 import re
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict, List, Callable
+from server.tool_sampling import tool_sampling_request
 from server.config import (
     SPARQL_ENDPOINT,
     REQUEST_TIMEOUT,
@@ -326,3 +327,70 @@ def validate_doremus_uri(uri: str) -> bool:
         # Fail open on network errors to avoid blocking valid queries due to connectivity issues
         logger.warning(f"Could not validate URI {uri}: {e}")
         return True
+
+async def resolve_entity_uri(name: str, entity_type: str, question: str = "", log_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> Optional[str]:
+    """
+    Helper to resolve a name to a URI using internal tools with LLM sampling.
+    Returns the most relevant matching URI or None.
+    """
+    
+    # Check if name is already an uri
+    if name.startswith("http:") or name.startswith("https:"):
+        return name
+    
+    try:
+        result = find_candidate_entities_utils(name, entity_type)
+
+        if result.get("matches_found", 0) > 0:
+            entities = result["entities"]
+            
+            # If only one match, return it directly
+            if len(entities) == 1:
+                return entities[0].get("entity")
+            
+            # Multiple matches: use sampling to choose best one
+            entity_options_text = "\n".join([
+                f"{i}. {entity.get('label', 'N/A')} ({entity.get('entity', 'N/A')}) ({entity.get('type', 'N/A')})"
+                for i, entity in enumerate(entities)
+            ])
+            
+            # Add REGEX fallback option as the last choice
+            regex_option_index = len(entities)
+            entity_options_text += f"\n{regex_option_index}. None of the above - use REGEX pattern matching instead"
+            
+            system_prompt = f"""You are an expert in entity resolution for the DOREMUS music knowledge base.
+Choose the most semantically relevant entity that matches the user's query intent.
+If none of the specific entities match well, choose the REGEX option to use pattern matching instead."""
+            
+            pattern_intent = f"""Which of these entities best represents '{name}' (type: {entity_type})?
+{f"Given the question: '{question}'" if question else ""}
+
+The options available are:
+{entity_options_text}
+
+Return only the number (index) of the best match."""
+            
+            # Send Sampling request to LLM
+            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_callback, caller_tool_name="resolve_entity_uri")
+            
+            try:
+                # Extract the number
+                match = re.search(r'\d+', llm_answer)
+                if match:
+                    index = int(match.group())
+                    # Check if LLM chose the REGEX option
+                    if index == regex_option_index:
+                        logger.info(f"LLM chose REGEX fallback for '{name}'")
+                        return None
+                    elif 0 <= index < len(entities):
+                        return entities[index].get("entity")
+                # Fallback to first if invalid index
+                return entities[0].get("entity")
+            except (IndexError, ValueError):
+                # Fallback to first on error
+                return entities[0].get("entity")
+            
+    except Exception as e:
+        logger.warning(f"Failed to resolve entity {name}: {e}")
+    
+    return None

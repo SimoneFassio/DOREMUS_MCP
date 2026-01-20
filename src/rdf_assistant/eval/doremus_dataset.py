@@ -52,7 +52,7 @@ def load_rq_files(directory):
 cq_examples = load_rq_files(competency_dir)
 user_examples = load_rq_files(user_dir)
 
-examples_queries = user_examples + cq_examples 
+examples_queries = cq_examples + user_examples
 
 def test_print_examples():
     """Prints the examples in the evaluation dataset."""

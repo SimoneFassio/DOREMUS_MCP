@@ -5,13 +5,12 @@ import re
 from nanoid import generate
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict, List, Callable
 from difflib import get_close_matches
-from server.find_paths import load_graph
+from server.find_paths import load_graph, find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
 from server.graph_schema_explorer import GraphSchemaExplorer
 from server.query_container import QueryContainer, create_triple_element
 from server.query_builder import query_works, query_performance, query_artist
-from server.find_paths import find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
 from server.utils import (
     execute_sparql_query,
     contract_uri,
@@ -19,9 +18,11 @@ from server.utils import (
     expand_prefixed_uri,
     get_entity_label,
     find_candidate_entities_utils,
-    remove_redundant_paths
+    remove_redundant_paths,
+    resolve_entity_uri,
+    extract_label,
+    convert_to_variable_name
 )
-from server.utils import extract_label, convert_to_variable_name
 from server.tool_sampling import format_paths_for_llm, tool_sampling_request
 
 logger = logging.getLogger("doremus-mcp")
@@ -253,6 +254,10 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
     # FAILSAFE: debug
     if not qc:
         raise Exception(f"Query ID {query_id} not found or expired.")
+    
+    # Send Sampling request to LLM
+    def log_sampling(log_data: Dict[str, Any]):
+        qc.sampling_logs.append(log_data)
 
     # RETRIEVE SUBJECT URI
     subject = subject.strip().lower()
@@ -271,22 +276,16 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
         obj = (obj.split("/")[-1]).strip().lower()
     else:
         obj = obj.strip().lower()
-        res_obj = find_candidate_entities_internal(obj, "vocabulary") #TODO migrate to _resolve_entity
-        if res_obj['matches_found']==0:
-            res_obj = find_candidate_entities_internal(obj, "others")
-            if res_obj['matches_found']>0:
-                obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
-                obj_uri = extract_label(obj_uri_complete)
-            else:
+        obj_uri = await resolve_entity_uri(obj, "vocabulary", log_callback=log_sampling)
+        if obj_uri is None:
+            obj_uri = await resolve_entity_uri(obj, "others", log_callback=log_sampling)
+            if obj_uri is None:
                 raise Exception(f"Object entity '{obj}' not found in the knowledge base.")
-        else:
-            obj_uri_complete = res_obj.get("entities", [])[0]["entity"]
-            obj_uri = obj_uri_complete
     
     #-------------------------------
     # VOCAB/ONTOLOGY SWITCH
     #-------------------------------
-    if obj_uri.startswith("http://"):
+    if obj_uri.startswith("http://") or obj_uri.startswith("https://"):
         # Find inverse arcs
         query_inverse = f"""
             SELECT ?incoming_property (SAMPLE(?item_pointing_at_me) AS ?single_example)
@@ -320,7 +319,7 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
         if not parents:
             raise Exception(f"No parent entities found while incoming arcs are {[extract_label(arc_val.get('incoming_property')) for arc_val in inverse_arcs.get('results', [])]} for vocabulary entity: {obj}")
     else:
-        # Onthology term provided as label -> use Graph
+        # Ontology term provided as label -> use Graph
         res = find_inverse_arcs_internal(obj_uri, graph)
         if not res:
             logger.error(f"find_inverse_arcs_internal found no matches for {obj_uri}")
@@ -424,11 +423,8 @@ The current query is:
 The options available are:
 {path_options_text}
         """
-        # Send Sampling request to LLM
-        def log_sampling(log_data: Dict[str, Any]):
-            qc.sampling_logs.append(log_data)
         
-        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling)
+        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling, caller_tool_name="associate_to_N_entities")
         try:
             # simple extraction of the number
             match = re.search(r'\d+', llm_answer)

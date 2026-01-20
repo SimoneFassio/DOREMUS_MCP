@@ -56,7 +56,7 @@ def format_paths_for_llm(paths):
     return "\n".join(options)
 
 
-async def tool_sampling_request(system_prompt: str, pattern_intent: str, log_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> str:
+async def tool_sampling_request(system_prompt: str, pattern_intent: str, log_callback: Optional[Callable[[Dict[str, Any]], None]] = None, caller_tool_name: str = "unknown") -> str:
     """
     Sends a sampling request to the client (LLM) to resolve ambiguity.
     This function will handle fallback to server-side LLM if client sampling fails.
@@ -187,7 +187,7 @@ You MUST reply with exactly one token: the integer index only — nothing else, 
         latency = time.time() - start_time
         if log_callback:
             log_data = {
-                "tool": "tool_sampling_request",
+                "tool": caller_tool_name,
                 "model": used_model,
                 "inputs": {
                     "system_prompt": system_prompt,

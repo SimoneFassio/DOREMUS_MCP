@@ -7,7 +7,7 @@ WHERE {
        ecrm:P9_consists_of / ecrm:P14_carried_out_by <http://data.doremus.org/organization/Radio_France> ;
        efrbroo:R20_recorded ?performance .
 
- ?performance ecrm:P9_consists_of* / ecrm:P14_carried_out_by ?artist .
+ ?performance ecrm:P9_consists_of+ / ecrm:P14_carried_out_by ?artist .
 
  ?artist foaf:name ?artistName
 } GROUP BY ?artist
