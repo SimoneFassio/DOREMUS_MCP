@@ -394,3 +394,12 @@ Return only the number (index) of the best match."""
         logger.warning(f"Failed to resolve entity {name}: {e}")
     
     return None
+
+def get_quantity_property(entity_uri: str, graph: Dict) -> Optional[str]:
+    """Helper that finds the property to filter based on number of entities."""
+    for node, edges in graph.items():
+        if node == entity_uri:
+            for pred, _ in edges:
+                if "quantity" in pred.lower():
+                    return pred
+    return None

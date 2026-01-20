@@ -7,10 +7,10 @@ from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from typing import Any, Optional, Dict, List, Callable
 from difflib import get_close_matches
-from server.find_paths import load_graph, find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal
+from server.find_paths import load_graph, find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal, recur_domain
 from server.graph_schema_explorer import GraphSchemaExplorer
 from server.query_container import QueryContainer, create_triple_element
-from server.query_builder import query_works, query_performance, query_artist, query_recording_event, query_trackset
+# query_builder imports removed as old build_query is removed
 from server.utils import (
     execute_sparql_query,
     contract_uri,
@@ -21,9 +21,11 @@ from server.utils import (
     remove_redundant_paths,
     resolve_entity_uri,
     extract_label,
-    convert_to_variable_name
+    convert_to_variable_name,
+    get_quantity_property
 )
 from server.tool_sampling import format_paths_for_llm, tool_sampling_request
+from server.template_parser import get_cached_template, TemplateParseError, TemplateValidationError, convert_triples_to_module, parse_triple_string
 
 logger = logging.getLogger("doremus-mcp")
 
@@ -51,11 +53,7 @@ def find_candidate_entities_internal(
         raise ToolError(f"Error finding candidate entities: {e}")
 
 
-def find_linked_entities(subject: str, obj: str) -> List[str] | None:
-    object_entity = find_candidate_entities_internal(obj, "vocabulary")
-    if not object_entity.get("success"):
-        return None
-    return [obj for obj in object_entity.get("entities", [])]
+
     
     
 def get_entity_properties_internal(
@@ -135,378 +133,544 @@ def get_entity_properties_internal(
 # QUERY BUILDER INTERNALS
 #-------------------------------
 
-async def build_query_internal(
+
+
+#-------------------------------
+# NEW QUERY BUILDER V2 INTERNALS
+#-------------------------------
+
+
+
+
+async def build_query_v2_internal(
     question: str,
-    template: str,
-    filters: Dict[str, Any] | None,
-    strategy: str
+    template: str
 ) -> Dict[str, Any]:
+    """
+    Build a query using the new template-based approach.
+    
+    Args:
+        question: The user's natural language question
+        template: Template name (expression, performance, artist, etc.)
+    
+    Returns:
+        Dict with query_id, generated_query, available_filters
+    """
     try:
-        # Standardize template name
+        # Load template
         template = template.lower().strip()
-
-        # Generate ID and Store
+        template_def = get_cached_template(template)
+        
+        # Generate ID
         query_id = generate(size=10)
-
-        if filters is None:
-            filters = {}
         
-        if template == "works":
-            logger.info(f"Building 'Works' query for question: {question} with filters: {filters}")
-            qc = await query_works(
-                query_id=query_id,
-                question=question,
-                **filters
-            )
-        elif template == "performances":
-            qc = await query_performance(
-                query_id=query_id,
-                question=question,
-                **filters
-            )
-        elif template == "artists":
-            qc = await query_artist(
-                query_id=query_id,
-                question=question,
-                **filters
-            )
-        elif template == "recording_events":
-            qc = await query_recording_event(
-                query_id=query_id,
-                question=question,
-                **filters
-            )
-        elif template == "tracksets" or template == "tracks":
-            qc = await query_trackset(
-                query_id=query_id,
-                question=question,
-                **filters
-            )
-        else:
-            raise Exception(f"Unknown template: {template}. Supported templates: Works, Performances, Artists, Recording_Events, Tracksets")
-
-        sparql_query = qc.to_string()
-        qc.set_question(question)
+        # Create QueryContainer
+        qc = QueryContainer(query_id, question)
         
+        # Define logging callback
+        def log_sampling(log_data: Dict[str, Any]):
+            qc.sampling_logs.append(log_data)
+        
+        # Convert core triples to module
+        core_module = convert_triples_to_module(
+            template_def.core_triples,
+            f"{template}_core",
+            template_def.base_variable,
+            template_def.base_variable,  # No renaming for core
+            template_def.var_classes
+        )
+        
+        await qc.add_module(core_module)
+        
+        # Add base variable to SELECT
+        qc.add_select(template_def.base_variable, template_def.base_class)
+        
+        # Store query
         QUERY_STORAGE[query_id] = qc
         
+        # Build list of available filters
+        available_filters = []
+        for filter_name, filter_def in template_def.filters.items():
+            available_filters.append({
+                "name": filter_name,
+                "entity_type": filter_def.entity_type,
+                "supports_uri": filter_def.values_var is not None,
+                "supports_regex": filter_def.regex_var is not None
+            })
+        
+        # Generate strategy guide based on template
+        strategy_guide = f"""
+### Query Strategy for {template} template
+
+**STEP 2 - Apply Filters:**
+Use `apply_filter(query_id="{query_id}", base_variable="{template_def.base_variable}", template="{template}", filters={{...}})`
+
+Available filters: {[f['name'] for f in available_filters]}
+
+**After basic filters:**
+- For INSTRUMENT constraints: Use `associate_to_N_entities(subject, instrument, query_id)`
+- For TIME/DATE constraints: Use `has_quantity_of(entity, time-span, ...)`
+- For AGGREGATIONS: Use `groupBy_having(query_id, group_var, aggregate, ...)`
+
+**Example for "{template}":**
+apply_filter(query_id="{query_id}", base_variable="{template_def.base_variable}", template="{template}", 
+             filters={{"{available_filters[0]['name'] if available_filters else 'filter_name'}": "value"}})
+"""
+        
         return {
+            "success": True,
             "query_id": query_id,
-            "generated_query": sparql_query,
-            "message": "Query built successfully. Review the SPARQL. It is strongly suggested to follow this strategy:\n"+strategy+ "\nIf correct, then use execute_query(query_id) to run it."
+            "generated_query": qc.to_string(),
+            "template": template,
+            "base_variable": template_def.base_variable,
+            "base_class": template_def.base_class,
+            "available_filters": available_filters,
+            "strategy_guide": strategy_guide,
+            "message": f"Query built. Use apply_filter() to add constraints. Follow the strategy guide below."
         }
         
+    except TemplateParseError as e:
+        raise ToolError(f"Template error: {e}")
     except Exception as e:
         raise ToolError(f"Error building query: {e}")
+
+
+async def filter_internal(
+    query_id: str,
+    base_variable: str,
+    template: str,
+    filters: Dict[str, str]
+) -> Dict[str, Any]:
+    """
+    Apply filters to an existing query.
+    
+    Args:
+        query_id: ID of the query to modify
+        base_variable: Variable in the query to filter on (e.g., "work", "expression")
+        template: Template name to use for filter definitions
+        filters: Dict of filter_name -> filter_value
+    
+    Returns:
+        Dict with success status and updated query
+    """
+    try:
+        # Get the query container
+        if query_id not in QUERY_STORAGE:
+            raise ToolError(f"Query ID not found: {query_id}")
+        
+        qc = QUERY_STORAGE[query_id]
+        
+        # Load template
+        template = template.lower().strip()
+        template_def = get_cached_template(template)
+        
+        # Define logging callback
+        def log_sampling(log_data: Dict[str, Any]):
+            qc.sampling_logs.append(log_data)
+        
+        # Check that base_variable exists in query
+        if base_variable not in qc.variable_registry:
+            raise ToolError(
+                f"Variable '{base_variable}' not found in query. "
+                f"Available variables: {list(qc.variable_registry.keys())}"
+            )
+        
+        # Apply each filter
+        for filter_name, filter_value in filters.items():
+            # Check filter exists in template
+            if filter_name not in template_def.filters:
+                raise ToolError(
+                    f"Filter '{filter_name}' not found in template '{template}'. "
+                    f"Available filters: {list(template_def.filters.keys())}"
+                )
+            
+            filter_def = template_def.filters[filter_name]
+            
+            # Determine if filter_value is a URI
+            is_uri = filter_value.startswith("http://") or filter_value.startswith("https://")
+            
+            # Validate argument type
+            if is_uri and not filter_def.values_var:
+                raise ToolError(
+                    f"Filter '{filter_name}' does not support URI arguments (values_var is empty). "
+                    f"Pass a string label instead."
+                )
+            
+            if not is_uri and not filter_def.regex_var:
+                raise ToolError(
+                    f"Filter '{filter_name}' does not support string arguments (regex_var is empty). "
+                    f"Pass a URI instead."
+                )
+            
+            # Resolve entity if not literal type
+            resolved_uri = None
+            if filter_def.entity_type != "literal" and not is_uri:
+                resolved_uri = await resolve_entity_uri(
+                    filter_value, 
+                    filter_def.entity_type, 
+                    qc.question, 
+                    log_sampling
+                )
+            elif is_uri:
+                resolved_uri = filter_value
+            
+            # Create module from filter triples
+            module_id = f"{base_variable}_{filter_name}"
+            filter_module = convert_triples_to_module(
+                filter_def.triples,
+                module_id,
+                template_def.base_variable,
+                base_variable,
+                template_def.var_classes
+            )
+            
+            # Add filter expression
+            if resolved_uri and filter_def.values_var:
+                # Use VALUES clause
+                values_var = filter_def.values_var.lstrip('?')
+                if base_variable != template_def.base_variable:
+                    values_var = f"{values_var}_{base_variable}"
+                
+                filter_module["triples"].append({
+                    "subj": create_triple_element(values_var, "", "var"),
+                    "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                    "obj": create_triple_element(resolved_uri, resolved_uri, "uri")
+                })
+            else:
+                # Use FILTER REGEX
+                regex_var = filter_def.regex_var.lstrip('?')
+                if base_variable != template_def.base_variable:
+                    regex_var = f"{regex_var}_{base_variable}"
+                
+                filter_module["filter_st"] = [{
+                    "function": "REGEX",
+                    "args": [f"?{regex_var}", f"'{filter_value}'", "'i'"]
+                }]
+            
+            # Deduplicate triplets - ONLY skip exact triples from modules with SAME base_variable
+            # Collisions with other modules are handled by add_module via sampling
+            
+            def to_hashable(val):
+                """Convert any value to a hashable string representation."""
+                if isinstance(val, list):
+                    return str(val)
+                if isinstance(val, dict):
+                    return str(val)
+                return val if val is not None else ""
+            
+            existing_triples_same_base = set()
+            for module in qc.where:
+                module_id = module.get("id", "")
+                # Check if module belongs to the same base_variable
+                # Module IDs follow pattern: {base_variable}_{filter_name} or {template}_core
+                if module_id.startswith(f"{base_variable}_") or module_id == f"{base_variable}_core":
+                    for t in module.get("triples", []):
+                        # Create a hashable key for each triple
+                        subj = t.get("subj", {})
+                        pred = t.get("pred", {})
+                        obj = t.get("obj", {})
+                        triple_key = (
+                            to_hashable(subj.get("var_name", "")), to_hashable(subj.get("var_label", "")), to_hashable(subj.get("type", "")),
+                            to_hashable(pred.get("var_name", "")), to_hashable(pred.get("var_label", "")), to_hashable(pred.get("type", "")),
+                            to_hashable(obj.get("var_name", "")), to_hashable(obj.get("var_label", "")), to_hashable(obj.get("type", ""))
+                        )
+                        existing_triples_same_base.add(triple_key)
+            
+            # Filter out duplicate triples from same base_variable modules only
+            deduplicated_triples = []
+            for t in filter_module.get("triples", []):
+                subj = t.get("subj", {})
+                pred = t.get("pred", {})
+                obj = t.get("obj", {})
+                triple_key = (
+                    to_hashable(subj.get("var_name", "")), to_hashable(subj.get("var_label", "")), to_hashable(subj.get("type", "")),
+                    to_hashable(pred.get("var_name", "")), to_hashable(pred.get("var_label", "")), to_hashable(pred.get("type", "")),
+                    to_hashable(obj.get("var_name", "")), to_hashable(obj.get("var_label", "")), to_hashable(obj.get("type", ""))
+                )
+                if triple_key not in existing_triples_same_base:
+                    deduplicated_triples.append(t)
+                else:
+                    logger.debug(f"Skipping duplicate triple (same base_variable): {triple_key}")
+            
+            filter_module["triples"] = deduplicated_triples
+            
+            # Only add module if it has triples or filters
+            if deduplicated_triples or filter_module.get("filter_st"):
+                await qc.add_module(filter_module)
+        
+        return {
+            "success": True,
+            "query_id": query_id,
+            "generated_query": qc.to_string(),
+            "filters_applied": list(filters.keys()),
+            "message": "Filters applied successfully. Review the SPARQL and execute when ready."
+        }
+        
+    except ToolError:
+        raise
+    except Exception as e:
+        raise ToolError(f"Error applying filter: {e}")
 
 #-------------------------------
 # ASSOCIATE N ENTITIES INTERNALS
 #-------------------------------
 
-# helper that finds the property to filter based on number of entities
-def get_quantity_property(entity_uri: str) -> str | None:
-    for node, edges in graph.items():
-        for pred, _ in edges:
-            if node == entity_uri and "quantity" in pred.lower():
-                return pred
-            
-#-------------------------------
-# RECURSIVE PATHFINDER
-#-------------------------------
-def recur_domain(current_entity: str, target_entity: str, graph, depth: int, path: List[str]) -> List[str]:
-    # 1. PRUNING: Depth Limit
-    if depth > 6 or current_entity not in graph:
-        return []
-    # 2. SUCCESS: Target Found
-    if current_entity == target_entity:
-        return [path]
-    
-    # RECURSION: Explore Parents
-    res = find_inverse_arcs_internal(current_entity, graph)
-    if not res:
-        logger.error("find_inverse_arcs error found")
-        return []
-    if not res.get("success"):
-        # We reached a dead end
-        return []
-    
-    parents = res.get("parents", [])
-    results = []
-    for neighbor, predicate in parents:
-        neighbor_var = convert_to_variable_name(neighbor)
-        predicate_var = convert_to_variable_name(predicate)
-
-        # avoid cycles
-        if any(neighbor == uri for _, uri in path):
-            continue
-
-        new_path = [(neighbor_var, neighbor), (predicate_var, predicate)] + path
-        child_paths = recur_domain(neighbor, target_entity, graph, depth + 1, new_path)
-        
-        # Collect valid paths
-        results.extend(child_paths)
-    
-    return results
-        
-    
 async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str, n: int | None) -> List[dict]:
     try:
-        return await _associate_to_N_entities_internal_impl(subject, obj, query_id, n)
-    except Exception as e:
-        raise ToolError(f"Error associating N entities: {e}")
+        #-------------------------------
+        # CHECK IF QUERY EXISTS
+        #-------------------------------
+        if not QUERY_STORAGE:
+            logger.error("Query storage not initialized")
+            raise Exception("Query storage not initialized")
+        qc = QUERY_STORAGE.get(query_id)
+        # FAILSAFE: debug
+        if not qc:
+            raise Exception(f"Query ID {query_id} not found or expired.")
+        
+        # Send Sampling request to LLM
+        def log_sampling(log_data: Dict[str, Any]):
+            qc.sampling_logs.append(log_data)
 
-async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_id: str, n: int | None) -> List[dict]:
-    #-------------------------------
-    # CHECK IF QUERY EXISTS
-    #-------------------------------
-    if not QUERY_STORAGE:
-        logger.error("Query storage not initialized")
-        raise Exception("Query storage not initialized")
-    qc = QUERY_STORAGE.get(query_id)
-    # FAILSAFE: debug
-    if not qc:
-        raise Exception(f"Query ID {query_id} not found or expired.")
-    
-    # Send Sampling request to LLM
-    def log_sampling(log_data: Dict[str, Any]):
-        qc.sampling_logs.append(log_data)
+        # RETRIEVE SUBJECT URI
+        subject = subject.strip().lower()
+        subject_uri = qc.get_variable_uri(subject)
+        # FAILSAFE: debug
+        if not subject_uri:
+            raise Exception(f"Subject variable ?{subject} not found in query.")
+        
+        # TYPE GUARD: obj must be a string
+        if not isinstance(obj, str):
+            raise Exception(f"Invalid argument type: 'obj' must be a string (the entity name, e.g., 'violin'). Received: {type(obj).__name__} ({obj}). If you meant to specify a quantity, use the 'n' parameter.")
 
-    # RETRIEVE SUBJECT URI
-    subject = subject.strip().lower()
-    subject_uri = qc.get_variable_uri(subject)
-    # FAILSAFE: debug
-    if not subject_uri:
-        raise Exception(f"Subject variable ?{subject} not found in query.")
-    
-    # TYPE GUARD: obj must be a string
-    if not isinstance(obj, str):
-        raise Exception(f"Invalid argument type: 'obj' must be a string (the entity name, e.g., 'violin'). Received: {type(obj).__name__} ({obj}). If you meant to specify a quantity, use the 'n' parameter.")
-
-    # RETRIEVE OBJECT URI
-    if obj.startswith("http://") or obj.startswith("https://"):
-        obj_uri = obj
-        obj = (obj.split("/")[-1]).strip().lower()
-    else:
-        obj = obj.strip().lower()
-        obj_uri = await resolve_entity_uri(obj, "vocabulary", log_callback=log_sampling)
-        if obj_uri is None:
-            obj_uri = await resolve_entity_uri(obj, "others", log_callback=log_sampling)
+        # RETRIEVE OBJECT URI
+        if obj.startswith("http://") or obj.startswith("https://"):
+            obj_uri = obj
+            obj = (obj.split("/")[-1]).strip().lower()
+        else:
+            obj = obj.strip().lower()
+            obj_uri = await resolve_entity_uri(obj, "vocabulary", log_callback=log_sampling)
             if obj_uri is None:
-                raise Exception(f"Object entity '{obj}' not found in the knowledge base.")
-    
-    #-------------------------------
-    # VOCAB/ONTOLOGY SWITCH
-    #-------------------------------
-    if obj_uri.startswith("http://") or obj_uri.startswith("https://"):
-        # Find inverse arcs
-        query_inverse = f"""
-            SELECT ?incoming_property (SAMPLE(?item_pointing_at_me) AS ?single_example)
-            WHERE {{
-            # 1. FIX THE TARGET
-            VALUES ?my_entity {{ <{obj_uri}> }} .
-
-            # 2. Find incoming links
-            ?item_pointing_at_me ?incoming_property ?my_entity .
-
-            }} 
-            # Group by the "Keys" (The things that should be unique per row)
-            GROUP BY ?incoming_property
-        """
-        inverse_arcs = execute_sparql_query(query_inverse, limit=50)
-        if not inverse_arcs:
-            logger.error(f"No inverse arc found for {obj_uri}")
-            raise Exception(f"No inverse arc found for {obj_uri}")
-        # FAILSAFE: debug
-        if len(inverse_arcs.get("results", []))==0:
-            raise Exception(f"No incoming arcs found for vocabulary entity: {obj}")
-        parents = []
-        for arc_val in inverse_arcs.get("results", []):
-            arc = arc_val.get("incoming_property")
-            arc_label = extract_label(arc)
-            for subj, edges in graph.items():
-                for pred, _ in edges:
-                    if pred == arc_label:
-                        parents.append((subj, pred))
-        # FAILSAFE: debug
-        if not parents:
-            raise Exception(f"No parent entities found while incoming arcs are {[extract_label(arc_val.get('incoming_property')) for arc_val in inverse_arcs.get('results', [])]} for vocabulary entity: {obj}")
-    else:
-        # Ontology term provided as label -> use Graph
-        res = find_inverse_arcs_internal(obj_uri, graph)
-        if not res:
-            logger.error(f"find_inverse_arcs_internal found no matches for {obj_uri}")
-            raise Exception(f"find_inverse_arcs_internal found no matches for {obj_uri}")
-        if not res.get("success"):
-            raise Exception(res.get("error"))
-        parents = res.get("parents", [])
-
-    #-------------------------------
-    # CALL RECURSIVE PATHFINDER
-    #-------------------------------
-    possible_paths = []
-    properties_paths = {str(extract_label(arc_uri)): [] for _, arc_uri in parents}
-    selected_path = None
-    logger.info(f"Found parents: {parents} for object {obj}")
-    for parent_entity_uri, arc_uri in parents:
-        # #TODO: handle the noise introduced by the many skos properties
-        # if "skos" in arc_uri:
-        #     # Skip skos:broader/narrower relations
-        #     continue
-        logger.info(f"Finding paths from parent entity {parent_entity_uri} to subject {subject_uri}...")
-        possible_subpaths = recur_domain(parent_entity_uri, subject_uri, graph, 1, [(convert_to_variable_name(parent_entity_uri), parent_entity_uri)])
-        # FAILSAFE: debug
-        if not possible_subpaths:
-            # Do not consider paths with no results
-            logger.info(f"No paths found from {convert_to_variable_name(parent_entity_uri)} -> {extract_label(arc_uri)} to subject {obj}.")
-            continue
+                obj_uri = await resolve_entity_uri(obj, "others", log_callback=log_sampling)
+                if obj_uri is None:
+                    raise Exception(f"Object entity '{obj}' not found in the knowledge base.")
         
-        for subpath in possible_subpaths:
-            full_path = subpath + [(convert_to_variable_name(extract_label(arc_uri)), extract_label(arc_uri)), (obj, obj_uri)]
-            possible_paths.append(full_path)
-            properties_paths[str(extract_label(arc_uri))].append(full_path)
-    
-    # ---------------------------------------------------------
-    # DECISION LOGIC FOR SAMPLING
-    # ---------------------------------------------------------
-    # FAILSAFE: debug
-    if not possible_paths:
-         raise Exception("No paths found.")
-         
-    elif len(possible_paths) == 1:
-        selected_path = possible_paths[0]
-        
-    else:
-        # MULTIPLE PATHS FOUND: Use MCP Sampling to decide: reduce the number of paths by length (keep shortest 5 for each property)
-        reduced_paths = []
-        for prop, paths in properties_paths.items():
-            pruned_paths = remove_redundant_paths(paths)
-            sorted_paths = sorted(pruned_paths, key=len)
-            reduced_paths.extend(sorted_paths[:5])
-        possible_paths = sorted(reduced_paths, key=len)
+        #-------------------------------
+        # VOCAB/ONTOLOGY SWITCH
+        #-------------------------------
+        if obj_uri.startswith("http://") or obj_uri.startswith("https://"):
+            # Find inverse arcs
+            query_inverse = f"""
+                SELECT ?incoming_property (SAMPLE(?item_pointing_at_me) AS ?single_example)
+                WHERE {{
+                # 1. FIX THE TARGET
+                VALUES ?my_entity {{ <{obj_uri}> }} .
 
-        # Exclude the paths that lead to zero results dry run
-        for k, path in enumerate(possible_paths):
-            triples = []
-            for i in range(0, len(path)-2, 2):
+                # 2. Find incoming links
+                ?item_pointing_at_me ?incoming_property ?my_entity .
+
+                }} 
+                # Group by the "Keys" (The things that should be unique per row)
+                GROUP BY ?incoming_property
+            """
+            inverse_arcs = execute_sparql_query(query_inverse, limit=50)
+            if not inverse_arcs:
+                logger.error(f"No inverse arc found for {obj_uri}")
+                raise Exception(f"No inverse arc found for {obj_uri}")
+            # FAILSAFE: debug
+            if len(inverse_arcs.get("results", []))==0:
+                raise Exception(f"No incoming arcs found for vocabulary entity: {obj}")
+            parents = []
+            for arc_val in inverse_arcs.get("results", []):
+                arc = arc_val.get("incoming_property")
+                arc_label = extract_label(arc)
+                for subj, edges in graph.items():
+                    for pred, _ in edges:
+                        if pred == arc_label:
+                            parents.append((subj, pred))
+            # FAILSAFE: debug
+            if not parents:
+                raise Exception(f"No parent entities found while incoming arcs are {[extract_label(arc_val.get('incoming_property')) for arc_val in inverse_arcs.get('results', [])]} for vocabulary entity: {obj}")
+        else:
+            # Ontology term provided as label -> use Graph
+            res = find_inverse_arcs_internal(obj_uri, graph)
+            if not res:
+                logger.error(f"find_inverse_arcs_internal found no matches for {obj_uri}")
+                raise Exception(f"find_inverse_arcs_internal found no matches for {obj_uri}")
+            if not res.get("success"):
+                raise Exception(res.get("error"))
+            parents = res.get("parents", [])
+
+        #-------------------------------
+        # CALL RECURSIVE PATHFINDER
+        #-------------------------------
+        possible_paths = []
+        properties_paths = {str(extract_label(arc_uri)): [] for _, arc_uri in parents}
+        selected_path = None
+        logger.info(f"Found parents: {parents} for object {obj}")
+        for parent_entity_uri, arc_uri in parents:
+            # #TODO: handle the noise introduced by the many skos properties
+            # if "skos" in arc_uri:
+            #     # Skip skos:broader/narrower relations
+            #     continue
+            logger.info(f"Finding paths from parent entity {parent_entity_uri} to subject {subject_uri}...")
+            possible_subpaths = recur_domain(parent_entity_uri, subject_uri, graph, 1, [(convert_to_variable_name(parent_entity_uri), parent_entity_uri)])
+            # FAILSAFE: debug
+            if not possible_subpaths:
+                # Do not consider paths with no results
+                logger.info(f"No paths found from {convert_to_variable_name(parent_entity_uri)} -> {extract_label(arc_uri)} to subject {obj}.")
+                continue
+            
+            for subpath in possible_subpaths:
+                full_path = subpath + [(convert_to_variable_name(extract_label(arc_uri)), extract_label(arc_uri)), (obj, obj_uri)]
+                possible_paths.append(full_path)
+                properties_paths[str(extract_label(arc_uri))].append(full_path)
+        
+        # ---------------------------------------------------------
+        # DECISION LOGIC FOR SAMPLING
+        # ---------------------------------------------------------
+        # FAILSAFE: debug
+        if not possible_paths:
+             raise Exception("No paths found.")
+             
+        elif len(possible_paths) == 1:
+            selected_path = possible_paths[0]
+            
+        else:
+            # MULTIPLE PATHS FOUND: Use MCP Sampling to decide: reduce the number of paths by length (keep shortest 5 for each property)
+            reduced_paths = []
+            for prop, paths in properties_paths.items():
+                pruned_paths = remove_redundant_paths(paths)
+                sorted_paths = sorted(pruned_paths, key=len)
+                reduced_paths.extend(sorted_paths[:5])
+            possible_paths = sorted(reduced_paths, key=len)
+
+            # Exclude the paths that lead to zero results dry run
+            for k, path in enumerate(possible_paths):
+                triples = []
+                for i in range(0, len(path)-2, 2):
+                    triples.append({
+                        "subj": create_triple_element(path[i][0], path[i][1], "var"),
+                        "pred": create_triple_element(path[i+1][0], path[i+1][1], "uri"),
+                        "obj": create_triple_element(path[i+2][0], path[i+2][1], "var")
+                    })
+                def_vars = qc.extract_defined_variables(triples)
+                # Add VALUES for object
                 triples.append({
-                    "subj": create_triple_element(path[i][0], path[i][1], "var"),
-                    "pred": create_triple_element(path[i+1][0], path[i+1][1], "uri"),
-                    "obj": create_triple_element(path[i+2][0], path[i+2][1], "var")
+                    "subj": create_triple_element(obj, obj_uri, "var"),
+                    "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                    "obj": create_triple_element(obj_uri, obj_uri, "uri")
                 })
-            def_vars = qc.extract_defined_variables(triples)
-            # Add VALUES for object
+                module = {
+                    "id": f"dry_run_path_module_{k}",
+                    "type": "pattern",
+                    "scope": "main",
+                    "triples": triples,
+                    "required_vars": [create_triple_element(subject, subject_uri, "var")],
+                    "defined_vars": def_vars[1:]
+                }
+                try:
+                    await qc.test_add_module(module)
+                    # If dry run passes, keep the path but remove the module afterwards
+                except Exception as e:
+                    logger.info(f"Excluding path {path} due to dry run failure: {e}")
+                    possible_paths.remove(path)
+            
+            path_options_text = format_paths_for_llm(possible_paths)
+
+            current_query = qc.to_string()
+            
+            # Create the prompt for the LLM
+            system_prompt = """You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query.
+    Note the shortest path is rarely the best option, compare the semantic relevance of the paths.
+    DOREMUS is based on the CIDOC-CRM ontology, using the EFRBROO (Work-Expression-Manifestation-Item) extension.
+    Work -> conceptual idea (idea of a sonata)
+    Expression -> musical realization (written notation of the sonata, with his title, composer, etc.)
+    Event -> performance or recording"""
+            pattern_intent = f"""which of these paths is the best for associating '{subject}' to {n} '{obj}'/s, 
+    given that the current question being asked is: '{qc.get_question()}'.
+
+    The current query is:
+    {current_query}
+            
+    The options available are:
+    {path_options_text}
+            """
+            
+            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling, caller_tool_name="associate_to_N_entities")
+            try:
+                # simple extraction of the number
+                match = re.search(r'\d+', llm_answer)
+                if match:
+                    # CASE 1: valid index returned
+                    index = int(match.group())
+                    selected_path = possible_paths[index]
+                else:
+                    # CASE 2: Fallback to shortest if LLM output is weird
+                    selected_path = sorted(possible_paths, key=len)[0]
+            except (IndexError, ValueError):
+                # CASE 3: Error in sampling process
+                raise Exception("Failed sampling selection, an error occurred")
+        # FAILSAFE: debug
+        if not selected_path:
+            raise Exception("Failed to select a path.")
+        
+        # Impose subject at the beginning of the path
+        selected_path[0] = (subject, subject_uri)
+        
+        # Check for name collision: if target variable name (obj) is used in intermediate nodes
+        target_var_name = obj
+        intermediate_vars = {selected_path[i][0] for i in range(0, len(selected_path)-1, 2)}
+        if target_var_name in intermediate_vars:
+            target_var_name = f"{obj}_target"
+            # Update path
+            selected_path[-1] = (target_var_name, obj_uri)
+
+        triples = []
+        for i in range(0, len(selected_path)-2, 2):
             triples.append({
-                "subj": create_triple_element(obj, obj_uri, "var"),
-                "pred": create_triple_element("VALUES", "VALUES", "uri"),
-                "obj": create_triple_element(obj_uri, obj_uri, "uri")
+                "subj": create_triple_element(selected_path[i][0], selected_path[i][1], "var"),
+                "pred": create_triple_element(selected_path[i+1][0], selected_path[i+1][1], "uri"),
+                "obj": create_triple_element(selected_path[i+2][0], selected_path[i+2][1], "var")
             })
-            module = {
-                "id": f"dry_run_path_module_{k}",
-                "type": "pattern",
+        logger.info(f"Selected path for associating {subject} to {obj} is: {triples}")
+
+        logger.info(f"associate_to_N_entities called with raw n={n!r}")
+        
+        if n is not None:
+            quantity_property = get_quantity_property(selected_path[-3][1], graph)
+            logger.info(f"Quantity property for entity {selected_path[-3][1]} is {quantity_property}")
+            if quantity_property:
+                triples.append({
+                    "subj": create_triple_element(selected_path[-3][0], selected_path[-3][1], "var"),
+                    "pred": create_triple_element(convert_to_variable_name(quantity_property), quantity_property, "uri"),
+                    "obj": create_triple_element(n, "", "literal")
+                })
+        def_vars = qc.extract_defined_variables(triples)
+        logger.info(f"Defined vars after adding triples: {def_vars}")
+        triples.append({
+            "subj": create_triple_element(target_var_name, obj_uri, "var"),
+            "pred": create_triple_element("VALUES", "VALUES", "uri"),
+            "obj": create_triple_element(obj_uri, obj_uri, "uri")
+        })
+        await qc.add_module({
+                "id": f"associate_N_entities_module_{selected_path[-1][0]}",
+                "type": "associate_N_entities",
                 "scope": "main",
                 "triples": triples,
                 "required_vars": [create_triple_element(subject, subject_uri, "var")],
-                "defined_vars": def_vars[1:]
-            }
-            try:
-                await qc.test_add_module(module)
-                # If dry run passes, keep the path but remove the module afterwards
-            except Exception as e:
-                logger.info(f"Excluding path {path} due to dry run failure: {e}")
-                possible_paths.remove(path)
-        
-        path_options_text = format_paths_for_llm(possible_paths)
-
-        current_query = qc.to_string()
-        
-        # Create the prompt for the LLM
-        system_prompt = """You are a SPARQL ontology expert. Choose the most semantically relevant path for the user's query.
-Note the shortest path is rarely the best option, compare the semantic relevance of the paths.
-DOREMUS is based on the CIDOC-CRM ontology, using the EFRBROO (Work-Expression-Manifestation-Item) extension.
-Work -> conceptual idea (idea of a sonata)
-Expression -> musical realization (written notation of the sonata, with his title, composer, etc.)
-Event -> performance or recording"""
-        pattern_intent = f"""which of these paths is the best for associating '{subject}' to {n} '{obj}'/s, 
-given that the current question being asked is: '{qc.get_question()}'.
-
-The current query is:
-{current_query}
-        
-The options available are:
-{path_options_text}
-        """
-        
-        llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling, caller_tool_name="associate_to_N_entities")
-        try:
-            # simple extraction of the number
-            match = re.search(r'\d+', llm_answer)
-            if match:
-                # CASE 1: valid index returned
-                index = int(match.group())
-                selected_path = possible_paths[index]
-            else:
-                # CASE 2: Fallback to shortest if LLM output is weird
-                selected_path = sorted(possible_paths, key=len)[0]
-        except (IndexError, ValueError):
-            # CASE 3: Error in sampling process
-            raise Exception("Failed sampling selection, an error occurred")
-    # FAILSAFE: debug
-    if not selected_path:
-        raise Exception("Failed to select a path.")
-    
-    # Impose subject at the beginning of the path
-    selected_path[0] = (subject, subject_uri)
-    
-    # Check for name collision: if target variable name (obj) is used in intermediate nodes
-    target_var_name = obj
-    intermediate_vars = {selected_path[i][0] for i in range(0, len(selected_path)-1, 2)}
-    if target_var_name in intermediate_vars:
-        target_var_name = f"{obj}_target"
-        # Update path
-        selected_path[-1] = (target_var_name, obj_uri)
-
-    triples = []
-    for i in range(0, len(selected_path)-2, 2):
-        triples.append({
-            "subj": create_triple_element(selected_path[i][0], selected_path[i][1], "var"),
-            "pred": create_triple_element(selected_path[i+1][0], selected_path[i+1][1], "uri"),
-            "obj": create_triple_element(selected_path[i+2][0], selected_path[i+2][1], "var")
+                "defined_vars": def_vars[1:] # Exclude subject from defined vars
         })
-    logger.info(f"Selected path for associating {subject} to {obj} is: {triples}")
-
-    logger.info(f"associate_to_N_entities called with raw n={n!r}")
-    
-    if n is not None:
-        quantity_property = get_quantity_property(selected_path[-3][1])
-        logger.info(f"Quantity property for entity {selected_path[-3][1]} is {quantity_property}")
-        if quantity_property:
-            triples.append({
-                "subj": create_triple_element(selected_path[-3][0], selected_path[-3][1], "var"),
-                "pred": create_triple_element(convert_to_variable_name(quantity_property), quantity_property, "uri"),
-                "obj": create_triple_element(n, "", "literal")
-            })
-    def_vars = qc.extract_defined_variables(triples)
-    logger.info(f"Defined vars after adding triples: {def_vars}")
-    triples.append({
-        "subj": create_triple_element(target_var_name, obj_uri, "var"),
-        "pred": create_triple_element("VALUES", "VALUES", "uri"),
-        "obj": create_triple_element(obj_uri, obj_uri, "uri")
-    })
-    await qc.add_module({
-            "id": f"associate_N_entities_module_{selected_path[-1][0]}",
-            "type": "associate_N_entities",
-            "scope": "main",
-            "triples": triples,
-            "required_vars": [create_triple_element(subject, subject_uri, "var")],
-            "defined_vars": def_vars[1:] # Exclude subject from defined vars
-    })
-    sparql_query = qc.to_string()
-    return {
-            "success": True,
-            "query_id": query_id,
-            "generated_query": sparql_query,
-            "message": "Query pattern added successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
-        }
+        sparql_query = qc.to_string()
+        return {
+                "success": True,
+                "query_id": query_id,
+                "generated_query": sparql_query,
+                "message": "Query pattern added successfully. Review the SPARQL. If correct, use execute_query(query_id) to run it."
+            }
+            
+    except Exception as e:
+        raise ToolError(f"Error associating N entities: {e}")
 
 
 def _process_date(date_str: str) -> str:

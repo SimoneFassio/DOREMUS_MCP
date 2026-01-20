@@ -1,0 +1,20 @@
+# Template: performance
+SELECT DISTINCT ?performance
+WHERE {
+# build_query
+?performance a efrbroo:F31_Performance .
+?performance rdfs:label ?title .
+
+# filter: "title":"?performance":"?title":"literal"
+?performance rdfs:label ?title .
+
+# filter: "location":"?place":"?placeName":"place"
+?performance ecrm:P7_took_place_at ?place .
+?place rdfs:label ?placeName .
+
+# filter: "performer":"?performer":"?performerName":"artist"
+?performance ecrm:P9_consists_of ?performanceActivity .
+?performanceActivity ecrm:P14_carried_out_by ?performer .
+?performer foaf:name ?performerName .
+
+}

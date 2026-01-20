@@ -2,8 +2,12 @@ import csv
 import sys
 import heapq
 import re
+import logging
 from typing import Any, Optional, Dict, List
+
+logger = logging.getLogger("doremus-mcp")
 from collections import defaultdict
+from server.utils import convert_to_variable_name
 
 # Usage: python find_paths.py start_node end_node k
 
@@ -103,6 +107,41 @@ def find_inverse_arcs_internal(entity_uri: str, graph) -> Dict[str, Any]:
         "success": False,
         "error": f"No incoming arcs found for entity: {entity_uri}"
     }
+
+def recur_domain(current_entity: str, target_entity: str, graph, depth: int, path: List[str]) -> List[str]:
+    # 1. PRUNING: Depth Limit
+    if depth > 6 or current_entity not in graph:
+        return []
+    # 2. SUCCESS: Target Found
+    if current_entity == target_entity:
+        return [path]
+    
+    # RECURSION: Explore Parents
+    res = find_inverse_arcs_internal(current_entity, graph)
+    if not res:
+        logger.error("find_inverse_arcs error found")
+        return []
+    if not res.get("success"):
+        # We reached a dead end
+        return []
+    
+    parents = res.get("parents", [])
+    results = []
+    for neighbor, predicate in parents:
+        neighbor_var = convert_to_variable_name(neighbor)
+        predicate_var = convert_to_variable_name(predicate)
+
+        # avoid cycles
+        if any(neighbor == uri for _, uri in path):
+            continue
+
+        new_path = [(neighbor_var, neighbor), (predicate_var, predicate)] + path
+        child_paths = recur_domain(neighbor, target_entity, graph, depth + 1, new_path)
+        
+        # Collect valid paths
+        results.extend(child_paths)
+    
+    return results
 
 if __name__ == "__main__":
     if len(sys.argv) != 5:

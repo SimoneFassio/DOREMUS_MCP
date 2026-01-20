@@ -1,0 +1,23 @@
+# Template: recording_event
+SELECT DISTINCT ?recordingEvent
+WHERE {
+# build_query
+?recordingEvent a efrbroo:F29_Recording_Event .
+?recordingEvent rdfs:label ?title .
+
+# filter: "title":"?recordingEvent":"?title":"literal"
+?recordingEvent rdfs:label ?title .
+
+# filter: "carried_out_by":"?performer":"?performerName":"others"
+?recordingEvent ecrm:P9_consists_of / ecrm:P14_carried_out_by ?performer .
+?performer foaf:name ?performerName .
+
+# filter: "location":"?place":"?placeName":"place"
+?recordingEvent ecrm:P7_took_place_at ?place .
+?place rdfs:label ?placeName .
+
+# filter: "recorded_performance":"?performance":"?performanceLabel":"others"
+?recordingEvent efrbroo:R20_recorded ?performance .
+?performance rdfs:label ?performanceLabel .
+
+}

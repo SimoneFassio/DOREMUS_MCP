@@ -1,0 +1,38 @@
+# Template: expression
+SELECT DISTINCT ?expression
+WHERE {
+# build_query
+?expression a efrbroo:F22_Self-Contained_Expression .
+?expression rdfs:label ?title .
+?expCreation efrbroo:R17_created ?expression .
+
+# filter: "title":"?expression":"?title":"literal"
+?expression rdfs:label ?title .
+
+# filter: "composer_name":"?composer":"?composerName":"artist"
+?expCreation efrbroo:R17_created ?expression .
+?expCreation ecrm:P9_consists_of ?compositionActivity .
+?compositionActivity ecrm:P14_carried_out_by ?composer .
+?compositionActivity mus:U31_had_function <http://data.doremus.org/vocabulary/function/composer> .
+?composer foaf:name ?composerName .
+
+# filter: "composer_nationality":"":"?countryCode":"literal"
+?expCreation efrbroo:R17_created ?expression .
+?expCreation ecrm:P9_consists_of ?compositionActivity .
+?compositionActivity ecrm:P14_carried_out_by ?composer .
+?composer schema:birthPlace / geonames:countryCode ?countryCode .
+
+# filter: "genre":"?expGenre":"?expGenreLabel":"vocabulary"
+?expression mus:U12_has_genre ?expGenre .
+?expGenre skos:prefLabel ?expGenreLabel .
+
+# filter: "composition_place":"?expCompPlace":"?expCompPlaceLabel":"place"
+?expCreation efrbroo:R17_created ?expression .
+?expCreation ecrm:P7_took_place_at ?expCompPlace .
+?expCompPlace rdfs:label ?expCompPlaceLabel .
+
+# filter: "musical_key":"?expKey":"?expKeyLabel":"vocabulary"
+?expression mus:U11_has_key ?expKey .
+?expKey skos:prefLabel ?expKeyLabel .
+
+}

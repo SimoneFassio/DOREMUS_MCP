@@ -18,7 +18,9 @@ from server.tools_internal import (
     graph,
     find_candidate_entities_internal,
     get_entity_properties_internal,
-    build_query_internal,
+
+    build_query_v2_internal,
+    filter_internal,
     execute_query_from_id_internal,
     associate_to_N_entities_internal,
     has_quantity_of_internal,
@@ -79,135 +81,68 @@ def activate_doremus_agent():
 
 
 @mcp.tool()
-async def build_query(question: str, 
-                      template: str, 
-                      filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
+async def build_query(
+    question: str,
+    template: str
+) -> Dict[str, Any]:
     """
-    **STEP 1: ALWAYS CALL THIS FIRST.**
-    Build a SPARQL query safely using a predefined template.
-
-    **CRITICAL INSTRUCTION:** Before calling this, if the user mentions specific names (e.g. "Beethoven", "Magic Flute"), 
-    you SHOULD use the `search_entity` (or `find_candidate_entities`) tool first to get their URIs. 
-    Passing URIs in `filters` is much more accurate than passing raw strings.
-
-    This tool does NOT execute the query. It generates the SPARQL string and returns a `query_id`.
-    The LLM should inspect the generated SPARQL. If it looks correct, use `execute_query(query_id)` to run it.
-    If it is incorrect, call `build_query` again with adjusted filters.
-    Use find_candidate_entities to find the URI of the filters.
-    Use full names (always prefer name surname) for the filters, do not use initials for composers, places or instruments.
-
+    **STEP 1: Create a query from a template.**
+    
+    This creates a base SPARQL query and returns available filters.
+    Use `apply_filter` as STEP 2 to add constraints.
+    
     Args:
-        question: The user natural language question to answer.
-        template: The conceptual domain to search within. CHOOSE CAREFULLY:
-            - "works": For musical works (titles, composers, genres, keys...)
-                       Use this even if searching by creator (e.g. "Works by Bach").
-            - "performances": For events/performances (dates, locations, performers...)
-                              Focuses on *when* and *where* something happened.
-            - "artists": For finding artists (names, instruments, birth places...)
-                         Use this to find *people*, not their works.
-            - "recording_events": For recording sessions/events (performers, locations, recorded performances)
-                                  Use when asking about *recording sessions* by broadcasters or organizations.
-            - "tracksets" or "tracks": For recorded tracks (works, composers, genres)
-                                       Use when asking about *recordings of works* or track metadata.
-        filters: A dictionary of filters to apply.
-            - For Works: 
-                "title": String or URI, 
-                "composer_name": String or URI, 
-                "composer_nationality": String,
-                "genre": String or URI, 
-                "place_of_composition": String or URI, 
-                "musical_key": String or URI
-            - For Performances:
-                "title": String,
-                "location": String or URI,
-                "carried_out_by": List of Strings or URIs
-            - For Artists:
-                "name": String or URI,
-                "nationality": String,
-                "birth_place": String,
-                "death_place" : String,
-                "work_name" : String or URI
-            - For Recording Events:
-                "carried_out_by": String or URI (performer/organization),
-                "location": String or URI (recording venue),
-                "recorded_performance": String or URI
-            - For Tracksets:
-                "work_title": String or URI,
-                "composer_name": String or URI,
-                "genre": String or URI
-            It may be possible that no filters are needed, in which case pass an empty dict or None.
-
+        question: The user's natural language question.
+        template: Template to use. Options:
+            - "expression": Musical works/expressions
+            - "performance": Performances/concerts
+            - "artist": Artists/composers/performers
+            - "recording_event": Recording sessions
+            - "track": Recorded tracks
+    
     Returns:
-        Dict containing:
-        - "success": boolean
-        - "query_id": The ID to use with `execute_query`
-        - "generated_query": The generated SPARQL string for review
-        - "message": The query output and a set of few-shot examples to follow
+        Dict with query_id, generated_query, and available_filters list.
+    
+    Example:
+        build_query(question="Works by Mozart", template="expression")
+        -> Returns query_id and filters like ["title", "composer_name", "genre", ...]
     """
+    return await build_query_v2_internal(question, template)
 
-    strategy_guide = ""
-    # CATEGOPRY 3: Strict filtering
-    if "strictly" in question.lower() or "exactly" in question.lower() or "quartet" in question.lower() or "trio" in question.lower():
-        strategy_guide = """
-        ### TYPE 3: Strict/Exact Instrumentation (Closed Sets)
-        *Trigger:* "Strictly...", "Exactly...", "String Quartet" (implied set), "Trio"
-        *Strategy:*
-        1. `build_query`
-        2. `associate_to_N_entities` for EACH instrument.
-        3. `groupBy` to count the Total Number of Parts (ensuring no extra instruments).
-        
-        *Example:* "Works written for violin, clarinet and piano (strictly)"
-        -> build_query(...)
-        -> find_candidate_entities("violin", "vocabulary") -> violin_uri
-        -> find_candidate_entities("clarinet", "vocabulary") -> clarinet_uri
-        -> find_candidate_entities("piano", "vocabulary") -> piano_uri
-        -> associate_to_N_entities(expression, violin_uri, q_id)
-        -> associate_to_N_entities(expression, clarinet_uri, q_id)
-        -> associate_to_N_entities(expression, piano_uri, q_id)
-        -> groupBy(casting, q_id, castingDetail, COUNT, equal, 3) 
-        (Note: Logic is 'equal 3' because we have 3 distinct instrument parts)
-        
-        *Example:* "Works for String Quartet" (2 Violins, 1 Viola, 1 Cello = 3 distinct parts usually)
-        -> build_query(...)
-        -> find_candidate_entities("violin", "vocabulary") -> violin_uri
-        -> find_candidate_entities("viola", "vocabulary") -> viola_uri
-        -> find_candidate_entities("cello", "vocabulary") -> cello_uri
-        -> associate_to_N_entities(expression, violin_uri, q_id, 2)
-        -> associate_to_N_entities(expression, viola_uri, q_id, 1)
-        -> associate_to_N_entities(expression, cello_uri, q_id, 1)
-        -> groupBy(casting, q_id, castingDetail, COUNT, equal, 3)
-        """
 
-    # CATEGORY 2: Open filters
-    elif "for" in question.lower() or "at least" in question.lower() or "involving at least" in question.lower():
-        strategy_guide = """
-        ### TYPE 2: Open Instrumentation (Inclusion)
-        *Trigger:* "Works for oboe...", "involving at least...", "for choir and orchestra"
-        *Strategy:* 1. `build_query` (set template="Works")
-        2. `associate_to_N_entities` for EACH instrument mentioned.
-        3. `has_quantity_of` if a date/time is mentioned.
-        4. DO NOT use `groupBy` (we allow other instruments to be present).
-        
-        *Example:* "Works written for oboe and orchestra in 1900"
-        -> build_query(..., filters={})
-        -> find_candidate_entities("oboe", "vocabulary") -> oboe_uri
-        -> find_candidate_entities("orchestra", "vocabulary") -> orchestra_uri
-        -> associate_to_N_entities(expression, oboe_uri, q_id)
-        -> associate_to_N_entities(expression, orchestra_uri, q_id)
-        -> has_quantity_of(expCreation, time-span, range, "01-01-1900", "31-12-1900", q_id)
-        """
+@mcp.tool()
+async def apply_filter(
+    query_id: str,
+    base_variable: str,
+    template: str,
+    filters: Dict[str, str]
+) -> Dict[str, Any]:
+    """
+    **STEP 2: Apply filters to a query.**
+    
+    Use after `build_query` to add constraints. Pass filter values as strings
+    (labels like "Mozart", "opera") - URIs are resolved automatically.
+    
+    Args:
+        query_id: The query ID from build_query.
+        base_variable: The variable to filter on (usually from build_query response).
+        template: The template containing the filter definitions.
+        filters: Dict of filter_name -> filter_value.
+            Example: {"composer_name": "Mozart", "genre": "opera"}
+    
+    Returns:
+        Dict with updated SPARQL query.
+    
+    Example:
+        apply_filter(
+            query_id="abc123",
+            base_variable="expression",
+            template="expression",
+            filters={"composer_name": "Wolfgang Amadeus Mozart"}
+        )
+    """
+    return await filter_internal(query_id, base_variable, template, filters)
 
-    # CATEGORY 1: simple metadata queries that can be asked with query builder -> default
-    else: 
-        strategy_guide = """
-        ### TYPE 1: Simple Metadata (Composer, Genre, Title)
-        *Trigger:* "Who composed...", "Works by...", "Sacred music..."
-        *Strategy:* Use `build_query` with filters. Do NOT use entity associations unless instruments are mentioned.
-        *Example:* "Works by Mozart"
-        -> build_query(template="Artists", filters={"name": "Wolfgang Amadeus Mozart"})
-        Review what has been done by the build_query tool and if necessary call it again
-        """
-    return await build_query_internal(question, template, filters, strategy_guide)
 
 @mcp.tool()
 async def associate_to_N_entities(
