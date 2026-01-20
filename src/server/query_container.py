@@ -182,7 +182,10 @@ class QueryContainer:
             "where": copy.deepcopy(self.where),
             "filter_st": copy.deepcopy(self.filter_st),
             "variable_registry": copy.deepcopy(self.variable_registry),
-            "select": copy.deepcopy(self.select)
+            "select": copy.deepcopy(self.select),
+            "group_by": copy.deepcopy(self.group_by),
+            "having": copy.deepcopy(self.having),
+            "order_by": copy.deepcopy(self.order_by),
         }
 
         # 1. ADD MODULE (TEMPORARILY)
@@ -193,6 +196,15 @@ class QueryContainer:
                 return True
             except Exception as e:
                 raise e
+            finally:
+                # REVERT STATE
+                self.where = state_backup["where"]
+                self.filter_st = state_backup["filter_st"]
+                self.variable_registry = state_backup["variable_registry"]
+                self.select = state_backup["select"]
+                self.group_by = state_backup["group_by"]
+                self.having = state_backup["having"]
+                self.order_by = state_backup["order_by"]
             
             
         elif module["scope"] == "optional":
@@ -266,7 +278,6 @@ class QueryContainer:
         if module["scope"] == "main":
             # Process variable renaming (if needed for uniqueness or linking)
             processed_module = await self._process_variables(module)
-            logger.info(f"Module has form: {processed_module['triples'] if 'triples' in processed_module else 'No triples'}")
             
             # --- URI EXPANSION LOGIC ---
             self._expand_values_uris_in_module(processed_module, max_uris=4)
@@ -727,14 +738,40 @@ class QueryContainer:
             if "defined_vars" in module.keys() and len(module["defined_vars"]) > 0:
                 if all(def_elem["var_name"] not in self.variable_registry for def_elem in module["defined_vars"]):
                     # No conflicts, simply register all defined variables
-                    for def_elem in module["defined_vars"]:
-                        var_name = def_elem["var_name"]
-                        var_label = def_elem["var_label"]
-                        self._update_variable_counter(var_label)
-                        self.variable_registry[var_name] = {
-                            "var_label": var_label,
-                            "count": 1
-                        }
+                    logger.info("No variable conflicts detected; registering defined variables directly.")
+                    if not dry_run:
+                        # If not a dry run, update registry
+                        for def_elem in module["defined_vars"]:
+                            var_name = def_elem["var_name"]
+                            var_label = def_elem["var_label"]
+                            self._update_variable_counter(var_label)
+                            self.variable_registry[var_name] = {
+                                "var_label": var_label,
+                                "count": 1
+                            }
+                    else:
+                        # In dry run, we have to test adding the module as is
+                        try:
+                            # --- URI EXPANSION LOGIC ---
+                            self._expand_values_uris_in_module(module, max_uris=4)
+                            # ---------------------------
+
+                            if module.get("filter_st"):
+                                for fl in module.get("filter_st", []):
+                                    self.filter_st.append(fl)
+
+                            if module.get("triples"):
+                                self.where.append(module)
+
+                            logger.info(f"Testing module {module.get('id', 'unknown')} in dry run check.")
+                            self.dry_run_test()
+                        finally:
+                            # ALWAYS revert container state
+                            self.where = copy.deepcopy(state_backup_v["where"])
+                            self.filter_st = copy.deepcopy(state_backup_v["filter_st"])
+                            self.variable_registry = copy.deepcopy(state_backup_v["variable_registry"])
+                            self.select = copy.deepcopy(state_backup_v["select"])
+                            logger.info(f"Testing module {module.get('id', 'unknown')} removed after dry run check.")
                     final_module = new_module
                 elif dry_run:
                     if not self._recursive_variable_dry_run(new_module, new_module["defined_vars"][0], new_module["defined_vars"], state_backup_v):
@@ -747,6 +784,7 @@ class QueryContainer:
                     logger.info(f"The defined variables are {module['defined_vars']}")
                     logger.info(f"The options for conflict resolution are: {options_dict}")
                     options_dict = self._recursive_variable_retr_opt(new_module, new_module["defined_vars"][0], new_module["defined_vars"], state_backup_v, options_dict, current_config)
+                    logger.info(f"Currently, the variable registry is: {self.variable_registry}")
                     logger.info(f"The final options for conflict resolution are: {options_dict}")
                     
                     final_module = copy.deepcopy(new_module)

@@ -385,6 +385,7 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
         possible_paths = sorted(reduced_paths, key=len)
 
         # Exclude the paths that lead to zero results dry run
+        kept_paths = []
         for k, path in enumerate(possible_paths):
             triples = []
             for i in range(0, len(path)-2, 2):
@@ -410,10 +411,12 @@ async def _associate_to_N_entities_internal_impl(subject: str, obj: str, query_i
             }
             try:
                 await qc.test_add_module(module)
+                kept_paths.append(path)
                 # If dry run passes, keep the path but remove the module afterwards
             except Exception as e:
                 logger.info(f"Excluding path {path} due to dry run failure: {e}")
-                possible_paths.remove(path)
+
+        possible_paths = kept_paths
         
         path_options_text = format_paths_for_llm(possible_paths)
 
