@@ -782,39 +782,87 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
             # ?time_span time:hasEnd / time:inXSDDate ?end .
             
             ts_var = "time_span"
-            triples.append({
-                "subj": create_triple_element(subject_var, subject_label if subject_label else "", "var"),
-                "pred": create_triple_element("ecrm:P4_has_time-span", "ecrm:P4_has_time-span", "uri"),
-                "obj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var")
-            })
-            defined_vars.append({"var_name": ts_var, "var_label": "ecrm:E52_Time-Span"})
             
-            # We add triples for start/end based on filter type to be efficient?
-            # Or always add them? 
-            # If we only need start (e.g. > 1900), only add start.
-            
-            if type in ["more", "range", "equal"] or (type == "less" and not valueEnd): # Logic check
-                 # For 'more than' we usually check start date. 
-                 # For 'range' we check start and end.
-                 # Let's define:
-                 # start var ?start
-                 start_var = "start"
-                 triples.append({
-                     "subj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var"),
-                     "pred": create_triple_element("time:hasBeginning / time:inXSDDate", "time:hasBeginning / time:inXSDDate", "uri"),
-                     "obj": create_triple_element(start_var, "", "var")
-                 })
-                 defined_vars.append({"var_name": start_var, "var_label": ""})
-            
-            if type in ["less", "range", "equal"]:
-                 end_var = "end"
-                 triples.append({
-                     "subj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var"),
-                     "pred": create_triple_element("time:hasEnd / time:inXSDDate", "time:hasEnd / time:inXSDDate", "uri"),
-                     "obj": create_triple_element(end_var, "", "var")
-                 })
-                 defined_vars.append({"var_name": end_var, "var_label": ""})
-            target_var = None
+            # Helper to create basic time-span structure
+            def create_ts_structure(include_end=True):
+                local_triples = [{
+                    "subj": create_triple_element(subject_var, subject_label if subject_label else "", "var"),
+                    "pred": create_triple_element("ecrm:P4_has_time-span", "ecrm:P4_has_time-span", "uri"),
+                    "obj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var")
+                }]
+                local_defined_vars = [{"var_name": ts_var, "var_label": "ecrm:E52_Time-Span"}]
+                
+                # Start var is always needed for our supported filters
+                start_var = "start"
+                local_triples.append({
+                    "subj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var"),
+                    "pred": create_triple_element("time:hasBeginning / time:inXSDDate", "time:hasBeginning / time:inXSDDate", "uri"),
+                    "obj": create_triple_element(start_var, "", "var")
+                })
+                local_defined_vars.append({"var_name": start_var, "var_label": ""})
+                
+                end_var = "end"
+                if include_end:
+                    local_triples.append({
+                        "subj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var"),
+                        "pred": create_triple_element("time:hasEnd / time:inXSDDate", "time:hasEnd / time:inXSDDate", "uri"),
+                        "obj": create_triple_element(end_var, "", "var")
+                    })
+                    local_defined_vars.append({"var_name": end_var, "var_label": ""})
+                
+                return local_triples, local_defined_vars, start_var, end_var
+
+            if type == "range":
+                # Try strict range first (Start and End)
+                strict_triples, strict_vars, s_var, e_var = create_ts_structure(include_end=True)
+                strict_filter = [{'function': '', 'args': [f'?{s_var} >= {val_start_fmt} AND ?{e_var} <= {val_end_fmt}']}]
+                
+                strict_module = {
+                    "id": prop_module_id,
+                    "type": "has_quantity_of",
+                    "scope": "main",
+                    "triples": strict_triples,
+                    "filter_st": strict_filter,
+                    "defined_vars": strict_vars
+                }
+                
+                logger.info(f"Attempting strict date range for {subject_var}...")
+                try:
+                    await qc.test_add_module(strict_module)
+                    
+                    # If success, use this
+                    triples = strict_triples
+                    defined_vars = strict_vars
+                    filter_st = strict_filter
+                    target_var = None # handled in filter_st
+                    
+                except Exception as e:
+                    logger.warning(f"Strict date range failed ({e}). Falling back to Start-only range.")
+                    
+                    # Fallback: Use only Start date
+                    # Filter: start >= valStart AND start <= valEnd
+                    fb_triples, fb_vars, s_var, _ = create_ts_structure(include_end=False)
+                    fb_filter = [{'function': '', 'args': [f'?{s_var} >= {val_start_fmt} AND ?{s_var} <= {val_end_fmt}']}]
+                    
+                    triples = fb_triples
+                    defined_vars = fb_vars
+                    filter_st = fb_filter
+                    target_var = None
+
+            else:                
+                include_end = True
+                if type == "more" or (type == "less" and not valueEnd):
+                     if type == "more": include_end = False
+                     if type == "equal": include_end = False
+                
+                check_triples, check_vars, s_var, e_var = create_ts_structure(include_end=include_end)
+                triples = check_triples
+                defined_vars = check_vars
+                if type == "less":
+                     pass 
+                
+                target_var = None
+
             
         else:
             # Generic Property

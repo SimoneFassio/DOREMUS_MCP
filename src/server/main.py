@@ -279,7 +279,7 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
     Args:
         subject: The subject entity variable name (e.g., "expCreation")
         property: The property uri (e.g., "mus:U78_estimated_duration" or "time-span")
-        type: "less", "more", "equal", or "range"
+        type: "less", "more", "equal", or "range". Do not use "equal" for dates, use "range" with the same value for start and end.
         value: value (number or date), in case of "range" type, it is the start value
         valueEnd: End value (number or date), required only for "range" type
         query_id: The ID of the query being built.
@@ -367,7 +367,7 @@ async def execute_query(query_id: str, limit: int = 10) -> Dict[str, Any]:
     return execute_query_from_id_internal(query_id, limit)
 
 
-#@mcp.tool()
+@mcp.tool()
 async def find_candidate_entities(
     name: str, entity_type: str = "others"
 ) -> dict[str, Any]:
