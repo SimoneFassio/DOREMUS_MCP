@@ -1,5 +1,5 @@
 # Template: performance
-SELECT DISTINCT ?performance ?title
+SELECT DISTINCT ?performance
 WHERE {
 # build_query
 ?performance a efrbroo:F31_Performance .

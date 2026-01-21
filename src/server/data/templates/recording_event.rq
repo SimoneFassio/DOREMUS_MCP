@@ -1,5 +1,5 @@
 # Template: recording_event
-SELECT DISTINCT ?recordingEvent ?title
+SELECT DISTINCT ?recordingEvent
 WHERE {
 # build_query
 ?recordingEvent a efrbroo:F29_Recording_Event .

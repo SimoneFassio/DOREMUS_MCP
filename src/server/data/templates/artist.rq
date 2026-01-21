@@ -1,5 +1,5 @@
 # Template: artist
-SELECT DISTINCT ?artist ?name
+SELECT DISTINCT ?artist
 WHERE {
 # build_query
 ?artist a ecrm:E21_Person .
