@@ -198,14 +198,25 @@ async def build_query_v2_internal(
                 "supports_regex": filter_def.regex_var is not None
             })
         
+        # Get all templates and their filters
+        other_filters_text = "Filters available in other templates (use these by changing the template arg in apply_filter):"
+        templates_dir = pathlib.Path(__file__).parent / "data" / "templates"
+        for template_file in templates_dir.glob("*.rq"):
+            try:
+                tmpl_name = template_file.stem
+                tmpl_def = get_cached_template(tmpl_name)
+                filters_list = sorted(list(tmpl_def.filters.keys()))
+                if filters_list:
+                    other_filters_text += f"\n- {tmpl_name}: {filters_list}"
+            except Exception as e:
+                logger.warning(f"Could not load template {template_file}: {e}")
+
         # Generate strategy guide based on template
         strategy_guide = f"""
 ### Query Strategy for {template} template
+Available filters for this template: {[f['name'] for f in available_filters]}
 
-**STEP 2 - Apply Filters:**
-Use `apply_filter(query_id="{query_id}", base_variable="{template_def.base_variable}", template="{template}", filters={{...}})`
-
-Available filters: {[f['name'] for f in available_filters]}
+{other_filters_text}
 
 **After basic filters:**
 - For INSTRUMENT constraints: Use `associate_to_N_entities(subject, instrument, query_id)`
@@ -213,8 +224,7 @@ Available filters: {[f['name'] for f in available_filters]}
 - For AGGREGATIONS: Use `groupBy_having(query_id, group_var, aggregate, ...)`
 
 **Example for "{template}":**
-apply_filter(query_id="{query_id}", base_variable="{template_def.base_variable}", template="{template}", 
-             filters={{"{available_filters[0]['name'] if available_filters else 'filter_name'}": "value"}})
+apply_filter(query_id="{query_id}", base_variable="{template_def.base_variable}", template="{template}", filters={{"{available_filters[0]['name'] if available_filters else 'filter_name'}": "value"}})
 """
         
         return {
@@ -289,30 +299,35 @@ async def filter_internal(
             # Determine if filter_value is a URI
             is_uri = filter_value.startswith("http://") or filter_value.startswith("https://")
             
-            # Validate argument type
-            if is_uri and not filter_def.values_var:
-                raise ToolError(
-                    f"Filter '{filter_name}' does not support URI arguments (values_var is empty). "
-                    f"Pass a string label instead."
-                )
-            
-            if not is_uri and not filter_def.regex_var:
-                raise ToolError(
-                    f"Filter '{filter_name}' does not support string arguments (regex_var is empty). "
-                    f"Pass a URI instead."
-                )
-            
-            # Resolve entity if not literal type
-            resolved_uri = None
-            if filter_def.entity_type != "literal" and not is_uri:
-                resolved_uri = await resolve_entity_uri(
-                    filter_value, 
-                    filter_def.entity_type, 
-                    qc.question, 
-                    log_sampling
-                )
-            elif is_uri:
-                resolved_uri = filter_value
+            # Handle empty filter value (just add structure, no filtering)
+            if filter_value == "":
+                 # Skip validation and resolution
+                 resolved_uri = None
+            else:
+                # Validate argument type
+                if is_uri and not filter_def.values_var:
+                    raise ToolError(
+                        f"Filter '{filter_name}' does not support URI arguments (values_var is empty). "
+                        f"Pass a string label instead."
+                    )
+                
+                if not is_uri and not filter_def.regex_var:
+                    raise ToolError(
+                        f"Filter '{filter_name}' does not support string arguments (regex_var is empty). "
+                        f"Pass a URI instead."
+                    )
+                
+                # Resolve entity if not literal type
+                resolved_uri = None
+                if filter_def.entity_type != "literal" and not is_uri:
+                    resolved_uri = await resolve_entity_uri(
+                        filter_value, 
+                        filter_def.entity_type, 
+                        qc.question, 
+                        log_sampling
+                    )
+                elif is_uri:
+                    resolved_uri = filter_value
             
             # Create module from filter triples
             module_id = f"{base_variable}_{filter_name}"
@@ -325,27 +340,28 @@ async def filter_internal(
             )
             
             # Add filter expression
-            if resolved_uri and filter_def.values_var:
-                # Use VALUES clause
-                values_var = filter_def.values_var.lstrip('?')
-                if base_variable != template_def.base_variable:
-                    values_var = f"{values_var}_{base_variable}"
-                
-                filter_module["triples"].append({
-                    "subj": create_triple_element(values_var, "", "var"),
-                    "pred": create_triple_element("VALUES", "VALUES", "uri"),
-                    "obj": create_triple_element(resolved_uri, resolved_uri, "uri")
-                })
-            else:
-                # Use FILTER REGEX
-                regex_var = filter_def.regex_var.lstrip('?')
-                if base_variable != template_def.base_variable:
-                    regex_var = f"{regex_var}_{base_variable}"
-                
-                filter_module["filter_st"] = [{
-                    "function": "REGEX",
-                    "args": [f"?{regex_var}", f"'{filter_value}'", "'i'"]
-                }]
+            if filter_value != "":
+                if resolved_uri and filter_def.values_var:
+                    # Use VALUES clause
+                    values_var = filter_def.values_var.lstrip('?')
+                    if base_variable != template_def.base_variable:
+                        values_var = f"{values_var}_{base_variable}"
+                    
+                    filter_module["triples"].append({
+                        "subj": create_triple_element(values_var, "", "var"),
+                        "pred": create_triple_element("VALUES", "VALUES", "uri"),
+                        "obj": create_triple_element(resolved_uri, resolved_uri, "uri")
+                    })
+                else:
+                    # Use FILTER REGEX
+                    regex_var = filter_def.regex_var.lstrip('?')
+                    if base_variable != template_def.base_variable:
+                        regex_var = f"{regex_var}_{base_variable}"
+                    
+                    filter_module["filter_st"] = [{
+                        "function": "REGEX",
+                        "args": [f"?{regex_var}", f"'{filter_value}'", "'i'"]
+                    }]
             
             # Deduplicate triplets - ONLY skip exact triples from modules with SAME base_variable
             # Collisions with other modules are handled by add_module via sampling

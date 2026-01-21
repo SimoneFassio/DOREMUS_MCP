@@ -90,22 +90,26 @@ async def build_query(
     
     This creates a base SPARQL query and returns available filters.
     Use `apply_filter` as STEP 2 to add constraints.
+    Choose the template based on the type of entity the question is asking about.
     
     Args:
         question: The user's natural language question.
         template: Template to use. Options:
-            - "expression": Musical works/expressions
-            - "performance": Performances/concerts
-            - "artist": Artists/composers/performers
-            - "recording_event": Recording sessions
-            - "track": Recorded tracks
+            - "expression": Musical works/expressions (efrbroo:F22_Self-Contained_Expression)
+            - "performance": Performances/concerts (efrbroo:F31_Performance)
+            - "artist": Artists/composers/performers (ecrm:E21_Person)
+            - "recording_event": Recording sessions (efrbroo:F29_Recording_Event)
+            - "track": Recorded tracks, e.g. recordings (mus:M24_Track)
     
     Returns:
         Dict with query_id, generated_query, and available_filters list.
     
     Example:
         build_query(question="Works by Mozart", template="expression")
-        -> Returns query_id and filters like ["title", "composer_name", "genre", ...]
+        build_query(question="Name of artist that ...", template="artist")
+        build_query(question="Concerts/performances at ...", template="performance")
+        build_query(question="Recordings of ...", template="track") #Attention! a recording is a track
+        build_query(question="Have been recorded ...", template="recording_event") #This is an EVENT
     """
     return await build_query_v2_internal(question, template)
 
@@ -118,15 +122,15 @@ async def apply_filter(
     filters: Dict[str, str]
 ) -> Dict[str, Any]:
     """
-    **STEP 2: Apply filters to a query.**
-    
     Use after `build_query` to add constraints. Pass filter values as strings
     (labels like "Mozart", "opera") - URIs are resolved automatically.
+    The base_variable can be every variable present in the query, choose the template based on the class of that variable, among the available ones.
+    If the filter contains only filter_name, and "" as filter_value, triplets corresponding to the filter are added, but no filtering applied.
     
     Args:
         query_id: The query ID from build_query.
         base_variable: The variable to filter on (usually from build_query response).
-        template: The template containing the filter definitions.
+        template: The template, same as build_query, containing the filter definitions.
         filters: Dict of filter_name -> filter_value.
             Example: {"composer_name": "Mozart", "genre": "opera"}
     
@@ -134,12 +138,8 @@ async def apply_filter(
         Dict with updated SPARQL query.
     
     Example:
-        apply_filter(
-            query_id="abc123",
-            base_variable="expression",
-            template="expression",
-            filters={"composer_name": "Wolfgang Amadeus Mozart"}
-        )
+        apply_filter(query_id="abc123", base_variable="work", template="expression", filters={"composer_name": "Wolfgang Amadeus Mozart"})
+        apply_filter(query_id="abc123", base_variable="performance2", template="performance", filters={"location": "{placeName}"})
     """
     return await filter_internal(query_id, base_variable, template, filters)
 
@@ -206,7 +206,7 @@ async def associate_to_N_entities(
     return await associate_to_N_entities_internal(subject, obj, query_id, n)
 
 
-@mcp.tool()
+#@mcp.tool()
 async def groupBy_having(
         subject: str, 
         query_id: str, 
@@ -296,7 +296,7 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
     return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
 
 
-@mcp.tool()
+#@mcp.tool()
 async def add_triplet(
     subject: str, 
     subject_class: str, 
@@ -350,7 +350,7 @@ async def add_select(
 
 
 @mcp.tool()
-async def execute_query(query_id: str, limit: int = 50) -> Dict[str, Any]:
+async def execute_query(query_id: str, limit: int = 10) -> Dict[str, Any]:
     """
     Execute a previously built SPARQL query by its ID.
 
@@ -365,7 +365,7 @@ async def execute_query(query_id: str, limit: int = 50) -> Dict[str, Any]:
     return execute_query_from_id_internal(query_id, limit)
 
 
-@mcp.tool()
+#@mcp.tool()
 async def find_candidate_entities(
     name: str, entity_type: str = "others"
 ) -> dict[str, Any]:
@@ -393,7 +393,7 @@ async def find_candidate_entities(
     return find_candidate_entities_internal(name, entity_type)
 
 
-@mcp.tool()
+#@mcp.tool()
 async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     """
     It shows all direct properties of a specific entity (e.g., "http://data.doremus.org/artist/...") or of a class (e.g., "ecrm:E21_Person").

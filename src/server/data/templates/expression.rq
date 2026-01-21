@@ -6,7 +6,7 @@ WHERE {
 ?expression rdfs:label ?title .
 ?expCreation efrbroo:R17_created ?expression .
 
-# filter: "title":"?expression":"?title":"literal"
+# filter: "title":"":"?title":"literal"
 ?expression rdfs:label ?title .
 
 # filter: "composer_name":"?composer":"?composerName":"artist"

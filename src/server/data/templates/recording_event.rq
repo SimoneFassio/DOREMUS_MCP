@@ -5,7 +5,7 @@ WHERE {
 ?recordingEvent a efrbroo:F29_Recording_Event .
 ?recordingEvent rdfs:label ?title .
 
-# filter: "title":"?recordingEvent":"?title":"literal"
+# filter: "title":"":"?title":"literal"
 ?recordingEvent rdfs:label ?title .
 
 # filter: "carried_out_by":"?performer":"?performerName":"others"
@@ -16,7 +16,7 @@ WHERE {
 ?recordingEvent ecrm:P7_took_place_at ?place .
 ?place rdfs:label ?placeName .
 
-# filter: "recorded_performance":"?performance":"?performanceLabel":"others"
+# filter: "recorded_performance":"":"?performanceLabel":"others"
 ?recordingEvent efrbroo:R20_recorded ?performance .
 ?performance rdfs:label ?performanceLabel .
 

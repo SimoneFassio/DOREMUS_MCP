@@ -7,7 +7,7 @@ WHERE {
 ?performance mus:U54_is_performed_expression_of ?work .
 ?work rdfs:label ?workTitle .
 
-# filter: "work_title":"?work":"?workTitle":"others"
+# filter: "work_title":"":"?workTitle":"others"
 ?track mus:U51_is_partial_or_full_recording_of ?performance .
 ?performance mus:U54_is_performed_expression_of ?work .
 ?work rdfs:label ?workTitle .

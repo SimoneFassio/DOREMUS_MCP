@@ -5,7 +5,7 @@ WHERE {
 ?performance a efrbroo:F31_Performance .
 ?performance rdfs:label ?title .
 
-# filter: "title":"?performance":"?title":"literal"
+# filter: "title":"":"?title":"literal"
 ?performance rdfs:label ?title .
 
 # filter: "location":"?place":"?placeName":"place"
