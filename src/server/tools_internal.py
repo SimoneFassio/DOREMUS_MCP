@@ -22,7 +22,8 @@ from server.utils import (
     resolve_entity_uri,
     extract_label,
     convert_to_variable_name,
-    get_quantity_property
+    get_quantity_property,
+    format_as_markdown_table
 )
 from server.tool_sampling import format_paths_for_llm, tool_sampling_request
 from server.template_parser import get_cached_template, TemplateParseError, TemplateValidationError, convert_triples_to_module, parse_triple_string
@@ -48,7 +49,10 @@ def find_candidate_entities_internal(
     entity_type: str = "others"
 ) -> Dict[str, Any]:
     try:
-        return find_candidate_entities_utils(name, entity_type)
+        res = find_candidate_entities_utils(name, entity_type)
+        if res.get("matches_found", 0) > 0 and "entities" in res:
+            res["entities"] = format_as_markdown_table(res["entities"])
+        return res
     except Exception as e:
         raise ToolError(f"Error finding candidate entities: {e}")
 
@@ -182,8 +186,10 @@ async def build_query_v2_internal(
         
         await qc.add_module(core_module)
         
-        # Add base variable to SELECT
-        qc.add_select(template_def.base_variable, template_def.base_class)
+        # Add all variables from the template's SELECT clause
+        for var_name in template_def.default_select_vars:
+            var_label = template_def.var_classes.get(var_name, "")
+            qc.add_select(var_name, var_label)
         
         # Store query
         QUERY_STORAGE[query_id] = qc
@@ -234,7 +240,7 @@ apply_filter(query_id="{query_id}", base_variable="{template_def.base_variable}"
             "template": template,
             "base_variable": template_def.base_variable,
             "base_class": template_def.base_class,
-            "available_filters": available_filters,
+            "available_filters": format_as_markdown_table(available_filters),
             "strategy_guide": strategy_guide,
             "message": f"Query built. Use apply_filter() to add constraints. Follow the strategy guide below."
         }
@@ -1175,13 +1181,39 @@ def execute_query_from_id_internal(query_id: str, limit: int) -> Dict[str, Any]:
                 f.write("SPARQL Query: \n" + qc.to_string())
                 f.write("LIMIT: " + str(limit))
         logger.info(f"Executing query : {qc.to_string(for_execution=True)} with limit {limit}")        
-        return execute_sparql_query(qc.to_string(for_execution=True), limit)
+        res = execute_sparql_query(qc.to_string(for_execution=True), limit)
+
+        # Post-Processing for LLM safety
+        if res.get("success") and "results" in res:
+             results = res["results"]
+             if not results:
+                 return res
+                 
+             # Identify URI columns based on first few rows
+             uri_keys = set()
+             check_limit = min(len(results), 5)
+             for i in range(check_limit):
+                 row = results[i]
+                 for k, v in row.items():
+                     if k not in uri_keys and isinstance(v, str) and (v.startswith("http://") or v.startswith("https://")):
+                         uri_keys.add(k)
+             
+             if uri_keys:
+                 # Modify results in-place
+                 # For rows index 2+, clear URI values
+                 for i in range(2, len(results)):
+                     row = results[i]
+                     for k in uri_keys:
+                         if k in row:
+                             # Clear the URI value to avoid leaking many URIs
+                             row[k] = ""
+                 
+                 res["message"] = "Only showing the firsts URI, use add_select to add relevant variable to show to the user. Never write an URI in the answer to the user"
+             
+             # Convert results to Markdown Table to save tokens
+             if results:
+                 res["results"] = format_as_markdown_table(results)
+        
+        return res
     except Exception as e:
         raise ToolError(f"Error executing query: {e}")
-
-
-if __name__ == "__main__":
-    # Example usage
-    test_entity = "violin"
-    result = find_linked_entities("Casting", test_entity)
-    print(f"Linked entities for '{test_entity}': {result}")

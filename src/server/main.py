@@ -14,6 +14,8 @@ from starlette.responses import PlainTextResponse, JSONResponse
 import os
 import logging
 from server.find_paths import find_k_shortest_paths
+from server.template_parser import initialize_templates
+
 from server.tools_internal import (
     graph,
     find_candidate_entities_internal,
@@ -34,6 +36,12 @@ from server.tools_internal import (
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("doremus-mcp")
+
+# Initialize templates at startup
+try:
+    initialize_templates()
+except Exception as e:
+    logger.error(f"Failed to initialize templates: {e}")
 
 # Initialize FastMCP server
 mcp = FastMCP("DOREMUS Knowledge Graph Server")
@@ -206,7 +214,7 @@ async def associate_to_N_entities(
     return await associate_to_N_entities_internal(subject, obj, query_id, n)
 
 
-#@mcp.tool()
+@mcp.tool()
 async def groupBy_having(
         subject: str, 
         query_id: str, 
@@ -298,7 +306,7 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
     return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
 
 
-#@mcp.tool()
+@mcp.tool()
 async def add_triplet(
     subject: str, 
     subject_class: str, 
@@ -328,7 +336,7 @@ async def add_triplet(
 
 
 @mcp.tool()
-async def add_select(
+async def select_variable(
     variable: str,
     query_id: str,
     aggregator: Optional[str] = None
@@ -395,7 +403,7 @@ async def find_candidate_entities(
     return find_candidate_entities_internal(name, entity_type)
 
 
-#@mcp.tool()
+@mcp.tool()
 async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     """
     It shows all direct properties of a specific entity (e.g., "http://data.doremus.org/artist/...") or of a class (e.g., "ecrm:E21_Person").

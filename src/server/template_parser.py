@@ -57,6 +57,7 @@ class TemplateDefinition:
     core_triples: List[str]
     filters: Dict[str, FilterDefinition] = field(default_factory=dict)
     var_classes: Dict[str, str] = field(default_factory=dict)  # Maps variable names to their classes
+    default_select_vars: List[str] = field(default_factory=list) # Variables to select by default
 
 
 class TemplateParseError(Exception):
@@ -238,6 +239,7 @@ def extract_var_classes_from_triples(all_triples: List[str]) -> Dict[str, str]:
             if pred not in ['a', 'rdf:type']:
                 if o_name not in var_predicates_range:
                     var_predicates_range[o_name] = []
+                var_predicates_range[o_name] = [] # Fix initialization bug
                 var_predicates_range[o_name].append(pred) # Class of o_name is RANGE of pred
     
     # Query KG for variables without explicit type
@@ -464,11 +466,20 @@ def parse_template_file(filepath: str) -> TemplateDefinition:
     name_match = re.search(r'# Template: (.+)', content)
     template_name = name_match.group(1).strip() if name_match else path.stem
     
-    # Extract base variable from SELECT
-    base_var_match = re.search(r'SELECT DISTINCT \?(\w+)', content)
-    if not base_var_match:
-        raise TemplateParseError(f"Could not find SELECT DISTINCT ?var in {path.name}")
-    base_variable = base_var_match.group(1)
+    # Extract ALL variables from SELECT
+    select_match = re.search(r'SELECT DISTINCT(.*?)(?=\s+WHERE)', content, re.IGNORECASE | re.DOTALL)
+    if not select_match:
+         raise TemplateParseError(f"Could not find SELECT DISTINCT clause in {path.name}")
+    
+    select_content = select_match.group(1)
+    # Extract vars including those with regex (though simple ?var is expected for templates)
+    select_vars = re.findall(r'\?(\w+)', select_content)
+    
+    if not select_vars:
+        raise TemplateParseError(f"No variables found in SELECT clause in {path.name}")
+        
+    base_variable = select_vars[0] # Assume first is base
+    default_select_vars = select_vars
     
     # Split content into sections
     sections = re.split(r'(# filter: ".*")', content)
@@ -517,7 +528,8 @@ def parse_template_file(filepath: str) -> TemplateDefinition:
         base_class=base_class,
         core_triples=core_triples,
         filters=filters,
-        var_classes=var_classes
+        var_classes=var_classes,
+        default_select_vars=default_select_vars
     )
 
 
@@ -582,3 +594,28 @@ def get_cached_template(name: str) -> TemplateDefinition:
         raise TemplateParseError(f"Template not found: {name}")
     
     return _templates_cache[name]
+
+
+def initialize_templates():
+    """
+    Initialize templates cache and validate variable classes.
+    Logs warning for any template variable that lacks a resolved class.
+    """
+    global _templates_cache
+    _templates_cache = load_all_templates()
+    
+    for tmpl_name, tmpl_def in _templates_cache.items():
+        # Check if all default selected variables have a class
+        missing_classes = []
+        for var in tmpl_def.default_select_vars:
+            if var not in tmpl_def.var_classes:
+                missing_classes.append(var)
+        
+        if missing_classes:
+            logger.warning(
+                f"Template '{tmpl_name}' initialized with missing class definitions "
+                f"for variables: {missing_classes}. "
+                "These variables may not have metadata in Generated Queries."
+            )
+        else:
+             logger.info(f"Template '{tmpl_name}' validated successfully with {len(tmpl_def.default_select_vars)} variables.")

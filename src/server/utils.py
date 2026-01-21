@@ -416,3 +416,26 @@ def get_quantity_property(entity_uri: str, graph: Dict) -> Optional[str]:
                 if "quantity" in pred.lower():
                     return pred
     return None
+
+def format_as_markdown_table(data: List[Dict[str, Any]]) -> str:
+    """
+    Formats a list of dictionaries as a Markdown table.
+    """
+    if not data:
+        return ""
+        
+    # Extract headers from the first dictionary to ensure order
+    headers = list(data[0].keys())
+    
+    # Create header row
+    md_table = "| " + " | ".join(headers) + " |\n"
+    md_table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
+    
+    # Create rows
+    for row in data:
+        values = [str(row.get(h, "")) for h in headers]
+        # Sanitize values (remove newlines to prevent breaking table, escape pipes)
+        values = [v.replace("\n", " ").replace("|", r"\|") for v in values]
+        md_table += "| " + " | ".join(values) + " |\n"
+        
+    return md_table

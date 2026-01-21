@@ -1,8 +1,9 @@
 # Template: track
-SELECT DISTINCT ?track
+SELECT DISTINCT ?track ?title
 WHERE {
 # build_query
 ?track a mus:M24_Track .
+?track rdfs:label ?title .
 ?track mus:U51_is_partial_or_full_recording_of ?performance .
 ?performance mus:U54_is_performed_expression_of ?work .
 ?work rdfs:label ?workTitle .
