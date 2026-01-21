@@ -1,0 +1,12 @@
+# category: "Tracks"
+# question: "List tracks from publications(works) with title 'Goldberg Variations'."
+# tools: build_query, filter
+SELECT DISTINCT ?track ?title
+WHERE {
+  ?track a mus:M24_Track ;
+         rdfs:label ?title ;
+         mus:U51_is_partial_or_full_recording_of ?performance .
+  ?performance mus:U54_is_performed_expression_of ?work .
+  ?work rdfs:label ?workTitle .
+  FILTER (REGEX(?workTitle, "Variations Goldberg", "i"))
+}

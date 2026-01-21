@@ -1,0 +1,12 @@
+# category: "Recordings"
+# question: "Count the number of recordings for each genre, showing the top 5."
+# tools: build_query, add_triplet, groupBy_having, execute_query
+SELECT SAMPLE(?genreLabel) as ?genreLbl (COUNT(DISTINCT ?recordingEvent) AS ?count)
+WHERE {
+  ?recordingEvent a efrbroo:F29_Recording_Event ;
+                  efrbroo:R20_recorded / efrbroo:R66_included_performed_version_of / mus:U12_has_genre ?genre .
+  ?genre skos:prefLabel ?genreLabel .
+}
+GROUP BY ?genre
+ORDER BY DESC(?count)
+LIMIT 5
