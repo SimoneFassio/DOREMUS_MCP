@@ -360,7 +360,8 @@ async def resolve_entity_uri(name: str, entity_type: str, question: str = "", lo
             
             system_prompt = f"""You are an expert in entity resolution for the DOREMUS music knowledge base.
 Choose the most semantically relevant entity that matches the user's query intent.
-If none of the specific entities match well, choose the REGEX option to use pattern matching instead."""
+If none of the specific entities match well, choose the REGEX option to use pattern matching instead.
+Choose REGEX when the user is not asking about a specific entity (like an exact work or concert) but about a group of entities (like a set of works)."""
             
             pattern_intent = f"""Which of these entities best represents '{name}' (type: {entity_type})?
 {f"Given the question: '{question}'" if question else ""}
@@ -393,4 +394,13 @@ Return only the number (index) of the best match."""
     except Exception as e:
         logger.warning(f"Failed to resolve entity {name}: {e}")
     
+    return None
+
+def get_quantity_property(entity_uri: str, graph: Dict) -> Optional[str]:
+    """Helper that finds the property to filter based on number of entities."""
+    for node, edges in graph.items():
+        if node == entity_uri:
+            for pred, _ in edges:
+                if "quantity" in pred.lower():
+                    return pred
     return None

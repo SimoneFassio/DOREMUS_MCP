@@ -1,0 +1,27 @@
+# Template: artist
+SELECT DISTINCT ?artist
+WHERE {
+# build_query
+?artist a ecrm:E21_Person .
+?artist foaf:name ?name .
+
+# filter: "name":"?artist":"?name":"artist"
+?artist foaf:name ?name .
+
+# filter: "nationality":"":"?countryCode":"literal"
+?artist schema:birthPlace / geonames:countryCode ?countryCode .
+
+# filter: "birth_place":"?birthPlace":"?birthPlaceLabel":"place"
+?artist schema:birthPlace ?birthPlace .
+?birthPlace geonames:name ?birthPlaceLabel .
+
+# filter: "death_place":"?deathPlace":"?deathPlaceLabel":"place"
+?artist schema:deathPlace ?deathPlace .
+?deathPlace geonames:name ?deathPlaceLabel .
+
+# filter: "work_title":"":"?workTitle":"others"
+?expCreation ecrm:P9_consists_of / ecrm:P14_carried_out_by ?artist .
+?expCreation efrbroo:R17_created ?work .
+?work rdfs:label ?workTitle .
+
+}

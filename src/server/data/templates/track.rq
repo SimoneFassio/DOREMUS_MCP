@@ -1,0 +1,28 @@
+# Template: track
+SELECT DISTINCT ?track
+WHERE {
+# build_query
+?track a mus:M24_Track .
+?track mus:U51_is_partial_or_full_recording_of ?performance .
+?performance mus:U54_is_performed_expression_of ?work .
+?work rdfs:label ?workTitle .
+
+# filter: "work_title":"":"?workTitle":"others"
+?track mus:U51_is_partial_or_full_recording_of ?performance .
+?performance mus:U54_is_performed_expression_of ?work .
+?work rdfs:label ?workTitle .
+
+# filter: "composer_name":"?composer":"?composerName":"artist"
+?track mus:U51_is_partial_or_full_recording_of ?performance .
+?performance mus:U54_is_performed_expression_of ?work .
+?expCreation efrbroo:R17_created ?work .
+?expCreation ecrm:P9_consists_of / ecrm:P14_carried_out_by ?composer .
+?composer foaf:name ?composerName .
+
+# filter: "genre":"?genre":"?genreLabel":"vocabulary"
+?track mus:U51_is_partial_or_full_recording_of ?performance .
+?performance mus:U54_is_performed_expression_of ?work .
+?work mus:U12_has_genre ?genre .
+?genre skos:prefLabel ?genreLabel .
+
+}
