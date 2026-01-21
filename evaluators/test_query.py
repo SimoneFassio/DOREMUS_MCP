@@ -158,31 +158,30 @@ async def main():
         """Check the percentage of correct values returned by the query."""
         ref_uris = []
         output_uris = []
-        reference_output = []
         query_output = []
+        loop = asyncio.get_running_loop()
+
+        def execute_query_safe(query, limit, retry_limit=None):
+            result = execute_sparql_query(query, limit=limit)
+            if not result["success"] and retry_limit:
+                error_msg = result.get("error", "")
+                if "timeout" in error_msg.lower():
+                    print(f"Query timed out with limit {limit}. Retrying with limit {retry_limit}...")
+                    return execute_sparql_query(query, limit=retry_limit)
+            return result
+        
+        # Run blocking reference query in executor with retry
+        reference_output_dict = await loop.run_in_executor(
+            None, 
+            lambda: execute_query_safe(reference_outputs["rdf_query"], limit=10000, retry_limit=100)
+        )
+        
+        if not reference_output_dict["success"] or reference_output_dict is None:
+            print(f"Error: Failed to execute reference SPARQL query. {reference_output_dict.get('error')}")
+            return 0.0
+        reference_output = reference_output_dict["results"]
+
         if outputs.get("generated_query"):
-            loop = asyncio.get_running_loop()
-
-            def execute_query_safe(query, limit, retry_limit=None):
-                result = execute_sparql_query(query, limit=limit)
-                if not result["success"] and retry_limit:
-                    error_msg = result.get("error", "")
-                    if "timeout" in error_msg.lower():
-                        print(f"Query timed out with limit {limit}. Retrying with limit {retry_limit}...")
-                        return execute_sparql_query(query, limit=retry_limit)
-                return result
-            
-            # Run blocking reference query in executor with retry
-            reference_output_dict = await loop.run_in_executor(
-                None, 
-                lambda: execute_query_safe(reference_outputs["rdf_query"], limit=10000, retry_limit=100)
-            )
-            
-            if not reference_output_dict["success"] or reference_output_dict is None:
-                print(f"Error: Failed to execute reference SPARQL query. {reference_output_dict.get('error')}")
-                return 0.0
-            reference_output = reference_output_dict["results"]
-
             # Run blocking generated query in executor with retry
             query_output_dict = await loop.run_in_executor(
                 None,
