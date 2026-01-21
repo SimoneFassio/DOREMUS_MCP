@@ -1,6 +1,7 @@
 # category: "Works and Expressions"
 # question: "List works composed by Ravel involving a Piano."
 # tools: build_query, filter, associate_to_N_entities
+# query:
 SELECT DISTINCT ?expression ?title
 WHERE {
   ?expression a efrbroo:F22_Self-Contained_Expression ;

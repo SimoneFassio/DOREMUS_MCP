@@ -1,6 +1,7 @@
 # category: "Tracks"
 # question: "List tracks from publications(works) with title 'Goldberg Variations'."
 # tools: build_query, filter
+# query:
 SELECT DISTINCT ?track ?title
 WHERE {
   ?track a mus:M24_Track ;

@@ -1,6 +1,7 @@
 # category: "Recordings"
 # question: "Count the number of tracks for each genre, showing the top 5."
 # tools: build_query, add_triplet, groupBy_having, execute_query
+# query:
 SELECT DISTINCT (COUNT(DISTINCT ?track) AS ?track_count) ?genreLabel
 WHERE {
   # Module: track_core
