@@ -926,7 +926,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         
         if aggregator:
             aggregator = aggregator.upper()
-            if aggregator not in ["COUNT", "SUM", "AVG", "MAX", "MIN"]:
+            if aggregator not in ["COUNT", "SUM", "AVG", "MAX", "MIN", "SAMPLE"]:
                 raise Exception(f"Invalid aggregator {aggregator}")
         if existing:
             # Update aggregator

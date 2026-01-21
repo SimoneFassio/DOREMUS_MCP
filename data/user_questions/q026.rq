@@ -1,12 +1,17 @@
 # category: "Recordings"
-# question: "Count the number of recordings for each genre, showing the top 5."
+# question: "Count the number of tracks for each genre, showing the top 5."
 # tools: build_query, add_triplet, groupBy_having, execute_query
-SELECT SAMPLE(?genreLabel) as ?genreLbl (COUNT(DISTINCT ?recordingEvent) AS ?count)
+SELECT DISTINCT (COUNT(DISTINCT ?track) AS ?track_count) ?genreLabel
 WHERE {
-  ?recordingEvent a efrbroo:F29_Recording_Event ;
-                  efrbroo:R20_recorded / efrbroo:R66_included_performed_version_of / mus:U12_has_genre ?genre .
+  # Module: track_core
+  ?track a mus:M24_Track .
+  ?track mus:U51_is_partial_or_full_recording_of ?performance .
+  ?performance mus:U54_is_performed_expression_of ?work .
+ 
+  # Module: track_genre
+  ?work mus:U12_has_genre ?genre .
   ?genre skos:prefLabel ?genreLabel .
 }
-GROUP BY ?genre
-ORDER BY DESC(?count)
+GROUP BY ?genreLabel ?genre
+ORDER BY DESC(?track_count)
 LIMIT 5
