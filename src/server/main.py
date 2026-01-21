@@ -382,7 +382,7 @@ async def find_candidate_entities(
             - "artist": Broad artist bucket covering people, ensembles, broadcasters, etc. Use COMPLETE names
             - "vocabulary": SKOS concepts such as genres, media of performance(instruments, etc.), keys (skos:Concept)
             - "place": ECRM places and geonames (ecrm:E53_Place)
-            - "others": Everything else; falls back to rdfs:label search (default)
+            - "others": Everything else (rdfs:label), automatic fallback in case no other result is found
 
     Returns:
         Dictionary with matching entities, including their URIs, labels, and reported RDF types

@@ -185,20 +185,32 @@ def find_candidate_entities_utils(
 
     result = execute_sparql_query(query, limit=limit)
     
-    # Eliminate duplicates based on entity URI and type
+    # Fallback mechanism: if no matches found and type is not "others", try "others"
+    if result.get("success") and len(result.get("results", [])) == 0 and normalized_type != "others":
+        logger.info(f"No results found for '{name}' with type '{normalized_type}'. Retrying with type 'others'.")
+        return find_candidate_entities_utils(name, "others", limit)
+
+    # Eliminate duplicates based on entity URI and merge types
     unique_entities = {}
     for e in result.get("results", []):
         ent_uri = e.get("entity")
-        ent_type = e.get("type")
-        key = (ent_uri, ent_type)
-        if key not in unique_entities:
-            unique_entities[key] = e
+        ent_type = contract_uri(e.get("type"))
+        
+        if ent_uri not in unique_entities:
+            e["types"] = {ent_type} # Use a set to store unique types
+            unique_entities[ent_uri] = e
+        else:
+             unique_entities[ent_uri]["types"].add(ent_type)
 
     if result.get("success"):
         entities = []
         for e in unique_entities.values():
-            e["type"] = contract_uri(e["type"])
+            # Join types with " & "
+            sorted_types = sorted(list(e["types"]))
+            e["type"] = " & ".join(sorted_types)
+            del e["types"] # Remove the set before returning
             entities.append(e)
+            
         return {
             "query": name,
             "entity_type": entity_type,
