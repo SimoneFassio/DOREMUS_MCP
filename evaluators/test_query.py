@@ -150,7 +150,8 @@ async def main():
         return {
             "generated_query": final_query,
             "final_answer": final_answer,
-            "sampling_requests": sampling_requests
+            "sampling_requests": sampling_requests,
+            "question": inputs["query_input"]
         }
 
     async def accuracy(outputs: dict, reference_outputs: dict) -> float:
@@ -220,17 +221,57 @@ async def main():
         
         # Special case: If there are no URI detected in one of the two results, try to match directly all possible combination of rows and columns.
         if not ref_uris or not output_uris:
-            def extract_all_values(results):
-                vals = set()
-                if not results: return vals
-                for row in results:
-                    for v in row.values():
-                        if v: vals.add(str(v))
-                return vals
-
-            ref_vals = extract_all_values(reference_output)
-            out_vals = extract_all_values(query_output)
+                # Try LLM Judge Fallback
+            print("⚠️ No URIs or Values found for comparison. Using LLM Judge fallback...")
             
+            # Instantiate judge
+            llm = create_model(provider, model_name)
+            
+            question = outputs.get("question", "")
+            final_answer = outputs.get("final_answer", "")
+            # We use the reference query results as truth, but also the query itself might be useful context,
+            # but here we rely on the reference answer data. 
+            # Converting reference output to string representation
+            ref_ans_str = json.dumps(reference_output)
+            ref_ans_str = ref_ans_str.replace("\n", "")
+            ref_ans_str = ref_ans_str[:1000] + "..." if len(ref_ans_str) > 1000 else ref_ans_str
+            
+            prompt = f"""
+You are an expert evaluator. Determine if the candidate answer is correct based on the reference answer to the question.
+
+Question: {question}
+
+Reference Answer (Ground Truth Data):
+{ref_ans_str}
+
+Candidate Final Answer (from Assistant):
+{final_answer}
+
+Task:
+- If the Candidate Answer matches the data/facts in the Reference Answer, accuracy is 1.0.
+- If it is partially correct (e.g. missing some items but got others right), accuracy is 0.5.
+- If it is incorrect or says "I don't know" when there is an answer, accuracy is 0.0.
+
+Output ONLY a single number: 1.0, 0.5, or 0.0.
+            """
+            
+            try:
+                response = await llm.ainvoke(prompt)
+                score_text = response.content.strip()
+                # extract number
+                import re
+                match = re.search(r"0\.|1\.0|0|1", score_text)
+                if match:
+                        score = float(match.group())
+                        print(f" LLM Judge Score (Accuracy): {score}")
+                        return score
+                else:
+                    print(f" Could not parse LLM score: {score_text}")
+                    return 0.0
+            except Exception as e:
+                print(f" LLM Judge Error: {e}")
+                return 0.0
+
             if not out_vals:
                 percentage_correct = 100.0 if not ref_vals else 0.0
             else:
@@ -278,9 +319,12 @@ async def main():
             return {"score": 0, "comment": "No query generated"}
 
         # Define the prompt for the judge
+        question = outputs.get("question", "")
         prompt = f"""
         You are an expert SPARQL query evaluator. Compare the GENERATED SPARQL query with the REFERENCE SPARQL query.
         
+        Question: {question}
+
         REFERENCE QUERY:
         ```sparql
         {reference_query}
@@ -295,6 +339,7 @@ async def main():
         1. Ignore minor whitespace or limit differences (e.g. LIMIT 100 vs LIMIT 50).
         2. Check if the intent filters and selection variables are semantically equivalent.
         3. Check if the graph patterns (triples) match the same logic.
+        4. VERIFY if the generated query correctly answers the specific Question provided.
         
         Output a JSON object with:
         - "score": A number between 0 and 1 (1 means semantically equivalent, 0 means completely wrong).
@@ -333,8 +378,11 @@ async def main():
             return {"score": 0, "comment": "No query generated"}
 
         # Define the prompt for the judge
+        question = outputs.get("question", "")
         prompt = f"""
         You are an expert SPARQL query evaluator. Determine if the GENERATED SPARQL query is effectively CORRECT compared to the REFERENCE SPARQL query.
+
+        Question: {question}
 
         REFERENCE QUERY:
         ```sparql
@@ -357,6 +405,7 @@ async def main():
            - Extra triplets present in the query -> IGNORE (Correct)
            - Differences in how the date are filtered (consider only the year) -> IGNORE (Correct)
         4. **Focus on Results**: If the query would likely return the correct core entities (Subject/Object) as the reference, mark it as CORRECT.
+        5. **Verify Question Relevance**: Ensure the query answers the specific Question.
 
         Output a JSON object with:
         - "is_correct": boolean (true if correct, false otherwise)
