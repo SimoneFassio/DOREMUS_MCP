@@ -144,8 +144,6 @@ def get_entity_properties_internal(
 #-------------------------------
 
 
-
-
 async def build_query_v2_internal(
     question: str,
     template: str
@@ -221,7 +219,7 @@ async def build_query_v2_internal(
         # CATEGOPRY 3: Strict filtering
         if "strictly" in question.lower() or "exactly" in question.lower() or "quartet" in question.lower() or "trio" in question.lower():
             strategy = """
-### TYPE 3: Strict/Exact Instrumentation (Closed Sets)
+### TYPE 3: Strict/Exact Filters (Closed Sets)
 *Trigger:* "Strictly...", "Exactly...", "String Quartet" (implied set), "Trio"
 *Strategy:*
 1. `build_query`
@@ -229,7 +227,7 @@ async def build_query_v2_internal(
 3. `groupBy` to count the Total Number of Parts (ensuring no extra instruments).
 
 *Example:* "Works written for violin, clarinet and piano (strictly)"
--> build_query(...)
+-> build_query(template="expression")
 -> find_candidate_entities("violin", "vocabulary") -> violin_uri
 -> find_candidate_entities("clarinet", "vocabulary") -> clarinet_uri
 -> find_candidate_entities("piano", "vocabulary") -> piano_uri
@@ -240,7 +238,7 @@ async def build_query_v2_internal(
 (Note: Logic is 'equal 3' because we have 3 distinct instrument parts)
 
 *Example:* "Works for String Quartet" (2 Violins, 1 Viola, 1 Cello = 3 distinct parts usually)
--> build_query(...)
+-> build_query(template="expression")
 -> find_candidate_entities("violin", "vocabulary") -> violin_uri
 -> find_candidate_entities("viola", "vocabulary") -> viola_uri
 -> find_candidate_entities("cello", "vocabulary") -> cello_uri
@@ -253,20 +251,25 @@ async def build_query_v2_internal(
         # CATEGORY 2: Open filters
         elif "for" in question.lower() or "at least" in question.lower():
             strategy = """
-### TYPE 2: Open Instrumentation (Inclusion)
+### TYPE 2: Open Filters (Inclusion)
 *Trigger:* "Works for oboe...", "involving at least...", "for choir and orchestra"
-*Strategy:* 1. `build_query` (set template="Works")
+*Strategy:* 1. `build_query` (set template="expression")
 2. `associate_to_N_entities` for EACH instrument mentioned.
 3. `has_quantity_of` if a date/time is mentioned.
 4. DO NOT use `groupBy` (we allow other instruments to be present).
 
 *Example:* "Works written for oboe and orchestra in 1900"
--> build_query(..., filters={})
+-> build_query(template="expression")
 -> find_candidate_entities("oboe", "vocabulary") -> oboe_uri
 -> find_candidate_entities("orchestra", "vocabulary") -> orchestra_uri
 -> associate_to_N_entities(expression, oboe_uri, q_id)
 -> associate_to_N_entities(expression, orchestra_uri, q_id)
 -> has_quantity_of(expCreation, time-span, range, "01-01-1900", "31-12-1900", q_id)
+
+*Example:* "Concerts recorded at Philarmonie de Paris between 1995 and 2014"
+-> build_query(template="performance")
+-> apply_filter(q_id, base_variable="performance", template="performance", filters={"location": "Philarmonie de Paris"})
+-> has_quantity_of(expCreation, time-span, range, "01-01-1995", "31-12-2014", q_id)
             """
 
         # CATEGORY 1: simple metadata queries that can be asked with query builder -> default
@@ -276,7 +279,8 @@ async def build_query_v2_internal(
 *Trigger:* "Who composed...", "Works by...", "Sacred music..."
 *Strategy:* Use `build_query` with filters. Do NOT use entity associations unless instruments are mentioned.
 *Example:* "Works by Mozart"
--> build_query(template="Artists", filters={"name": "Wolfgang Amadeus Mozart"})
+-> build_query(template="expression")
+-> apply_filter(query_id, base_variable="work", template="expression", filters={"composer_name": "Mozart"})
 Review what has been done by the build_query tool and if necessary call it again
             """
 

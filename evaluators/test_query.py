@@ -6,6 +6,13 @@ import logging
 import httpx
 from dotenv import load_dotenv
 from langgraph.errors import GraphRecursionError
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Use `streamable_http_client` instead\.",
+    category=DeprecationWarning,
+)
 
 # Add src to path for local development
 sys.path.insert(0, 'src')
