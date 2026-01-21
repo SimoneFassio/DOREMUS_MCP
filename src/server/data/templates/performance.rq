@@ -10,7 +10,7 @@ WHERE {
 
 # filter: "location":"?place":"?placeName":"place"
 ?performance ecrm:P7_took_place_at ?place .
-?place rdfs:label ?placeName .
+?place geonames:name ?placeName .
 
 # filter: "performer":"?performer":"?performerName":"artist"
 ?performance ecrm:P9_consists_of ?performanceActivity .

@@ -8,13 +8,17 @@ WHERE {
 # filter: "title":"":"?title":"literal"
 ?recordingEvent rdfs:label ?title .
 
-# filter: "carried_out_by":"?performer":"?performerName":"others"
+# filter: "recorded_by":"?recorder":"?recorderName":"others"
+?recordingEvent ecrm:P9_consists_of / ecrm:P14_carried_out_by ?recorder .
+?recorder foaf:name ?recorderName .
+
+# filter: "performed_by":"?performer":"?performerName":"others"
 ?recordingEvent ecrm:P9_consists_of / ecrm:P14_carried_out_by ?performer .
 ?performer foaf:name ?performerName .
 
 # filter: "location":"?place":"?placeName":"place"
 ?recordingEvent ecrm:P7_took_place_at ?place .
-?place rdfs:label ?placeName .
+?place geonames:name ?placeName .
 
 # filter: "recorded_performance":"":"?performanceLabel":"others"
 ?recordingEvent efrbroo:R20_recorded ?performance .

@@ -13,11 +13,11 @@ WHERE {
 
 # filter: "birth_place":"?birthPlace":"?birthPlaceLabel":"place"
 ?artist schema:birthPlace ?birthPlace .
-?birthPlace rdfs:label ?birthPlaceLabel .
+?birthPlace geonames:name ?birthPlaceLabel .
 
 # filter: "death_place":"?deathPlace":"?deathPlaceLabel":"place"
 ?artist schema:deathPlace ?deathPlace .
-?deathPlace rdfs:label ?deathPlaceLabel .
+?deathPlace geonames:name ?deathPlaceLabel .
 
 # filter: "work_title":"":"?workTitle":"others"
 ?expCreation ecrm:P9_consists_of / ecrm:P14_carried_out_by ?artist .

@@ -361,7 +361,7 @@ async def resolve_entity_uri(name: str, entity_type: str, question: str = "", lo
             system_prompt = f"""You are an expert in entity resolution for the DOREMUS music knowledge base.
 Choose the most semantically relevant entity that matches the user's query intent.
 If none of the specific entities match well, choose the REGEX option to use pattern matching instead.
-Also you should choose REGEX when the user is not asking about a specific entity (like an exact work or concert) but about a group of entities (like a set of works)."""
+Choose REGEX when the user is not asking about a specific entity (like an exact work or concert) but about a group of entities (like a set of works)."""
             
             pattern_intent = f"""Which of these entities best represents '{name}' (type: {entity_type})?
 {f"Given the question: '{question}'" if question else ""}

@@ -170,7 +170,7 @@ async def associate_to_N_entities(
         obj: The specific COMPONENT or INSTRUMENT required. (e.g., "violin", "piano", "cello").
         query_id: The ID of the active query to modify.
         n: The specific QUANTITY of the object required. 
-           - Pass an integer (e.g., 3) for exact matches ("for 3 violins").
+           - Pass an integer (e.g., 3) for exact matches ("for 3 violins") ONLY if the user explicitly asks for an exact number of components.
            - Pass `None` if the user just asks for the *presence* of the object without a specific count ("for violin").
 
     Returns:
@@ -292,6 +292,8 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
           Output: generated_query="... FILTER ( ?quantity_val <= "PT1H10M"^^xsd:duration) ..." (ISO 8601 duration format)
         - Input: subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1870", valueEnd="1913", query_id="..."
           Output: generated_query="... FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear) ..."
+        - Input: subject="expression", property="ecrm:P4_has_time-span", type="more", value="1870", query_id="..."
+          Output: generated_query="... FILTER ( ?start >= "1870"^^xsd:gYear) ..."
     """
     return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
 
