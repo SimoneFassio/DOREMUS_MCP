@@ -272,15 +272,6 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
             except Exception as e:
                 print(f" LLM Judge Error: {e}")
                 return 0.0
-
-            if not out_vals:
-                percentage_correct = 100.0 if not ref_vals else 0.0
-            else:
-                correct = len(out_vals.intersection(ref_vals))
-                percentage_correct = (correct / len(out_vals)) * 100.0
-
-            print(f" Percentage of correct values (fallback): {percentage_correct:.2f}%")
-            return round(percentage_correct/100, 3)
         
         query_total_uris = 0
         query_correct_uris = 0

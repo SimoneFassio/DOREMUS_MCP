@@ -1246,6 +1246,7 @@ def execute_query_from_id_internal(query_id: str, limit: int, order_by_variable:
             
         logger.info(f"Executing query : {query_str} with limit {limit}")        
         res = execute_sparql_query(query_str, limit)
+        res["query_id"] = query_id
 
         # Post-Processing for LLM safety
         if res.get("success") and "results" in res:
