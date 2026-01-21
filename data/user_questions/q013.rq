@@ -12,5 +12,5 @@ WHERE {
 
   ?activity ecrm:P14_carried_out_by ?artist ;
           mus:U1_used_medium_of_performance <http://data.doremus.org/vocabulary/iaml/mop/svc> .
-  FILTER (?date >= "2001-01-01"^^xsd:date)
+  FILTER (?date >= "2001"^^xsd:gYear)
 }

@@ -1,5 +1,5 @@
 # category: "Performances"
-# question: "Performances performed in January 2016, at the Philharmonie"
+# question: "Performances performed in January 2016, at the Philharmonie de Paris"
 # query:
 SELECT DISTINCT ?performance ?date
 WHERE {

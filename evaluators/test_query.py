@@ -156,72 +156,71 @@ async def main():
 
     async def accuracy(outputs: dict, reference_outputs: dict) -> float:
         """Check the percentage of correct values returned by the query."""
-        if not outputs.get("generated_query"):
-            print("Error: The LLM couldn't generate the query.")
-            return 0.0
-        
-        loop = asyncio.get_running_loop()
+        ref_uris = []
+        output_uris = []
+        if outputs.get("generated_query"):
+            loop = asyncio.get_running_loop()
 
-        def execute_query_safe(query, limit, retry_limit=None):
-            result = execute_sparql_query(query, limit=limit)
-            if not result["success"] and retry_limit:
-                error_msg = result.get("error", "")
-                if "timeout" in error_msg.lower():
-                    print(f"Query timed out with limit {limit}. Retrying with limit {retry_limit}...")
-                    return execute_sparql_query(query, limit=retry_limit)
-            return result
-        
-        # Run blocking reference query in executor with retry
-        reference_output_dict = await loop.run_in_executor(
-            None, 
-            lambda: execute_query_safe(reference_outputs["rdf_query"], limit=10000, retry_limit=100)
-        )
-        
-        if not reference_output_dict["success"] or reference_output_dict is None:
-            print(f"Error: Failed to execute reference SPARQL query. {reference_output_dict.get('error')}")
-            return 0.0
-        reference_output = reference_output_dict["results"]
+            def execute_query_safe(query, limit, retry_limit=None):
+                result = execute_sparql_query(query, limit=limit)
+                if not result["success"] and retry_limit:
+                    error_msg = result.get("error", "")
+                    if "timeout" in error_msg.lower():
+                        print(f"Query timed out with limit {limit}. Retrying with limit {retry_limit}...")
+                        return execute_sparql_query(query, limit=retry_limit)
+                return result
+            
+            # Run blocking reference query in executor with retry
+            reference_output_dict = await loop.run_in_executor(
+                None, 
+                lambda: execute_query_safe(reference_outputs["rdf_query"], limit=10000, retry_limit=100)
+            )
+            
+            if not reference_output_dict["success"] or reference_output_dict is None:
+                print(f"Error: Failed to execute reference SPARQL query. {reference_output_dict.get('error')}")
+                return 0.0
+            reference_output = reference_output_dict["results"]
 
-        # Run blocking generated query in executor with retry
-        query_output_dict = await loop.run_in_executor(
-            None,
-            lambda: execute_query_safe(outputs["generated_query"], limit=100, retry_limit=10)
-        )
-        
-        if not query_output_dict["success"] or query_output_dict is None:
-            print(f"Error: Failed to execute generated SPARQL query. {query_output_dict.get('error')}")
-            return 0.0
-        query_output = query_output_dict["results"]
-        
-        # Ensure both outputs are lists for comparison
-        if not isinstance(reference_output, list) or not isinstance(query_output, list):
-            print("Error: Outputs are not lists.")
-            return 0.0
-        
-        # Helper to extract URI values from list of dicts
-        def extract_uri_values(results):
-            uri_values = set()
-            if not results:
+            # Run blocking generated query in executor with retry
+            query_output_dict = await loop.run_in_executor(
+                None,
+                lambda: execute_query_safe(outputs["generated_query"], limit=100, retry_limit=10)
+            )
+            
+            if not query_output_dict["success"] or query_output_dict is None:
+                print(f"Error: Failed to execute generated SPARQL query. {query_output_dict.get('error')}")
+                return 0.0
+            query_output = query_output_dict["results"]
+            
+            # Ensure both outputs are lists for comparison
+            if not isinstance(reference_output, list) or not isinstance(query_output, list):
+                print("Error: Outputs are not lists.")
+                return 0.0
+            
+            # Helper to extract URI values from list of dicts
+            def extract_uri_values(results):
+                uri_values = set()
+                if not results:
+                    return uri_values
+                
+                # Find columns that look like URIs (check first row as heuristic, or all rows)
+                # Checking all rows to be safe, or iterate over keys of first row and check values
+                keys = results[0].keys()
+                
+                for key in keys:
+                    # collecting all values for this key
+                    col_values = [r.get(key) for r in results if r.get(key)]
+                    # Check if majority or any starts with http. Let's assume if it looks like a URI column
+                    if any(isinstance(v, str) and v.startswith("http") for v in col_values):
+                            uri_values.update(col_values)
                 return uri_values
-            
-            # Find columns that look like URIs (check first row as heuristic, or all rows)
-            # Checking all rows to be safe, or iterate over keys of first row and check values
-            keys = results[0].keys()
-            
-            for key in keys:
-                # collecting all values for this key
-                col_values = [r.get(key) for r in results if r.get(key)]
-                # Check if majority or any starts with http. Let's assume if it looks like a URI column
-                if any(isinstance(v, str) and v.startswith("http") for v in col_values):
-                        uri_values.update(col_values)
-            return uri_values
 
-        ref_uris = extract_uri_values(reference_output)
-        output_uris = extract_uri_values(query_output)
+            ref_uris = extract_uri_values(reference_output)
+            output_uris = extract_uri_values(query_output)
         
         # Special case: If there are no URI detected in one of the two results, try to match directly all possible combination of rows and columns.
         if not ref_uris or not output_uris:
-                # Try LLM Judge Fallback
+            # Try LLM Judge Fallback
             print("⚠️ No URIs or Values found for comparison. Using LLM Judge fallback...")
             
             # Instantiate judge

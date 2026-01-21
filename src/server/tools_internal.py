@@ -850,27 +850,19 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
             
             # Helper to create basic time-span structure
             def create_ts_structure(include_end=True):
+                start_var = "start"
                 local_triples = [{
                     "subj": create_triple_element(subject_var, subject_label if subject_label else "", "var"),
-                    "pred": create_triple_element("ecrm:P4_has_time-span", "ecrm:P4_has_time-span", "uri"),
-                    "obj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var")
-                }]
-                local_defined_vars = [{"var_name": ts_var, "var_label": "ecrm:E52_Time-Span"}]
-                
-                # Start var is always needed for our supported filters
-                start_var = "start"
-                local_triples.append({
-                    "subj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var"),
-                    "pred": create_triple_element("time:hasBeginning / time:inXSDDate", "time:hasBeginning / time:inXSDDate", "uri"),
+                    "pred": create_triple_element("ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate", "ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate", "uri"),
                     "obj": create_triple_element(start_var, "", "var")
-                })
-                local_defined_vars.append({"var_name": start_var, "var_label": ""})
+                }]
+                local_defined_vars = [{"var_name": start_var, "var_label": ""}]
                 
                 end_var = "end"
                 if include_end:
                     local_triples.append({
-                        "subj": create_triple_element(ts_var, "ecrm:E52_Time-Span", "var"),
-                        "pred": create_triple_element("time:hasEnd / time:inXSDDate", "time:hasEnd / time:inXSDDate", "uri"),
+                        "subj": create_triple_element(subject_var, subject_label if subject_label else "", "var"),
+                        "pred": create_triple_element("ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate", "ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate", "uri"),
                         "obj": create_triple_element(end_var, "", "var")
                     })
                     local_defined_vars.append({"var_name": end_var, "var_label": ""})
@@ -951,46 +943,46 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
             else:
                 return f"{var} {op} {val}"
 
-        if type == "less":
-            # <= valueStart
-            # If time-span: usually "end time is before X" ?
-            # Or "duration less than X".
-            if is_date:
-                 # "less than 1900" -> Ends before 1900? or Starts before? 
-                 # Usually "written before 1900" -> End date < 1900.
-                 filter_st.append({'function': '', 'args': [f'?end <= {val_start_fmt}']})
-            else:
-                 filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '<=', val_start_fmt)]})
-                 
-        elif type == "more":
-            # >= valueStart
-            # "more than 1900" -> Starts after 1900
-            if is_date:
-                filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt}']})
-            else:
-                filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '>=', val_start_fmt)]})
-                
-        elif type == "equal":
-            # = valueStart
-            if is_date:
-                # Start = val OR End = val? Or contains?
-                # Let's assume start = val for simplicity or create a generic overlap?
-                # For "written in 1900", it means start >= 1900-01-01 AND end <= 1900-12-31?
-                # But here user says "equal". 
-                filter_st.append({'function': '', 'args': [f'?start = {val_start_fmt}']})
-            else:
-                filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '=', val_start_fmt)]})
-                
-        elif type == "range":
-            # >= valueStart AND <= valueEnd
-            if is_date:
-                # Between 1870 and 1913
-                # Means Start >= 1870 AND End <= 1913 (Inclusive containment)
-                # OR Overlaps? The user example:
-                # ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear
-                filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt} AND ?end <= {val_end_fmt}']})
-            else:
-                filter_st.append({'function': '', 'args': [f'{fmt_cmp(target_var, ">=", val_start_fmt)} AND {fmt_cmp(target_var, "<=", val_end_fmt)}']})
+        if not filter_st:
+            if type == "less":
+                # <= valueStart
+                # If time-span: usually "end time is before X" ?
+                # Or "duration less than X".
+                if is_date:
+                     # "written before 1900" -> End date < 1900.
+                     filter_st.append({'function': '', 'args': [f'?end <= {val_start_fmt}']})
+                else:
+                     filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '<=', val_start_fmt)]})
+                     
+            elif type == "more":
+                # >= valueStart
+                # "more than 1900" -> Starts after 1900
+                if is_date:
+                    filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt}']})
+                else:
+                    filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '>=', val_start_fmt)]})
+                    
+            elif type == "equal":
+                # = valueStart
+                if is_date:
+                    # Start = val OR End = val? Or contains?
+                    # Let's assume start = val for simplicity or create a generic overlap?
+                    # For "written in 1900", it means start >= 1900-01-01 AND end <= 1900-12-31?
+                    # But here user says "equal". 
+                    filter_st.append({'function': '', 'args': [f'?start = {val_start_fmt}']})
+                else:
+                    filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '=', val_start_fmt)]})
+                    
+            elif type == "range":
+                # >= valueStart AND <= valueEnd
+                if is_date:
+                    # Between 1870 and 1913
+                    # Means Start >= 1870 AND End <= 1913 (Inclusive containment)
+                    # OR Overlaps? The user example:
+                    # ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear
+                    filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt} AND ?end <= {val_end_fmt}']})
+                else:
+                    filter_st.append({'function': '', 'args': [f'{fmt_cmp(target_var, ">=", val_start_fmt)} AND {fmt_cmp(target_var, "<=", val_end_fmt)}']})
 
         # 4. Add Module
         module = {

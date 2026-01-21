@@ -286,7 +286,7 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
 
     Args:
         subject: The subject entity variable name (e.g., "expCreation")
-        property: The property uri (e.g., "mus:U78_estimated_duration" or "time-span")
+        property: The property uri (e.g., "mus:U78_estimated_duration" or "ecrm:P4_has_time-span")
         type: "less", "more", "equal", or "range". Do not use "equal" for dates, use "range" with the same value for start and end.
         value: value (number or date), in case of "range" type, it is the start value
         valueEnd: End value (number or date), required only for "range" type
@@ -297,11 +297,11 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
 
     Examples:
         - Input: subject="expression", property="mus:U78_estimated_duration", type="less", value="PT1H10M", valueEnd="", query_id="..."
-          Output: generated_query="... FILTER ( ?quantity_val <= "PT1H10M"^^xsd:duration) ..." (ISO 8601 duration format)
+          Output: generated_query="... ?expression mus:U78_estimated_duration ?quantity_val ... FILTER ( ?quantity_val <= "PT1H10M"^^xsd:duration) ..." (ISO 8601 duration format)
         - Input: subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1870", valueEnd="1913", query_id="..."
-          Output: generated_query="... FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear) ..."
+          Output: generated_query="... ?expCreation ecrm:P4_has_time-span/... ?start ... FILTER ( ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear) ..."
         - Input: subject="expression", property="ecrm:P4_has_time-span", type="more", value="1870", query_id="..."
-          Output: generated_query="... FILTER ( ?start >= "1870"^^xsd:gYear) ..."
+          Output: generated_query="... ?expCreation ecrm:P4_has_time-span/... ?start ... FILTER ( ?start >= "1870"^^xsd:gYear) ..."
     """
     return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
 
@@ -336,7 +336,7 @@ async def add_triplet(
 
 
 @mcp.tool()
-async def select_variable(
+async def select_aggregate_variable(
     variable: str,
     query_id: str,
     aggregator: Optional[str] = None
@@ -355,6 +355,10 @@ async def select_variable(
     
     Returns:
         Dict containing success status and the updated SPARQL query.
+
+    Examples:
+        - Input: variable="expression", query_id="...", aggregator="COUNT"
+          Output: generated_query="... SELECT (COUNT(?expression) AS ?expression) ..."
     """
     return await add_select_variable_internal(variable, aggregator, query_id)
 

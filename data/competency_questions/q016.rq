@@ -11,7 +11,8 @@ WHERE {
           mus:U12_has_genre / skos:prefLabel ?genre.
 
   ?expCreation efrbroo:R17_created ?expression ;
-          ecrm:P4_has_time-span ?ts ;
+          ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end ;
+          ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?start ;
           ecrm:P9_consists_of ?activity .
   
   ?activity ecrm:P14_carried_out_by ?composer  ;
@@ -19,9 +20,6 @@ WHERE {
 
   ?composer foaf:name ?composerName ; schema:birthPlace / geonames:countryCode ?norwegian.
   VALUES ?norwegian { 'NO' }
-
-  ?ts time:hasEnd / time:inXSDDate ?end ;
-                time:hasBeginning / time:inXSDDate ?start .
 
   FILTER ( contains(str(?genre), "chambre") AND ?start >= "1800"^^xsd:gYear AND ?end < "1900"^^xsd:gYear )
 }

@@ -7,5 +7,5 @@ WHERE {
   ?expCreation efrbroo:R17_created ?expression ;
           ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?start ;
           ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end .
-  FILTER (?start >= "1800-01-01"^^xsd:date && ?end <= "1800-12-31"^^xsd:date)
+  FILTER (?start >= "1800"^^xsd:gYear && ?end <= "1800"^^xsd:gYear)
 }

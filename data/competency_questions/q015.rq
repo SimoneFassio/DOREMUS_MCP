@@ -10,9 +10,8 @@ WHERE {
           mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/mld> .
 
   ?expCreation efrbroo:R17_created ?expression ;
-          ecrm:P4_has_time-span ?ts.
-  ?ts time:hasEnd / time:inXSDDate ?end ;
-                time:hasBeginning / time:inXSDDate ?start .
+          ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end ;
+          ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?start .
 
   FILTER ( ?start >= "1900"^^xsd:gYear AND ?end < "2000"^^xsd:gYear )
 }

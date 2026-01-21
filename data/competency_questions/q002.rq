@@ -9,9 +9,8 @@ WHERE {
           rdfs:label ?title .
 
   ?expCreation efrbroo:R17_created ?expression ;
-          ecrm:P4_has_time-span ?ts.
-  ?ts time:hasEnd / time:inXSDDate ?end ;
-      time:hasBeginning / time:inXSDDate ?start .
+          ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end ;
+          ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?start .
 
   FILTER ( ?start <= "1836"^^xsd:gYear AND ?end >= "1836"^^xsd:gYear )
 }
