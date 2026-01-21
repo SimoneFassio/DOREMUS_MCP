@@ -158,6 +158,8 @@ async def main():
         """Check the percentage of correct values returned by the query."""
         ref_uris = []
         output_uris = []
+        reference_output = []
+        query_output = []
         if outputs.get("generated_query"):
             loop = asyncio.get_running_loop()
 
