@@ -360,7 +360,7 @@ async def select_variable(
 
 
 @mcp.tool()
-async def execute_query(query_id: str, limit: int = 10) -> Dict[str, Any]:
+async def execute_query(query_id: str, limit: int = 10, order_by_variable: str | None = None, order_by_desc: bool = False) -> Dict[str, Any]:
     """
     Execute a previously built SPARQL query by its ID.
 
@@ -368,11 +368,14 @@ async def execute_query(query_id: str, limit: int = 10) -> Dict[str, Any]:
 
     Args:
         query_id: The UUID returned by `build_query`.
+        limit: Max results (default is 10, max 50).
+        order_by_variable: Optional variable name to sort results by (e.g., "date", "title"). Use only if required.
+        order_by_desc: If True, sort in descending order. Default is False (ascending).
 
     Returns:
         The results of the SPARQL query execution.
     """
-    return execute_query_from_id_internal(query_id, limit)
+    return execute_query_from_id_internal(query_id, limit, order_by_variable, order_by_desc)
 
 
 @mcp.tool()

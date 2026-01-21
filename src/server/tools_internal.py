@@ -1166,7 +1166,7 @@ async def groupBy_having_internal(
 # EXECUTE QUERY INTERNALS
 #-------------------------------
 
-def execute_query_from_id_internal(query_id: str, limit: int) -> Dict[str, Any]:
+def execute_query_from_id_internal(query_id: str, limit: int, order_by_variable: str | None = None, order_by_desc: bool = False) -> Dict[str, Any]:
     try:
         qc = QUERY_STORAGE.get(query_id)
         if not qc:
@@ -1180,8 +1180,21 @@ def execute_query_from_id_internal(query_id: str, limit: int) -> Dict[str, Any]:
                 f.write("\n\n")
                 f.write("SPARQL Query: \n" + qc.to_string())
                 f.write("LIMIT: " + str(limit))
-        logger.info(f"Executing query : {qc.to_string(for_execution=True)} with limit {limit}")        
-        res = execute_sparql_query(qc.to_string(for_execution=True), limit)
+        
+        # Get query string
+        query_str = qc.to_string(for_execution=True)
+        
+        # Apply optional transient ORDER BY
+        if order_by_variable:
+            var_name = order_by_variable.strip()
+            if not var_name.startswith("?"):
+                var_name = "?" + var_name
+            
+            order_clause = f"DESC({var_name})" if order_by_desc else f"ASC({var_name})"
+            query_str += f"\nORDER BY {order_clause}"
+            
+        logger.info(f"Executing query : {query_str} with limit {limit}")        
+        res = execute_sparql_query(query_str, limit)
 
         # Post-Processing for LLM safety
         if res.get("success") and "results" in res:
