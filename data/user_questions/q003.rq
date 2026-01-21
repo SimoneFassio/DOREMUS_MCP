@@ -1,5 +1,5 @@
 # category: "Works and Expressions"
-# question: "Show me the Operas composed by Giuseppe Verdi."
+# question: "Show me the Operas composed by Giuseppe Verdi in 1853."
 # query:
 SELECT DISTINCT ?expression ?title
 WHERE {
@@ -11,4 +11,7 @@ WHERE {
   ?compositionActivity ecrm:P14_carried_out_by ?composer ;
     mus:U31_had_function <http://data.doremus.org/vocabulary/function/composer> .
   ?composer foaf:name "Giuseppe Verdi" .
+  ?expCreation ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?start ;
+          ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end .
+  FILTER (?start >= "1853-01-01"^^xsd:date && ?end <= "1853-12-31"^^xsd:date)
 }

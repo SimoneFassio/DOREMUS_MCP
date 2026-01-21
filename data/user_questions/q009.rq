@@ -1,11 +1,9 @@
 # category: "Artists"
-# question: "Who is 'Maria Callas'?"
+# question: "When was Maria Callas born?"
 # query:
-SELECT DISTINCT ?artist ?name ?birthDate ?note
+SELECT DISTINCT ?artist ?birthDate
 WHERE {
   ?artist a ecrm:E21_Person ;
-          foaf:name "Maria Callas" ;
-          foaf:name ?name ;
-          ecrm:P3_has_note ?note .
-  OPTIONAL { ?artist schema:birthDate ?birthDate }
+          schema:birthDate ?birthDate .
+  VALUES ?artist { <http://data.doremus.org/artist/60f784a6-2927-38e4-9379-e4bf4fc695b2> }
 }

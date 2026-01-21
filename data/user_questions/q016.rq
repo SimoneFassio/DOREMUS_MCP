@@ -1,0 +1,11 @@
+# category: "Performances"
+# question: "Performances performed in January 2016, at the Philharmonie"
+# query:
+SELECT DISTINCT ?performance ?date
+WHERE {
+  ?performance a efrbroo:F31_Performance ;
+               ecrm:P7_took_place_at <http://data.doremus.org/place/bd21be9c-3f2b-3aa3-a460-114d579eabe6> ;
+               ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?date .
+
+  FILTER (?date >= "2016-01-01"^^xsd:date && ?date <= "2016-01-31"^^xsd:date)
+}

@@ -1,5 +1,5 @@
 # category: "Artists"
-# question: "Which artists are known for playing the Violin?"
+# question: "Which artists are known for playing the Trumpet?"
 # query:
 SELECT DISTINCT ?artist ?name
 WHERE {
@@ -7,5 +7,5 @@ WHERE {
           foaf:name ?name .
   ?performance ecrm:P9_consists_of ?activity .
   ?activity ecrm:P14_carried_out_by ?artist ;
-            mus:U1_used_medium_of_performance <http://data.doremus.org/vocabulary/iaml/mop/svl> .
+            mus:U1_used_medium_of_performance <http://data.doremus.org/vocabulary/iaml/mop/btr> .
 }

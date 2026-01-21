@@ -5,5 +5,5 @@ SELECT DISTINCT ?expression ?title
 WHERE {
   ?expression a efrbroo:F22_Self-Contained_Expression ;
           rdfs:label ?title .
-  FILTER (CONTAINS(LCASE(?title), "moonlight"))
+  FILTER REGEX(?title, "Moonlight", "i")
 }

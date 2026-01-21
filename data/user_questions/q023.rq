@@ -1,0 +1,12 @@
+# category: "Performances"
+# question: "Give me performances between 2000 and 2001."
+# used_tools: ["build_query", "has_quantity_of", "add_select", "execute_query"]
+# query:
+SELECT DISTINCT ?performance ?title
+WHERE {
+  ?performance a efrbroo:F31_Performance ;
+          rdfs:label ?title ;
+          ecrm:P4_has_time-span ?time_span .
+  ?time_span time:hasBeginning / time:inXSDDate ?start .
+  FILTER ( ?start >= "2000"^^xsd:gYear AND ?start <= "2001"^^xsd:gYear )
+}

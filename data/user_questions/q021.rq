@@ -1,0 +1,12 @@
+# category: "Recordings"
+# question: "Give me recordings of the work Bolero."
+# used_tools: ["build_query", "apply_filter", "add_select", "execute_query"]
+# query:
+SELECT DISTINCT ?track ?workTitle
+WHERE {
+  ?track a mus:M24_Track ;
+         mus:U51_is_partial_or_full_recording_of ?performance .
+  ?performance mus:U54_is_performed_expression_of ?work .
+  ?work rdfs:label ?workTitle .
+  FILTER ( REGEX(?workTitle, 'Bolero', 'i') )
+}

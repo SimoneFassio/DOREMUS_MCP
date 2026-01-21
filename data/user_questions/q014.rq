@@ -1,10 +1,10 @@
 # category: "Artists"
-# question: "List artists who have acted as conductors."
+# question: "List artists who have acted as presenter."
 # query:
 SELECT DISTINCT ?artist ?name
 WHERE {
   ?artist a ecrm:E21_Person ;
           foaf:name ?name .
   ?activity ecrm:P14_carried_out_by ?artist ;
-            mus:U31_had_function <http://data.doremus.org/vocabulary/function/conductor> .
+            mus:U31_had_function <http://data.doremus.org/vocabulary/function/presenter> .
 }

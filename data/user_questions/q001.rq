@@ -1,5 +1,5 @@
 # category: "Works and Expressions"
-# question: "List all Symphonies composed by Ludwig van Beethoven."
+# question: "List all Symphonies composed by Louise Farrenc."
 # query:
 SELECT DISTINCT ?expression ?title
 WHERE {
@@ -8,5 +8,5 @@ WHERE {
           mus:U12_has_genre <http://data.doremus.org/vocabulary/iaml/genre/sy> .
   ?expCreation efrbroo:R17_created ?expression ;
           ecrm:P9_consists_of / ecrm:P14_carried_out_by ?composer .
-  ?composer foaf:name "Ludwig van Beethoven" .
-} ORDER BY ?title
+  VALUES ?composer {<http://data.doremus.org/artist/1d78b116-b274-3a8f-88dd-a32e77f30ee9>}
+}

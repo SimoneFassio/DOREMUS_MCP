@@ -1,0 +1,14 @@
+# category: "Works and Expressions"
+# question: "Give me works composed by Tommaso Albinoni in C major."
+# used_tools: ["find_candidate_entities", "build_query", "apply_filter", "add_select", "execute_query"]
+# query:
+SELECT DISTINCT ?expression ?title
+WHERE {
+  ?expression a efrbroo:F22_Self-Contained_Expression ;
+          rdfs:label ?title ;
+          mus:U11_has_key ?expKey .
+  ?expCreation efrbroo:R17_created ?expression ;
+          ecrm:P9_consists_of / ecrm:P14_carried_out_by ?composer .
+  VALUES ?composer {<http://data.doremus.org/artist/a82b0c56-ccdf-31b6-a8b4-ad065f3405e5>}
+  VALUES ?expKey { <http://data.doremus.org/vocabulary/key/c> }
+}

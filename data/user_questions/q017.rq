@@ -1,0 +1,12 @@
+# category: "Tracks"
+# question: "Give me the titles of all tracks that are recordings of work symphonie n° 5."
+# query:
+SELECT DISTINCT ?track ?trackTitle
+WHERE {
+  ?track a mus:M24_Track ;
+         rdfs:label ?trackTitle ;
+         mus:U51_is_partial_or_full_recording_of / mus:U54_is_performed_expression_of ?work .
+         
+  ?work rdfs:label ?workTitle .
+  FILTER REGEX (?workTitle, "symphonie n° 5", "i")
+}

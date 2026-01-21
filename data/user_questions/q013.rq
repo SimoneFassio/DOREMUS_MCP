@@ -1,5 +1,5 @@
 # category: "Artists"
-# question: "Give me name and birth date of artists that played a piano in 21th century"
+# question: "Give me name and birth date of artists that played a cello in 21th century"
 # query:
 SELECT DISTINCT ?artist ?name ?birthDate
 WHERE {
@@ -11,8 +11,6 @@ WHERE {
           ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?date .
 
   ?activity ecrm:P14_carried_out_by ?artist ;
-          mus:U1_used_medium_of_performance <http://data.doremus.org/vocabulary/iaml/mop/kpf> .
-
-  # 21st Century (>= 2001)
+          mus:U1_used_medium_of_performance <http://data.doremus.org/vocabulary/iaml/mop/svc> .
   FILTER (?date >= "2001-01-01"^^xsd:date)
 }

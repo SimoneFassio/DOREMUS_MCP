@@ -1,0 +1,11 @@
+# category: "Performances"
+# question: "Give me performances held in Paris."
+# used_tools: ["find_candidate_entities", "build_query", "apply_filter", "add_select", "execute_query"]
+# query:
+SELECT DISTINCT ?performance ?title
+WHERE {
+  ?performance a efrbroo:F31_Performance ;
+          rdfs:label ?title ;
+          ecrm:P7_took_place_at ?place .
+  VALUES ?place { <http://sws.geonames.org/2988507/> }
+}

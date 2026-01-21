@@ -1,11 +1,10 @@
 # category: "Artists"
-# question: "List musicians born in Vienna."
+# question: "List musicians born in Turin."
 # query:
 SELECT DISTINCT ?artist ?name
 WHERE {
   ?artist a ecrm:E21_Person ;
           foaf:name ?name ;
           schema:birthPlace ?place .
-  ?place rdfs:label ?placeLabel .
-  FILTER (CONTAINS(LCASE(?placeLabel), "vienna"))
+  VALUES ?place { <http://sws.geonames.org/3165524/> }
 }

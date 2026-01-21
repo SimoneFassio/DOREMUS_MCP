@@ -1,11 +1,12 @@
 # category: "Works and Expressions"
-# question: "Which works were composed between 1800 and 1801?"
+# question: "Which works were composed on 31st December 1799?"
 # query:
-SELECT DISTINCT ?expression ?title ?date
+SELECT DISTINCT ?expression ?title
 WHERE {
   ?expression a efrbroo:F22_Self-Contained_Expression ;
           rdfs:label ?title .
   ?expCreation efrbroo:R17_created ?expression ;
-          ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?date .
-  FILTER (?date >= "1800-01-01"^^xsd:date && ?date <= "1801-12-31"^^xsd:date)
+          ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?start ;
+          ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end .
+  FILTER (?start >= "1799-12-31"^^xsd:date && ?end <= "1799-12-31"^^xsd:date)
 }
