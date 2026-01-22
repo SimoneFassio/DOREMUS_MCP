@@ -323,9 +323,10 @@ This tool adds the property and the filter to the query.
 
 --- SCENARIO A: FILTERING BY DATE ---
 * **subject:** MUST be the *Creation Event* variable (usually `expCreation`), NOT the Work itself (`expression`).
-* **property:** Use `"ecrm:P4_has_time-span"`.
+* **property:** Use `"ecrm:P4_has_time-span"`, `schema:deathDate` or another date property if it is in the query (e.g., `schema:deathDate` because deathDate is in the query).
 * **value format:** "YYYY" (e.g., "1850") or "YYYY-MM-DD".
 * **type:** "less" (before), "more" (after), "range" (between and for specific years/dates).
+* **IMPORTANT** if the user asks for a specific year (e.g., "in 1900"), use type="range" with value="1900" and valueEnd="1900".
 
 --- SCENARIO B: FILTERING BY DURATION ---
 * **subject:** The Work/Expression variable (e.g., `expression`).
@@ -351,7 +352,7 @@ Returns:
 
 **FEW-SHOT EXAMPLES:**
 
-User: "Works composed in 1900"
+User: "... in 1900"
 Context: Date filter. Must apply to the 'Creation Event', not the 'Work'.
 Call: filter_by_quantity(
     subject="expCreation", 
@@ -362,7 +363,7 @@ Call: filter_by_quantity(
     query_id="..."
 )
 
-User: "Works longer than 15 minutes"
+User: "... longer than 15 minutes"
 Context: Duration filter. Applies to 'expression'. Format must be ISO.
 Call: filter_by_quantity(
     subject="expression", 
@@ -391,6 +392,7 @@ Adds a raw RDF triplet (`?s ?p ?o`) to the query graph.
 **WARNING:** - This tool is the "Last Resort". 
 - **DO NOT USE** for standard filters (use `apply_filter`).
 - **DO NOT USE** for instrument/component connections (use `add_component_constraint`).
+- **DO NOT USE** for adding a time-span, dates or other quantities (use `filter_by_quantity`).
 - **ONLY USE** when you need to traverse the graph in a way no other tool supports (e.g., connecting a Work to its Publisher, or a Performance to its Premiere).
 
 **SAFETY LOCK:**
