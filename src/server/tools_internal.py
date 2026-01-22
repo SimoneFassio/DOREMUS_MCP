@@ -790,6 +790,12 @@ def _process_date(date_str: str) -> str:
     # Error
     return None
 
+def _fmt_cmp(var, op, val, is_duration=False):
+    """Helpler for duration comparison syntax"""
+    if is_duration:
+        return f"xsd:dayTimeDuration(str({var})) {op} {val}"
+    else:
+        return f"{var} {op} {val}"
 
 async def has_quantity_of_internal(subject: str, property: str, type: str, valueStart: str, valueEnd: str | None, query_id: str) -> Dict[str, Any]:
     try:
@@ -811,11 +817,15 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         
         # Value processing (dates vs numbers)
         # Check if property implies date
-        is_date = "time-span" in propery
-        is_duration = "duration" in propery
-        
-        def format_value(val):
-            if is_date:
+        is_date = "date" in propery.lower()
+        is_time_span = "time-span" in propery.lower()
+        is_duration = "duration" in propery.lower()
+
+        if valueEnd == "":
+            valueEnd = None
+
+        def _format_value(val):
+            if is_date or is_time_span:
                 return _process_date(val)
             elif is_duration:
                 # ISO 8601 Duration check (Regex)
@@ -830,11 +840,8 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                     return val
                 return f'"{val}"'
 
-        if valueEnd == "":
-            valueEnd = None
-
-        val_start_fmt = format_value(valueStart)
-        val_end_fmt = format_value(valueEnd) if valueEnd else None
+        val_start_fmt = _format_value(valueStart)
+        val_end_fmt = _format_value(valueEnd) if valueEnd else None
 
         if not val_start_fmt:
             raise Exception("Invalid start date format.")
@@ -852,16 +859,13 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         
         prop_module_id = f"filter_by_quantity_{property}"
             
-        if is_date:
+        if is_time_span:
             # Time-Span Pattern: 
             # ?subject ecrm:P4_has_time-span ?time_span . 
             # ?time_span time:hasBeginning / time:inXSDDate ?start .
             # ?time_span time:hasEnd / time:inXSDDate ?end .
             
-            ts_var = "time_span"
-            
-            # Helper to create basic time-span structure
-            def create_ts_structure(include_end=True):
+            def _create_ts_structure(include_end=True):
                 start_var = "start"
                 local_triples = [{
                     "subj": create_triple_element(subject_var, subject_label if subject_label else "", "var"),
@@ -883,7 +887,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
 
             if type == "range":
                 # Try strict range first (Start and End)
-                strict_triples, strict_vars, s_var, e_var = create_ts_structure(include_end=True)
+                strict_triples, strict_vars, s_var, e_var = _create_ts_structure(include_end=True)
                 strict_filter = [{'function': '', 'args': [f'?{s_var} >= {val_start_fmt} AND ?{e_var} <= {val_end_fmt}']}]
                 
                 strict_module = {
@@ -910,7 +914,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                     
                     # Fallback: Use only Start date
                     # Filter: start >= valStart AND start <= valEnd
-                    fb_triples, fb_vars, s_var, _ = create_ts_structure(include_end=False)
+                    fb_triples, fb_vars, s_var, _ = _create_ts_structure(include_end=False)
                     fb_filter = [{'function': '', 'args': [f'?{s_var} >= {val_start_fmt} AND ?{s_var} <= {val_end_fmt}']}]
                     
                     triples = fb_triples
@@ -924,15 +928,13 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                      if type == "more": include_end = False
                      if type == "equal": include_end = False
                 
-                check_triples, check_vars, s_var, e_var = create_ts_structure(include_end=include_end)
+                check_triples, check_vars, s_var, e_var = _create_ts_structure(include_end=include_end)
                 triples = check_triples
                 defined_vars = check_vars
                 if type == "less":
                      pass 
                 
                 target_var = None
-
-            
         else:
             # Generic Property
             # ?subject property ?quantity_val
@@ -947,54 +949,15 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
 
         # 3. Construct Filters
         # Filter ops: <=, >=, =, and logical combinations
-        
-        # Helpler for duration comparison syntax
-        def fmt_cmp(var, op, val):
-            if is_duration:
-                return f"xsd:dayTimeDuration(str({var})) {op} {val}"
-            else:
-                return f"{var} {op} {val}"
-
         if not filter_st:
             if type == "less":
-                # <= valueStart
-                # If time-span: usually "end time is before X" ?
-                # Or "duration less than X".
-                if is_date:
-                     # "written before 1900" -> End date < 1900.
-                     filter_st.append({'function': '', 'args': [f'?end <= {val_start_fmt}']})
-                else:
-                     filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '<=', val_start_fmt)]})
-                     
+                filter_st.append({'function': '', 'args': [_fmt_cmp(target_var, '<=', val_start_fmt, is_duration)]})
             elif type == "more":
-                # >= valueStart
-                # "more than 1900" -> Starts after 1900
-                if is_date:
-                    filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt}']})
-                else:
-                    filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '>=', val_start_fmt)]})
-                    
+                filter_st.append({'function': '', 'args': [_fmt_cmp(target_var, '>=', val_start_fmt, is_duration)]})
             elif type == "equal":
-                # = valueStart
-                if is_date:
-                    # Start = val OR End = val? Or contains?
-                    # Let's assume start = val for simplicity or create a generic overlap?
-                    # For "written in 1900", it means start >= 1900-01-01 AND end <= 1900-12-31?
-                    # But here user says "equal". 
-                    filter_st.append({'function': '', 'args': [f'?start = {val_start_fmt}']})
-                else:
-                    filter_st.append({'function': '', 'args': [fmt_cmp(target_var, '=', val_start_fmt)]})
-                    
+                filter_st.append({'function': '', 'args': [_fmt_cmp(target_var, '=', val_start_fmt, is_duration)]})
             elif type == "range":
-                # >= valueStart AND <= valueEnd
-                if is_date:
-                    # Between 1870 and 1913
-                    # Means Start >= 1870 AND End <= 1913 (Inclusive containment)
-                    # OR Overlaps? The user example:
-                    # ?start >= "1870"^^xsd:gYear AND ?end <= "1913"^^xsd:gYear
-                    filter_st.append({'function': '', 'args': [f'?start >= {val_start_fmt} AND ?end <= {val_end_fmt}']})
-                else:
-                    filter_st.append({'function': '', 'args': [f'{fmt_cmp(target_var, ">=", val_start_fmt)} AND {fmt_cmp(target_var, "<=", val_end_fmt)}']})
+                filter_st.append({'function': '', 'args': [f'{_fmt_cmp(target_var, ">=", val_start_fmt, is_duration)} AND {_fmt_cmp(target_var, "<=", val_end_fmt, is_duration)}']})
 
         # 4. Add Module
         module = {

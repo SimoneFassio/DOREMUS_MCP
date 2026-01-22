@@ -1,14 +1,9 @@
 # category: "Artists"
-# question: "List composers who died in 2018."
+# question: "List artists who died in 2015."
 # query:
-SELECT DISTINCT ?artist ?name ?deathDate
+SELECT DISTINCT ?artist
 WHERE {
-  ?artist a ecrm:E21_Person ;
-          foaf:name ?name ;
-          schema:deathDate ?deathDate .
-  ?compositionActivity a ecrm:E7_Activity ;
-    ecrm:P14_carried_out_by ?artist ;
-    mus:U31_had_function <http://data.doremus.org/vocabulary/function/composer> .
-  FILTER (?deathDate >= "2018-01-01"^^xsd:date && ?deathDate <= "2018-12-31"^^xsd:date)
+  ?artist a ecrm:E21_Person .
+  ?artist schema:deathDate ?deathDate .
+FILTER ( ?deathDate >= "2015"^^xsd:gYear AND ?deathDate <= "2015"^^xsd:gYear)
 }
-
