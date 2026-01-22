@@ -191,7 +191,7 @@ async def apply_filter(
 
 
 @mcp.tool()
-async def associate_to_N_entities(
+async def add_component_constraint(
     subject: str, 
     obj: str, 
     query_id: str, 
@@ -226,7 +226,7 @@ async def associate_to_N_entities(
 
     User: "Find all musical works composed for exactly 3 violins."
     Context: We are looking for 'works' (subject) that use 'violins' (obj).
-    Call: associate_to_N_entities(
+    Call: add_component_constraint(
         subject="expression",
         obj="violin", 
         n=3,
@@ -234,7 +234,7 @@ async def associate_to_N_entities(
     )
 
     User: "Show me pieces that use a piano." (No specific count)
-    Call: associate_to_N_entities(
+    Call: add_component_constraint(
         subject="expression",
         obj="piano",
         n=None,
@@ -396,8 +396,8 @@ async def add_triplet(
     Adds a raw RDF triplet (`?s ?p ?o`) to the query graph.
     
     **WARNING:** - This tool is the "Last Resort". 
-    - **DO NOT USE** for standard filters (USE `apply_filter`).
-    - **DO NOT USE** for instrument/component connections (use `associate_to_N_entities`).
+    - **DO NOT USE** for standard filters (use `apply_filter`).
+    - **DO NOT USE** for instrument/component connections (use `add_component_constraint`).
     - **ONLY USE** when you need to traverse the graph in a way no other tool supports (e.g., connecting a Work to its Publisher, or a Performance to its Premiere).
 
     **SAFETY LOCK:**
@@ -587,7 +587,7 @@ Build the SPARQL query step by step:
 2. find_candidate_entities: discover the unique URI identifier for an entity
 3. get_entity_properties: retrieve detailed information about a specific entity (all property)
 4. build_query: build the base query using information collected
-5. Use the most appropriate tool to write complex filters (like associate_to_N_entities)
+5. Use the most appropriate tool to write complex filters (like add_component_constraint)
 6. execute_query: execute the query built
 7. Check the query result, refine and use again tool to explore more the graph or restart from beginning if necessary
 8. Once the result is ok, format it in a proper manner and write the response

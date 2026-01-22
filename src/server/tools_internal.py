@@ -223,7 +223,7 @@ async def build_query_v2_internal(
 *Trigger:* "Strictly...", "Exactly...", "String Quartet" (implied set), "Trio"
 *Strategy:*
 1. `build_query`
-2. `associate_to_N_entities` for EACH instrument.
+2. `add_component_constraint` for EACH instrument.
 3. `groupBy` to count the Total Number of Parts (ensuring no extra instruments).
 
 *Example:* "Works written for violin, clarinet and piano (strictly)"
@@ -231,9 +231,9 @@ async def build_query_v2_internal(
 -> find_candidate_entities("violin", "vocabulary") -> violin_uri
 -> find_candidate_entities("clarinet", "vocabulary") -> clarinet_uri
 -> find_candidate_entities("piano", "vocabulary") -> piano_uri
--> associate_to_N_entities(expression, violin_uri, q_id)
--> associate_to_N_entities(expression, clarinet_uri, q_id)
--> associate_to_N_entities(expression, piano_uri, q_id)
+-> add_component_constraint(expression, violin_uri, q_id)
+-> add_component_constraint(expression, clarinet_uri, q_id)
+-> add_component_constraint(expression, piano_uri, q_id)
 -> groupBy(casting, q_id, castingDetail, COUNT, equal, 3) 
 (Note: Logic is 'equal 3' because we have 3 distinct instrument parts)
 
@@ -242,9 +242,9 @@ async def build_query_v2_internal(
 -> find_candidate_entities("violin", "vocabulary") -> violin_uri
 -> find_candidate_entities("viola", "vocabulary") -> viola_uri
 -> find_candidate_entities("cello", "vocabulary") -> cello_uri
--> associate_to_N_entities(expression, violin_uri, q_id, 2)
--> associate_to_N_entities(expression, viola_uri, q_id, 1)
--> associate_to_N_entities(expression, cello_uri, q_id, 1)
+-> add_component_constraint(expression, violin_uri, q_id, 2)
+-> add_component_constraint(expression, viola_uri, q_id, 1)
+-> add_component_constraint(expression, cello_uri, q_id, 1)
 -> groupBy(casting, q_id, castingDetail, COUNT, equal, 3)
             """
 
@@ -254,7 +254,7 @@ async def build_query_v2_internal(
 ### TYPE 2: Open Filters (Inclusion)
 *Trigger:* "Works for oboe...", "involving at least...", "for choir and orchestra"
 *Strategy:* 1. `build_query` (set template="expression")
-2. `associate_to_N_entities` for EACH instrument mentioned.
+2. `add_component_constraint` for EACH instrument mentioned.
 3. `filter_by_quantity` if a date/time is mentioned.
 4. DO NOT use `groupBy` (we allow other instruments to be present).
 
@@ -262,8 +262,8 @@ async def build_query_v2_internal(
 -> build_query(template="expression")
 -> find_candidate_entities("oboe", "vocabulary") -> oboe_uri
 -> find_candidate_entities("orchestra", "vocabulary") -> orchestra_uri
--> associate_to_N_entities(expression, oboe_uri, q_id)
--> associate_to_N_entities(expression, orchestra_uri, q_id)
+-> add_component_constraint(expression, oboe_uri, q_id)
+-> add_component_constraint(expression, orchestra_uri, q_id)
 -> filter_by_quantity(expCreation, time-span, range, "01-01-1900", "31-12-1900", q_id)
 
 *Example:* "Concerts recorded at Royal Alber Hall by Nirvana between 1995 and 2014"
@@ -682,7 +682,7 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
     {path_options_text}
             """
             
-            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling, caller_tool_name="associate_to_N_entities")
+            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling, caller_tool_name="add_component_constraint")
             try:
                 # simple extraction of the number
                 match = re.search(r'\d+', llm_answer)
@@ -720,7 +720,7 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
             })
         logger.info(f"Selected path for associating {subject} to {obj} is: {triples}")
 
-        logger.info(f"associate_to_N_entities called with raw n={n!r}")
+        logger.info(f"add_component_constraint called with raw n={n!r}")
         
         if n is not None:
             quantity_property = get_quantity_property(selected_path[-3][1], graph)
@@ -1027,6 +1027,10 @@ async def add_triplet_internal(
         qc = QUERY_STORAGE.get(query_id)
         if not qc:
             raise Exception(f"Query ID {query_id} not found or expired.")
+
+        subject_class = contract_uri(subject_class)
+        property = contract_uri(property)
+        obj_class = contract_uri(obj_class)
             
         # 1. Check property existence
         if not explorer.class_has_property(subject_class, property):

@@ -8,5 +8,5 @@ WHERE {
          mus:U51_is_partial_or_full_recording_of ?performance .
   ?performance mus:U54_is_performed_expression_of ?work .
   ?work rdfs:label ?workTitle .
-  FILTER ( REGEX(?workTitle, 'Bolero', 'i') )
+  FILTER ( REGEX(?workTitle, 'Bol[eé]ro', 'i') )
 }
