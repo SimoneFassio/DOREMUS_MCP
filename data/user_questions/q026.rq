@@ -6,6 +6,7 @@ SELECT DISTINCT (COUNT(DISTINCT ?track) AS ?track_count) ?genreLabel
 WHERE {
   # Module: track_core
   ?track a mus:M24_Track .
+  ?track rdfs:label ?title .
   ?track mus:U51_is_partial_or_full_recording_of ?performance .
   ?performance mus:U54_is_performed_expression_of ?work .
  

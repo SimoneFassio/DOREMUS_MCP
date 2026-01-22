@@ -4,6 +4,7 @@
 SELECT DISTINCT ?placeLabel
 WHERE {
 ?artist a ecrm:E21_Person .
+?artist foaf:name ?name .
 VALUES ?artist { <http://data.doremus.org/artist/4802a043-23bb-3b8d-a443-4a3bd22ccc63> }
 ?artist schema:birthPlace ?birthPlace .
 ?birthPlace rdfs:label ?placeLabel . 

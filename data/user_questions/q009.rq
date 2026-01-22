@@ -4,6 +4,7 @@
 SELECT DISTINCT ?artist ?birthDate
 WHERE {
   ?artist a ecrm:E21_Person ;
-          schema:birthDate ?birthDate .
+          schema:birthDate ?birthDate ;
+          foaf:name ?name .
   VALUES ?artist { <http://data.doremus.org/artist/60f784a6-2927-38e4-9379-e4bf4fc695b2> }
 }

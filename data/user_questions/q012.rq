@@ -1,9 +1,10 @@
 # category: "Artists"
 # question: "List artists who died in 2015."
 # query:
-SELECT DISTINCT ?artist
+SELECT DISTINCT ?artist ?name
 WHERE {
   ?artist a ecrm:E21_Person .
   ?artist schema:deathDate ?deathDate .
+  ?artist foaf:name ?name .
 FILTER ( ?deathDate >= "2015"^^xsd:gYear AND ?deathDate <= "2015"^^xsd:gYear)
 }
