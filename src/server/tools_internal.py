@@ -1227,10 +1227,55 @@ def execute_query_from_id_internal(query_id: str, limit: int, order_by_variable:
             
             order_clause = f"DESC({var_name})" if order_by_desc else f"ASC({var_name})"
             query_str += f"\nORDER BY {order_clause}"
+        
+        # Build count query by modifying the SELECT clause to COUNT(DISTINCT ?base_var)
+        # Extract the first variable from the SELECT clause
+        base_query_for_count = qc.to_string(for_execution=True)
+        
+        # Find the first variable in the SELECT clause (e.g., ?expression from "SELECT ?expression ?title")
+        select_match = re.search(r'SELECT\s+(DISTINCT\s+)?(\?\w+)', base_query_for_count, re.IGNORECASE)
+        if select_match:
+            base_var = select_match.group(2)  # e.g., "?expression"
+        else:
+            base_var = "*"  # Fallback to COUNT(*)
+        
+        # Replace SELECT clause with COUNT(DISTINCT base_var)
+        count_query = re.sub(
+            r'SELECT\s+(DISTINCT\s+)?.*?\s+WHERE',
+            f'SELECT (COUNT(DISTINCT {base_var}) AS ?total) WHERE',
+            base_query_for_count,
+            count=1,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+        
+        logger.info(f"Executing query : {query_str} with limit {limit}")
+        
+        # Run both queries in parallel using ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            # Submit both queries
+            main_future = executor.submit(execute_sparql_query, query_str, limit)
+            count_future = executor.submit(execute_sparql_query, count_query, 100, 10)  # Limit 100 for count, short timeout
             
-        logger.info(f"Executing query : {query_str} with limit {limit}")        
-        res = execute_sparql_query(query_str, limit)
+            # Wait for both to complete
+            res = main_future.result()
+            count_res = count_future.result()
+        
         res["query_id"] = query_id
+        
+        # Process count result and add warning message if needed
+        total_count = None
+        count_exceeds_limit = False
+        if count_res.get("success") and count_res.get("results"):
+            try:
+                total_str = count_res["results"][0].get("total", "0")
+                total_count = int(total_str)
+                if total_count >= 100:
+                    count_exceeds_limit = True
+                    total_count = 100  # We know it's at least 100
+            except (ValueError, TypeError, IndexError):
+                pass
 
         # Post-Processing for LLM safety
         if res.get("success") and "results" in res:
@@ -1256,8 +1301,22 @@ def execute_query_from_id_internal(query_id: str, limit: int, order_by_variable:
                          if k in row:
                              # Clear the URI value to avoid leaking many URIs
                              row[k] = ""
-                 
-                 res["message"] = "Only showing the firsts URI, use add_select to add relevant variable to show to the user. Never write an URI in the answer to the user"
+             
+             # Build message with total count warning if applicable
+             messages = []
+             if uri_keys:
+                 messages.append("Only showing the first URIs, use add_select to add relevant variables to show to the user. Never write a URI in the answer to the user.")
+             
+             # Add count warning message for LLM
+             returned_count = len(results)
+             if total_count is not None and (total_count > limit or count_exceeds_limit):
+                 if count_exceeds_limit:
+                     messages.append(f"⚠️ IMPORTANT: The total number of results is 100+ (exact count not computed to avoid timeout), but only {returned_count} were returned (limit={limit}). WARN THE USER that this is a partial list and there are many more results available. Suggest they refine their query or increase the limit if needed.")
+                 else:
+                     messages.append(f"⚠️ IMPORTANT: The total number of results is {total_count}, but only {returned_count} were returned (limit={limit}). WARN THE USER that this is a partial list and there are {total_count - returned_count} more results available. Suggest they refine their query or increase the limit if needed.")
+             
+             if messages:
+                 res["message"] = " ".join(messages)
              
              # Convert results to Markdown Table to save tokens
              if results:
