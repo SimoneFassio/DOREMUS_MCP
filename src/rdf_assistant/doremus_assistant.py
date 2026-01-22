@@ -9,6 +9,7 @@ from langchain_ollama import ChatOllama
 from langchain.agents.middleware import wrap_tool_call, wrap_model_call
 from langchain.messages import ToolMessage
 from langchain_core.rate_limiters import InMemoryRateLimiter
+from pydantic import ValidationError
 
 from .prompts import agent_system_prompt
 from .extended_mcp_client import ExtendedMCPClient
@@ -86,6 +87,13 @@ async def handle_tool_errors(request, handler):
     try:
         response = await handler(request)
         return response
+    except ValidationError as e:
+        return ToolMessage(
+            content=f"Tool Validation Error: The tool output format was unexpected. ({str(e)})",
+            tool_call_id=request.tool_call["id"],
+            name=request.tool_call["name"],
+            status="error"
+        )
     except Exception as e:
         # Return a custom error message to the model
         return ToolMessage(

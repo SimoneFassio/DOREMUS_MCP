@@ -7,6 +7,7 @@ import httpx
 from dotenv import load_dotenv
 from langgraph.errors import GraphRecursionError
 import warnings
+from pydantic import ValidationError
 
 warnings.filterwarnings(
     "ignore",
@@ -70,6 +71,8 @@ async def main():
                     messages = chunk["messages"]
         except GraphRecursionError:
             print(f"⚠️ Recursion Limit Hit for: {inputs.get('query_input', '')[:30]}... processing partial messages.")
+        except ValidationError as e:
+             print(f"⚠️ Pydantic Validation Error for: {inputs.get('query_input', '')[:30]}... Error: {e}")
         except Exception as e:
             print(f"Error during ainvoke: {e}")
 
