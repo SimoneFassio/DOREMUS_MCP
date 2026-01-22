@@ -266,9 +266,9 @@ async def build_query_v2_internal(
 -> associate_to_N_entities(expression, orchestra_uri, q_id)
 -> has_quantity_of(expCreation, time-span, range, "01-01-1900", "31-12-1900", q_id)
 
-*Example:* "Concerts recorded at Philarmonie de Paris between 1995 and 2014"
--> build_query(template="performance")
--> apply_filter(q_id, base_variable="performance", template="performance", filters={"location": "Philarmonie de Paris"})
+*Example:* "Concerts recorded at Royal Alber Hall by Nirvana between 1995 and 2014"
+-> build_query(template="recording_event")
+-> apply_filter(q_id, base_variable="recordingEvent", template="recording_event", filters={"location": "Royal Alber Hall", "recorded_by": "Nirvana"})
 -> has_quantity_of(expCreation, time-span, range, "01-01-1995", "31-12-2014", q_id)
             """
 

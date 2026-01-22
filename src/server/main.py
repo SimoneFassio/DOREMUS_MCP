@@ -143,24 +143,28 @@ async def apply_filter(
 
     **ARGUMENT RULES:**
     - `base_variable`: The specific variable name in the SPARQL query you are filtering. 
-       *Usually* this is the main variable chosen in Step 1 (e.g., 'expression', 'work', 'artist'), but it can be any variable currently in the graph.
+       *Usually* this is the main variable chosen in Step 1 (e.g., 'expression', 'work', 'artist', 'recording_event', 'track'), but it can be any variable currently in the graph.
     - `template`: The class/category of the `base_variable`. This determines valid filter keys.
-       Options: "Works", "Performances", "Artists".
+       Options: "expression", "performance", "artist", "recording_event", "track".
 
     Args:
         query_id: The active query ID from Step 1.
         base_variable: The SPARQL variable to attach the filter to (e.g. "expression").
-        template: The schema template to use ("Works", "Performances", "Artists").
+        template: The schema template to use ("expression", "performance", "artist", "recording_event", "track").
         filters: A dictionary of { "filter_name": "value" }.
             *Tip: If you have a URI from `search_entity`, use it! Otherwise, passing a string (label) is acceptable.*
             
             **Valid Keys per Template:**
-            - Template "Works":
-              "title", "composer_name", "genre", "key", "instrumentation"
-            - Template "Performances":
+            - Template "expression":
+              "title", "composer_name", "composer_nationality", "genre", "composition_place", "musical_key"
+            - Template "performance":
               "date", "location", "performer"
-            - Template "Artists":
-              "name", "birth_place", "nationality"
+            - Template "artist":
+              "name", "birth_place", "nationality", "death_place", "work_title"
+            - Template "recording_event":
+              "title", "recorded_by", "performed_by", "location", "recorded_performance"
+            - Template "track":
+              "work_title", "composer_name", "genre"
 
     Returns:
         Dict: {"success": bool, "query_id": str, "generated_sparql": str}
@@ -171,7 +175,7 @@ async def apply_filter(
     Call: apply_filter(
         query_id="...", 
         base_variable="expression", 
-        template="Works", 
+        template="expression", 
         filters={"composer_name": "Wolfgang Amadeus Mozart"}
     )
 
@@ -179,7 +183,7 @@ async def apply_filter(
     Call: apply_filter(
         query_id="...", 
         base_variable="expression", 
-        template="Works", 
+        template="expression", 
         filters={"genre": ""}  <-- Empty string adds the triplet but no filter logic
     )
     """

@@ -35,7 +35,7 @@ class QueryContainer:
 
     _PREFERRED_URI_PREFIXES = (
         "http://www.mimo-db.eu/",
-        "http://data.doremus.org/",
+        "http://data.doremus.org/vocabulary/iaml/mop",
     )
     
     def __init__(self, query_id: str, question: str = ""):
