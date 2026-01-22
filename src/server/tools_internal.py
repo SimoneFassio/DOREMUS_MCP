@@ -10,7 +10,6 @@ from difflib import get_close_matches
 from server.find_paths import load_graph, find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal, recur_domain
 from server.graph_schema_explorer import GraphSchemaExplorer
 from server.query_container import QueryContainer, create_triple_element
-# query_builder imports removed as old build_query is removed
 from server.utils import (
     execute_sparql_query,
     contract_uri,
@@ -500,7 +499,7 @@ async def filter_internal(
 # ASSOCIATE N ENTITIES INTERNALS
 #-------------------------------
 
-async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str, n: int | None) -> List[dict]:
+async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str, n: int | str | None) -> List[dict]:
     try:
         #-------------------------------
         # CHECK IF QUERY EXISTS
@@ -512,6 +511,15 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
         # FAILSAFE: debug
         if not qc:
             raise Exception(f"Query ID {query_id} not found or expired.")
+
+        if n is not None and n != "None":
+            try:
+                n = int(n)
+            except Exception:
+                raise ToolError(f"Invalid n: expected integer, got {n!r}")
+            if n <= 0:
+                raise ToolError(f"Invalid n={n}. n must be a positive integer (or omit it).")
+
         
         # Send Sampling request to LLM
         def log_sampling(log_data: Dict[str, Any]):

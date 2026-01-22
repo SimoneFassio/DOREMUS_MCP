@@ -195,7 +195,7 @@ async def add_component_constraint(
     subject: str, 
     obj: str, 
     query_id: str, 
-    n: int | None = None) -> Dict[str, Any]:
+    n: int | str | None = None) -> Dict[str, Any]:
     """
     Adds a constraint to the query to filter items based on their components or instrumentation. 
     It answers questions like "Find [Subject] that has [N] [Objects]".
@@ -241,14 +241,6 @@ async def add_component_constraint(
         query_id="current_id"
     )
     """
-    if n is not None:
-        try:
-            n = int(n)
-        except Exception:
-            raise Exception(f"Invalid n: expected integer, got {n!r}")
-        if n <= 0:
-            raise Exception(f"Invalid n={n}. n must be a positive integer (or omit it).")
-
     return await associate_to_N_entities_internal(subject, obj, query_id, n)
 
 
