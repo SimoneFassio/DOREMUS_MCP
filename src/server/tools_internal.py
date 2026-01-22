@@ -512,7 +512,10 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
         if not qc:
             raise Exception(f"Query ID {query_id} not found or expired.")
 
-        if n is not None and n != "None":
+        if n == "None":
+            n = None
+
+        if n is not None:
             try:
                 n = int(n)
             except Exception:
