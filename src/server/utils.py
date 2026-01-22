@@ -381,6 +381,8 @@ Choose REGEX when the user is not asking about a specific entity (like an exact 
 The options available are:
 {entity_options_text}
 
+Prefer URIs from data.doremus.org and data.doremus.org/vocabulary/iaml/ when possible.
+
 Return only the number (index) of the best match."""
             
             # Send Sampling request to LLM

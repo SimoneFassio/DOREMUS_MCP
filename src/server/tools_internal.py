@@ -255,7 +255,7 @@ async def build_query_v2_internal(
 *Trigger:* "Works for oboe...", "involving at least...", "for choir and orchestra"
 *Strategy:* 1. `build_query` (set template="expression")
 2. `associate_to_N_entities` for EACH instrument mentioned.
-3. `has_quantity_of` if a date/time is mentioned.
+3. `filter_by_quantity` if a date/time is mentioned.
 4. DO NOT use `groupBy` (we allow other instruments to be present).
 
 *Example:* "Works written for oboe and orchestra in 1900"
@@ -264,12 +264,12 @@ async def build_query_v2_internal(
 -> find_candidate_entities("orchestra", "vocabulary") -> orchestra_uri
 -> associate_to_N_entities(expression, oboe_uri, q_id)
 -> associate_to_N_entities(expression, orchestra_uri, q_id)
--> has_quantity_of(expCreation, time-span, range, "01-01-1900", "31-12-1900", q_id)
+-> filter_by_quantity(expCreation, time-span, range, "01-01-1900", "31-12-1900", q_id)
 
 *Example:* "Concerts recorded at Royal Alber Hall by Nirvana between 1995 and 2014"
 -> build_query(template="recording_event")
 -> apply_filter(q_id, base_variable="recordingEvent", template="recording_event", filters={"location": "Royal Alber Hall", "recorded_by": "Nirvana"})
--> has_quantity_of(expCreation, time-span, range, "01-01-1995", "31-12-2014", q_id)
+-> filter_by_quantity(expCreation, time-span, range, "01-01-1995", "31-12-2014", q_id)
             """
 
         # CATEGORY 1: simple metadata queries that can be asked with query builder -> default
@@ -842,7 +842,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         if type == "range" and valueEnd is None:
             raise Exception("Value End is required for this type.")
         
-        prop_module_id = f"has_quantity_of_{property}"
+        prop_module_id = f"filter_by_quantity_{property}"
             
         if is_date:
             # Time-Span Pattern: 
@@ -880,7 +880,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                 
                 strict_module = {
                     "id": prop_module_id,
-                    "type": "has_quantity_of",
+                    "type": "filter_by_quantity",
                     "scope": "main",
                     "triples": strict_triples,
                     "filter_st": strict_filter,
@@ -991,7 +991,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         # 4. Add Module
         module = {
             "id": prop_module_id,
-            "type": "has_quantity_of",
+            "type": "filter_by_quantity",
             "scope": "main",
             "triples": triples,
             "filter_st": filter_st,

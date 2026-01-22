@@ -317,7 +317,7 @@ async def groupBy_having(
 
 
 @mcp.tool()
-async def has_quantity_of(subject: str, property: str, type: str, value: str, valueEnd: str | None, query_id: str) -> Dict[str, Any]:
+async def filter_by_quantity(subject: str, property: str, type: str, value: str, valueEnd: str | None, query_id: str) -> Dict[str, Any]:
     """
     Applies NUMERICAL or TEMPORAL constraints to the query. 
     Use this for questions involving Dates ("after 1900"), Durations ("longer than 5 minutes"), or Quantities.
@@ -332,7 +332,7 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
     * **subject:** MUST be the *Creation Event* variable (usually `expCreation`), NOT the Work itself (`expression`).
     * **property:** Use `"ecrm:P4_has_time-span"`.
     * **value format:** "YYYY" (e.g., "1850") or "YYYY-MM-DD".
-    * **type:** "less" (before), "more" (after), "range" (between), "equal" (exact).
+    * **type:** "less" (before), "more" (after), "range" (between and for specific years/dates).
     
     --- SCENARIO B: FILTERING BY DURATION ---
     * **subject:** The Work/Expression variable (e.g., `expression`).
@@ -358,19 +358,20 @@ async def has_quantity_of(subject: str, property: str, type: str, value: str, va
 
     **FEW-SHOT EXAMPLES:**
 
-    User: "Works composed after 1900"
+    User: "Works composed in 1900"
     Context: Date filter. Must apply to the 'Creation Event', not the 'Work'.
-    Call: has_quantity_of(
+    Call: filter_by_quantity(
         subject="expCreation", 
         property="ecrm:P4_has_time-span", 
-        type="more", 
-        value="1900", 
+        type="range", 
+        value="1900",
+        valueEnd="1900", 
         query_id="..."
     )
 
     User: "Works longer than 15 minutes"
     Context: Duration filter. Applies to 'expression'. Format must be ISO.
-    Call: has_quantity_of(
+    Call: filter_by_quantity(
         subject="expression", 
         property="mus:U78_estimated_duration", 
         type="more", 
@@ -391,11 +392,11 @@ async def add_triplet(
     query_id: str
 ) -> Dict[str, Any]:
     """
-    **ADVANCED TOOL: USE WHEN NECESSARY**
+    **ADVANCED TOOL: USE ONLY AS A LAST RESORT**
     Adds a raw RDF triplet (`?s ?p ?o`) to the query graph.
     
     **WARNING:** - This tool is the "Last Resort". 
-    - **DO NOT USE** for standard filters (use `apply_filter`).
+    - **DO NOT USE** for standard filters (USE `apply_filter`).
     - **DO NOT USE** for instrument/component connections (use `associate_to_N_entities`).
     - **ONLY USE** when you need to traverse the graph in a way no other tool supports (e.g., connecting a Work to its Publisher, or a Performance to its Premiere).
 
