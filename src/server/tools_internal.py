@@ -904,40 +904,40 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
                 
                 logger.info(f"Attempting strict date range for {subject_var}...")
                 try:
-                    await qc.test_add_module(strict_module)
-                    
-                    # If success, use this
-                    triples = strict_triples
-                    defined_vars = strict_vars
-                    filter_st = strict_filter
-                    target_var = None # handled in filter_st
-                    
+                    await qc.add_module(strict_module)
                 except Exception as e:
                     logger.warning(f"Strict date range failed ({e}). Falling back to Start-only range.")
-                    
                     # Fallback: Use only Start date
                     # Filter: start >= valStart AND start <= valEnd
                     fb_triples, fb_vars, s_var, _ = _create_ts_structure(include_end=False)
                     fb_filter = [{'function': '', 'args': [f'?{s_var} >= {val_start_fmt} AND ?{s_var} <= {val_end_fmt}']}]
-                    
-                    triples = fb_triples
-                    defined_vars = fb_vars
-                    filter_st = fb_filter
-                    target_var = None
-
-            else:                
-                include_end = True
-                if type == "more" or (type == "less" and not valueEnd):
-                     if type == "more": include_end = False
-                     if type == "equal": include_end = False
-                
-                check_triples, check_vars, s_var, e_var = _create_ts_structure(include_end=include_end)
-                triples = check_triples
-                defined_vars = check_vars
+                    fb_module = {
+                        "id": prop_module_id,
+                        "type": "filter_by_quantity",
+                        "scope": "main",
+                        "triples": fb_triples,
+                        "filter_st": fb_filter,
+                        "defined_vars": fb_vars
+                    }
+                    await qc.add_module(fb_module)
+            elif type == "equal":
+                raise Exception("Equal not implemented for time spans.")
+            else:
+                check_triples, check_vars, s_var, e_var = _create_ts_structure(include_end=False)
                 if type == "less":
-                     pass 
-                
-                target_var = None
+                    filter_st.append({'function': '', 'args': [f"?{s_var} >= {val_start_fmt}"]})
+                elif type == "more":
+                    filter_st.append({'function': '', 'args': [f"?{s_var} <= {val_start_fmt}"]})
+                module = {
+                    "id": prop_module_id,
+                    "type": "filter_by_quantity",
+                    "scope": "main",
+                    "triples": check_triples,
+                    "filter_st": filter_st,
+                    "defined_vars": check_vars
+                }
+                await qc.add_module(module)
+
         else:
             # Generic Property
             # ?subject property ?quantity_val
@@ -952,7 +952,6 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
 
         # 3. Construct Filters
         # Filter ops: <=, >=, =, and logical combinations
-        if not filter_st:
             if type == "less":
                 filter_st.append({'function': '', 'args': [_fmt_cmp(target_var, '<=', val_start_fmt, is_duration)]})
             elif type == "more":
@@ -962,18 +961,18 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
             elif type == "range":
                 filter_st.append({'function': '', 'args': [f'{_fmt_cmp(target_var, ">=", val_start_fmt, is_duration)} AND {_fmt_cmp(target_var, "<=", val_end_fmt, is_duration)}']})
 
-        # 4. Add Module
-        module = {
-            "id": prop_module_id,
-            "type": "filter_by_quantity",
-            "scope": "main",
-            "triples": triples,
-            "filter_st": filter_st,
-            "required_vars": [{"var_name": subject_var, "var_label": subject_label if subject_label else ""}],
-            "defined_vars": defined_vars
-        }
+            # 4. Add Module
+            module = {
+                "id": prop_module_id,
+                "type": "filter_by_quantity",
+                "scope": "main",
+                "triples": triples,
+                "filter_st": filter_st,
+                "required_vars": [{"var_name": subject_var, "var_label": subject_label if subject_label else ""}],
+                "defined_vars": defined_vars
+            }
 
-        await qc.add_module(module)
+            await qc.add_module(module)
         
         return {
             "query_id": query_id,
@@ -1051,6 +1050,9 @@ async def add_select_variable_internal(
         qc = QUERY_STORAGE.get(query_id)
         if not qc:
             raise Exception(f"Query ID {query_id} not found or expired.")
+        
+        if aggregator == "None":
+            aggregator = None
         
         # Check if variable exists in registry (it must be defined somewhere)
         var_label = ""

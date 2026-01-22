@@ -1,5 +1,5 @@
 # Template: expression
-SELECT DISTINCT ?expression
+SELECT DISTINCT ?expression ?title
 WHERE {
 # build_query
 ?expression a efrbroo:F22_Self-Contained_Expression .

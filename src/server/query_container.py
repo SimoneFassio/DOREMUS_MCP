@@ -1023,10 +1023,12 @@ You should select an option different to 0 ONLY if the variable represent a new 
         select_mod = "DISTINCT " if self.distinct_select else ""
         select_vars_str = []
 
+        has_aggregator = any(item.get("aggregator") for item in self.select)
+
         for item in self.select:
             var_name = item["var_name"]
             
-            if self.group_by:
+            if self.group_by or has_aggregator:
                 # Check if this variable is part of the grouping
                 is_grouped = any(g["var_name"] == var_name for g in self.group_by)
                 
@@ -1044,18 +1046,10 @@ You should select an option different to 0 ONLY if the variable represent a new 
                 
                 else:
                     # Case 3: Variable is NOT grouped and NO aggregator -> Auto-SAMPLE
-                    select_vars_str.append(f"SAMPLE(?{var_name}) as ?{var_name}")
+                    select_vars_str.append(f"SAMPLE(?{var_name}) as ?{var_name}_sample")
             
             else:
-                # No GROUP BY -> Select as is
-                if item.get("aggregator"):
-                    agg = item["aggregator"]
-                    if agg.upper() == "COUNT":
-                        select_vars_str.append(f"{agg}(DISTINCT ?{var_name}) as ?{var_name}")
-                    else:
-                        select_vars_str.append(f"{agg}(?{var_name}) as ?{var_name}")
-                else:
-                    select_vars_str.append(f"?{var_name}")
+                select_vars_str.append(f"?{var_name}")
 
         if not select_vars_str:
             select_vars_str.append("*")

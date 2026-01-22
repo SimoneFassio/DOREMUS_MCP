@@ -1,5 +1,5 @@
 # Template: track
-SELECT DISTINCT ?track
+SELECT DISTINCT ?track ?title
 WHERE {
 # build_query
 ?track a mus:M24_Track .
