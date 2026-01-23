@@ -2,8 +2,6 @@
 # split: "medium"
 # origin: competency_question
 # question: "Give me all titles of chamber music that foresee at least one cello"
-# build_query(question="Give me all the slow movements of chamber music that foresee at least one cello", template="Works", filters={"genre": "chamber music"})
-# associate_to_N_entities(subject="expression", obj="cello", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title
 WHERE {
@@ -24,7 +22,6 @@ WHERE {
 
 # workflow
 build_query(question="Give me all titles of chamber music that foresee at least one cello", template="expression")
-apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chamber music"})
-find_candidate_entities(name="cello", entity_type="vocabulary")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chambre"})
 add_component_constraint(subject="expression", obj="cello", query_id=query_id)
 execute_query(query_id=query_id)

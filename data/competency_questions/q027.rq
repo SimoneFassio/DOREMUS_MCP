@@ -22,8 +22,9 @@ WHERE {
 
 # workflow
 build_query(question="Give me all the performances in which a composer interprets his or her works", template="performance")
-add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="efrbroo:R25_performed/ecrm:P165_incorporates", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
-add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="^efrbroo:R17_created", obj="expCreation", obj_class="efrbroo:F28_Expression_Creation", query_id=query_id)
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="efrbroo:R25_performed", obj="perfPlan", obj_class="efrbroo:F25_PerformancePlan", query_id=query_id)
+add_triplet(subject="perfPlan", subject_class="efrbroo:F25_PerformancePlan", property="ecrm:P165_incorporates", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
+add_triplet(subject="expCreation", subject_class="efrbroo:F28_Expression_Creation", property="efrbroo:R17_created", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
 add_triplet(subject="expCreation", subject_class="efrbroo:F28_Expression_Creation", property="ecrm:P9_consists_of", obj="activity", obj_class="ecrm:E7_Activity", query_id=query_id)
 add_triplet(subject="activity", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="composer", obj_class="ecrm:E21_Person", query_id=query_id)
 add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of", obj="perfActivity", obj_class="ecrm:E7_Activity", query_id=query_id)

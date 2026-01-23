@@ -2,7 +2,6 @@
 # split: "impossible"
 # origin: competency_question
 # question: "What works are linked to a particular work and what type of link connect them?"
-# build_query(question="What works are linked to a particular work and what type of link connect them?", template="Works", filters={})
 # query:
 SELECT DISTINCT ?expression, ?link, ?expression2
 WHERE {

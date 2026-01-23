@@ -1127,7 +1127,6 @@ async def groupBy_having_internal(
                 obj = tmp_obj
             
 
-            logger.info(f"The aggregation variable {obj} has count {qc.get_var_count(obj)} with registery: {qc.variable_registry}")
             if qc.get_var_count(obj) > 1:
                 triple = qc.get_triple_object(subject, obj)
                 if not triple:

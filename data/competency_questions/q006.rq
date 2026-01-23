@@ -2,10 +2,6 @@
 # split: "medium"
 # origin: competency_question
 # question: "Give me the works written for oboe and orchestra after the 1900"
-# build_query(question="Give me the works written for oboe and orchestra after the 1900", template="Works", filters={})
-# associate_to_N_entities(subject="expression", obj="oboe", query_id=query_id)
-# associate_to_N_entities(subject="expression", obj="orchestra", query_id=query_id)
-# has_quantity_of(subject="expCreation", property="time-span", type="more", value="01-01-1900", valueEnd=None, query_id=query_id)
 # query:
 SELECT DISTINCT ?start, ?expression, SAMPLE(?title) as ?title, ?casting
 WHERE {
@@ -29,9 +25,7 @@ WHERE {
 
 # workflow
 build_query(question="Give me the works written for oboe and orchestra after the 1900", template="expression")
-find_candidate_entities(name="oboe", entity_type="vocabulary")
 add_component_constraint(subject="expression", obj="oboe", n=1, query_id=query_id)
-find_candidate_entities(name="orchestra", entity_type="vocabulary")
 add_component_constraint(subject="expression", obj="orchestra", n=1, query_id=query_id)
 filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="more", value="1900", query_id=query_id)
 execute_query(query_id=query_id)

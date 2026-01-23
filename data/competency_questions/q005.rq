@@ -2,9 +2,6 @@
 # split: "hard"
 # origin: competency_question
 # question: "Retrieve all the works that have been written by German composers between 1800 and 1850 and performed at the Royal Albert Hall"
-# build_query(question="Retrieve all the works that have been written by German composers between 1800 and 1850 and performed at the Royal Albert Hall", template="Works", filters={"composer_nationality": "DE"})
-# # Filter(performance.performed == expression and performance.took_place_at == “Royal Albert Hall”)
-# has_quantity_of(subject="expCreation", property="time-span", type="range", value="01-01-1800", valueEnd="01-01-1850", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?start as ?date, SAMPLE(?composerName) as ?composer
 WHERE {
@@ -28,11 +25,11 @@ WHERE {
 }
 
 # workflow
-find_candidate_entities(name="Royal Albert Hall", entity_type="place")
 build_query(question="Retrieve all the works that have been written by German composers between 1800 and 1850 and performed at the Royal Albert Hall", template="expression")
 apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"composer_nationality": "DE"})
 filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1800", valueEnd="1850", query_id=query_id)
-add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="^ecrm:P165_incorporates", obj="perf_version", obj_class="efrbroo:F25_Performance_Plan", query_id=query_id)
-add_triplet(subject="perf_version", subject_class="efrbroo:F25_Performance_Plan", property="^efrbroo:R25_performed", obj="performance", obj_class="efrbroo:F31_Performance", query_id=query_id)
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="a", obj="efrbroo:F31_Performance", obj_class="efrbroo:F31_Performance", query_id=query_id)
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="efrbroo:R25_performed", obj="activity", obj_class="ecrm:E7_Activity", query_id=query_id)
+add_triplet(subject="activity", subject_class="ecrm:E7_Activity", property="ecrm:P165_incorporates", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
 apply_filter(query_id=query_id, base_variable="performance", template="performance", filters={"location": "http://sws.geonames.org/6944344/"})
 execute_query(query_id=query_id)

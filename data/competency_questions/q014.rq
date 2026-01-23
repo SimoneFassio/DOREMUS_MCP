@@ -2,9 +2,6 @@
 # split: "hard"
 # origin: competency_question
 # question: "Give me all the operas of which the composer is also the librettist"
-# build_query(question="Give me all the operas of which the composer is also the librettist", template="Works", filters={"genre": "opera"})
-# associate_to_N_entities(subject="expression", obj="composer", query_id=query_id)
-# associate_to_N_entities(subject="expression", obj="librettist", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, SAMPLE(?composerName) as ?composer
 WHERE {
@@ -26,11 +23,9 @@ WHERE {
 }
 
 # workflow
-find_candidate_entities(name="composer", entity_type="vocabulary")
-find_candidate_entities(name="librettist", entity_type="vocabulary")
 build_query(question="Give me all the operas of which the composer is also the librettist", template="expression")
 apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "opera"})
-add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="^efrbroo:R17_created", obj="expCreation", obj_class="efrbroo:F28_Expression_Creation", query_id=query_id)
+add_triplet(subject="expCreation", subject_class="efrbroo:F28_Expression_Creation", property="efrbroo:R17_created", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
 add_triplet(subject="expCreation", subject_class="efrbroo:F28_Expression_Creation", property="ecrm:P9_consists_of", obj="activity1", obj_class="ecrm:E7_Activity", query_id=query_id)
 add_triplet(subject="activity1", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="composer", obj_class="ecrm:E21_Person", query_id=query_id)
 add_triplet(subject="activity1", subject_class="ecrm:E7_Activity", property="mus:U31_had_function", obj="functionComposer", obj_class="skos:Concept", query_id=query_id)

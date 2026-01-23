@@ -2,8 +2,6 @@
 # split: "medium"
 # origin: competency_question
 # question: "Give me a list of melodies of 20th century"
-# build_query(question="Give me a list of melodies of 20th century", template="Works", filters={"genre": "melody"})
-# has_quantity_of(subject="expCreation", property="time-span", type="range", value="01-01-1900", valueEnd="01-01-2001", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?start, ?end
 WHERE {
@@ -20,6 +18,6 @@ WHERE {
 
 # workflow
 build_query(question="Give me a list of melodies of 20th century", template="expression")
-apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "melody"})
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "melodie"})
 filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1900", valueEnd="2000", query_id=query_id)
 execute_query(query_id=query_id)

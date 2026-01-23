@@ -2,9 +2,6 @@
 # split: "hard"
 # origin: competency_question
 # question: "Give me a list of works of chamber music composed in the 19th century by Norwegian composers"
-# build_query(question="Give me a list of works of chamber music composed in the 19th century by Norwegian composers", template="Works", filters={"genre": "chamber music", "composer_nationality": "NO"})
-# associate_to_N_entities(subject="expression", obj="composer", query_id=query_id)
-# has_quantity_of(subject="expCreation", property="time-span", type="range", value="01-01-1800", valueEnd="01-01-1900", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?composerName, SAMPLE(?genre) AS ?genre
 WHERE {
@@ -28,6 +25,6 @@ WHERE {
 
 # workflow
 build_query(question="Give me a list of works of chamber music composed in the 19th century by Norwegian composers", template="expression")
-apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chamber music", "composer_nationality": "NO"})
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chambre", "composer_nationality": "NO"})
 filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1800", valueEnd="1900", query_id=query_id)
 execute_query(query_id=query_id)

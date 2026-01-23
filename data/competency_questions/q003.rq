@@ -2,11 +2,6 @@
 # split: "hard"
 # origin: competency_question
 # question: "Which works have been written for string quartet?"
-# build_query(question="Which works have been written for string quartet?", template="Works", filters={})
-# associate_to_N_entities(subject="expression", obj="violin", query_id=query_id, n=2)
-# associate_to_N_entities(subject="expression", obj="viola", query_id=query_id, n=1)
-# associate_to_N_entities(subject="expression", obj="cello", query_id=query_id, n=1)
-# groupBy_having(subject="casting", query_id=query_id, obj="castingDetail", function="COUNT", logic_type="equal", valueStart="3")
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?casting
 WHERE {
@@ -39,11 +34,8 @@ HAVING (COUNT(?allCastingDets) = 3)
 
 # workflow
 build_query(question="Which works have been written for string quartet?", template="expression")
-find_candidate_entities(name="violin", entity_type="vocabulary")
 add_component_constraint(subject="expression", obj="violin", n=2, query_id=query_id)
-find_candidate_entities(name="viola", entity_type="vocabulary")
 add_component_constraint(subject="expression", obj="viola", n=1, query_id=query_id)
-find_candidate_entities(name="cello", entity_type="vocabulary")
 add_component_constraint(subject="expression", obj="cello", n=1, query_id=query_id)
 groupBy_having(subject="casting", obj="castingDetail", function="COUNT", logic_type="equal", valueStart="3", query_id=query_id)
 execute_query(query_id=query_id)

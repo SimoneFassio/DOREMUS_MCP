@@ -17,9 +17,8 @@ WHERE {
 }
 
 # workflow
-find_candidate_entities(name="oboe", entity_type="vocabulary")
 build_query(question="Give me the name and the birth date of artists that played the oboe", template="artist")
-add_triplet(subject="artist", subject_class="ecrm:E21_Person", property="^ecrm:P14_carried_out_by", obj="part", obj_class="ecrm:E7_Activity", query_id=query_id)
-add_triplet(subject="part", subject_class="ecrm:E7_Activity", property="mus:U1_used_medium_of_performance", obj="oboe", obj_class="skos:Concept", query_id=query_id)
-# Manually add VALUES filter for oboe
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of", obj="part", obj_class="mus:M28_Individual_Performance", query_id=query_id)
+add_triplet(subject="part", subject_class="mus:M28_Individual_Performance", property="ecrm:P14_carried_out_by", obj="artis", obj_class="ecrm:E21_Person", query_id=query_id)
+add_component_constraint(subject="part", obj="oboe", query_id=query_id)
 execute_query(query_id=query_id)

@@ -17,9 +17,6 @@ WHERE {
 }
 
 # workflow
-find_candidate_entities(name="Philharmonie de Paris", entity_type="place")
-find_candidate_entities(name="chief conductor", entity_type="vocabulary")
-find_candidate_entities(name="violin", entity_type="vocabulary")
 build_query(question="Give me the list of concerts given at the Philharmonie de Paris in which the orchestra is directed by the solo violin", template="performance")
 apply_filter(query_id=query_id, base_variable="performance", template="performance", filters={"location": "Philharmonie de Paris"})
 add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of+", obj="activityDir", obj_class="ecrm:E7_Activity", query_id=query_id)

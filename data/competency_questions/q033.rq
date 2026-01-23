@@ -24,13 +24,12 @@ ORDER BY DESC (COUNT(DISTINCT ?rec))
 LIMIT 1
 
 # workflow
-find_candidate_entities(name="Radio France", entity_type="artist")
-build_query(question="Give me the name of the vocal soloist most recorded by Radio France in 2014", template="recording_event")
+build_query(question="Give me the name of the vocal soloist most recorded by Radio France in 2014", template="artist")
+add_triplet(subject="recordingEvent", subject_class="efrbroo:F29_Recording_Event", property="a", obj="efrbroo:F29_Recording_Event"", obj_class="efrbroo:F29_Recording_Event"", query_id=query_id)
 apply_filter(query_id=query_id, base_variable="recordingEvent", template="recording_event", filters={"recorded_by": "Radio France"})
-filter_by_quantity(subject="recordingEvent", property="ecrm:P4_has_time-span", type="range", value="2014", valueEnd="2014", query_id=query_id)
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of", obj="part", obj_class="ecrm:E7_Activity", query_id=query_id)
+add_component_constraint(subject="part", obj="voice", query_id=query_id)
+filter_by_quantity(subject="performance", property="ecrm:P4_has_time-span", type="range", value="2014", valueEnd="2014", query_id=query_id)
 add_triplet(subject="recordingEvent", subject_class="efrbroo:F29_Recording_Event", property="efrbroo:R20_recorded", obj="performance", obj_class="efrbroo:F31_Performance", query_id=query_id)
-add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of*", obj="part", obj_class="ecrm:E7_Activity", query_id=query_id)
-add_triplet(subject="part", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="artist", obj_class="ecrm:E21_Person", query_id=query_id)
-add_triplet(subject="part", subject_class="ecrm:E7_Activity", property="mus:U1_used_medium_of_performance/skos:broader*", obj="voice", obj_class="skos:Concept", query_id=query_id)
 select_aggregate_variable(variable="recordingEvent", aggregator="COUNT", query_id=query_id)
 execute_query(query_id=query_id)

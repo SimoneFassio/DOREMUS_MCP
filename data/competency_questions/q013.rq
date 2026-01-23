@@ -25,7 +25,6 @@ WHERE {
 # workflow
 build_query(question="Give me all the sacred vocal music for choir written since 1945", template="expression")
 apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "sacred"})
-find_candidate_entities(name="choir", entity_type="vocabulary")
 add_component_constraint(subject="expression", obj="choir", query_id=query_id)
 filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="more", value="1945", query_id=query_id)
 execute_query(query_id=query_id)

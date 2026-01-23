@@ -2,9 +2,6 @@
 # split: "impossible"
 # origin: competency_question
 # question: "Give me the works of chamber music that involves at most violin, clarinet and piano, except from the sonatas for violin and piano and clarinet and piano"
-# build_query(question="Give me the works of chamber music that involves at most violin, clarinet and piano, except from the sonatas for violin and piano and clarinet and piano", template="Works", filters={"genre": "chamber music"})
-# # associated_to_at_most(casting, [violin, clarinet, piano])
-# # except()
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?groupCount AS ?nbInstruments, ?isViolin, ?isClarinet, ?isPiano, ?casting
 WHERE {

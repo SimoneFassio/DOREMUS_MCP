@@ -27,14 +27,12 @@ GROUP BY ?work ?work2 ?casting ?expression
 HAVING (COUNT(DISTINCT ?cDet) = 1)
 
 # workflow
-find_candidate_entities(name="Schubert", entity_type="artist")
-find_candidate_entities(name="piano", entity_type="vocabulary")
 build_query(question="Give me all works for piano based on works of Schubert", template="expression")
 add_component_constraint(subject="expression", obj="piano", query_id=query_id)
 add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="^efrbroo:R9_is_realised_in", obj="work", obj_class="efrbroo:F14_Individual_Work", query_id=query_id)
 add_triplet(subject="work", subject_class="efrbroo:F14_Individual_Work", property="efrbroo:R2_is_derivative_of", obj="work2", obj_class="efrbroo:F14_Individual_Work", query_id=query_id)
 add_triplet(subject="work2", subject_class="efrbroo:F14_Individual_Work", property="efrbroo:R9_is_realised_in", obj="expression2", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
-add_triplet(subject="expression2", subject_class="efrbroo:F22_Self-Contained_Expression", property="^efrbroo:R17_created", obj="expCreation2", obj_class="efrbroo:F28_Expression_Creation", query_id=query_id)
+add_triplet(subject="expression2", subject_class="efrbroo:F22_Self-Contained_Expression", property="efrbroo:R17_created", obj="expCreation2", obj_class="efrbroo:F28_Expression_Creation", query_id=query_id)
 add_triplet(subject="expCreation2", subject_class="efrbroo:F28_Expression_Creation", property="ecrm:P9_consists_of", obj="activity2", obj_class="ecrm:E7_Activity", query_id=query_id)
 add_triplet(subject="activity2", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="schubert", obj_class="ecrm:E21_Person", query_id=query_id)
 # Manually add filter/binding for Schubert URI

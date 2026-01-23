@@ -18,7 +18,6 @@ WHERE {
 }
 
 # workflow
-find_candidate_entities(name="chief conductor", entity_type="vocabulary")
 build_query(question="Give me all the performances in which a composer directs one of his works", template="performance")
 add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="efrbroo:R25_performed/ecrm:P165_incorporates", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
 add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="^efrbroo:R17_created", obj="expCreation", obj_class="efrbroo:F28_Expression_Creation", query_id=query_id)

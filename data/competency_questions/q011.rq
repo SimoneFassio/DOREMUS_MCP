@@ -2,10 +2,6 @@
 # split: "hard"
 # origin: competency_question
 # question: "Give me all the melodies for baritone voice between 1870 and 1913."
-# build_query(question="Give me all the melodies written for baritone voice between 1870 and 1913", template="Works", filters={"genre": "melody"})
-# associated_to_N_entities(expression, baritone)
-# has_quantity_of(subject="expCreation", property="time-span", type="range", value="01-01-1870", valueEnd="01-01-1914", query_id=query_id)
-# groupBy_having(subject="expression", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression SAMPLE(?title) as ?title
 WHERE {
@@ -28,8 +24,7 @@ WHERE {
 
 # workflow
 build_query(question="Give me all the melodies for baritone voice between 1870 and 1913.", template="expression")
-apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "melody"})
-find_candidate_entities(name="baritone", entity_type="vocabulary")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "mélodie"})
 add_component_constraint(subject="expression", obj="baritone", query_id=query_id)
 filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1870", valueEnd="1913", query_id=query_id)
 execute_query(query_id=query_id)

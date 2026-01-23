@@ -2,8 +2,6 @@
 # split: "hard"
 # origin: competency_question
 # question: "Give me a cycle of melodies whose author of text is the same for each melody"
-# build_query(question="Give me a cycle of melodies whose author of text is the same for each melody", template="Works", filters={"genre": "melody"})
-# groupBy_having(subject="expression", query_id=query_id, obj="author", function="COUNT", logic_type="equal", valueStart="1")
 # query:
 SELECT DISTINCT ?expression (SAMPLE(?title) AS ?title) (SAMPLE(?authorName) AS ?author)
 WHERE {
@@ -27,7 +25,7 @@ HAVING (COUNT(DISTINCT ?author) = 1)
 build_query(question="Give me a cycle of melodies whose author of text is the same for each melody", template="expression")
 apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "melody"})
 add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="efrbroo:R5_has_component", obj="single", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
-add_triplet(subject="single", subject_class="efrbroo:F22_Self-Contained_Expression", property="^efrbroo:R17_created", obj="creation", obj_class="efrbroo:F28_Expression_Creation", query_id=query_id)
+add_triplet(subject="creation", subject_class="efrbroo:F28_Expression_Creation", property="efrbroo:R17_created", obj="single", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
 add_triplet(subject="creation", subject_class="efrbroo:F28_Expression_Creation", property="ecrm:P9_consists_of", obj="subActivity", obj_class="ecrm:E7_Activity", query_id=query_id)
 add_triplet(subject="subActivity", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="author", obj_class="ecrm:E21_Person", query_id=query_id)
 groupBy_having(subject="expression", obj="author", function="COUNT", logic_type="equal", valueStart="1", query_id=query_id)

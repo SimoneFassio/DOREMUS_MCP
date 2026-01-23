@@ -2,9 +2,6 @@
 # split: "medium"
 # origin: competency_question
 # question: "Give me the list of the works of which at least one of the dedicatees is also a performer of the work"
-# build_query(question="Give me the list of the works of which at least one of the dedicatees is also a performer of the work", template="Works", filters={})
-# associate_to_N_entities(subject="expression", obj="dedicatee", query_id=query_id)
-# associate_to_N_entities(subject="expression", obj="performance", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title
 WHERE {
@@ -18,9 +15,10 @@ WHERE {
 
 # workflow
 build_query(question="Give me the list of the works of which at least one of the dedicatees is also a performer of the work", template="expression")
-add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="mus:U44_has_dedication_statement", obj="dedicationStmt", obj_class="efrbroo:F33_Catalogue_Statement", query_id=query_id)
+add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="mus:U44_has_dedication_statement", obj="dedicationStmt", obj_class="mus:M15_Dedication_Statement", query_id=query_id)
 add_triplet(subject="dedicationStmt", subject_class="efrbroo:F33_Catalogue_Statement", property="ecrm:P67_refers_to", obj="dedicatee", obj_class="ecrm:E21_Person", query_id=query_id)
-add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="efrbroo:R17_created/mus:U54_is_performed_expression_of", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="efrbroo:R17_created", obj="performed_expression", obj_class="mus:M43_Performed_Expression", query_id=query_id)
+add_triplet(subject="performed_expression", subject_class="mus:M43_Performed_Expression", property="mus:U54_is_performed_expression_of", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
 add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of", obj="activity", obj_class="ecrm:E7_Activity", query_id=query_id)
 add_triplet(subject="activity", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="dedicatee", obj_class="ecrm:E21_Person", query_id=query_id)
 execute_query(query_id=query_id)

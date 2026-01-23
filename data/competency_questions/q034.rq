@@ -20,9 +20,9 @@ WHERE {
 }
 
 # workflow
-find_candidate_entities(name="Radio France", entity_type="artist")
-find_candidate_entities(name="Philharmonie de Paris", entity_type="place")
-build_query(question="Give me the list of all the concerts recorded by Radio France at the Philharmonie de Paris between 1995 and 2014", template="recording_event")
+build_query(question="Give me the list of all the concerts recorded by Radio France at the Philharmonie de Paris between 1995 and 2014", template="performance")
+add_triplet(subject="recordingEvent", subject_class="efrbroo:F29_Recording_Event", property="a", obj="efrbroo:F29_Recording_Event"", obj_class="efrbroo:F29_Recording_Event"", query_id=query_id)
+add_triplet(subject="recordingEvent", subject_class="efrbroo:F29_Recording_Event", property="efrbroo:R20_recorded", obj="performance"", obj_class="efrbroo:F31_Performance"", query_id=query_id)
 apply_filter(query_id=query_id, base_variable="recordingEvent", template="recording_event", filters={"recorded_by": "Radio France", "location": "Philharmonie de Paris"})
-filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1995", valueEnd="2014", query_id=query_id)
+filter_by_quantity(subject="recordingEvent", property="ecrm:P4_has_time-span", type="range", value="1995", valueEnd="2014", query_id=query_id)
 execute_query(query_id=query_id)

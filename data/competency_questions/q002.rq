@@ -2,8 +2,6 @@
 # split: "medium"
 # origin: competency_question
 # question: "Which works have been composed in 1836 ?"
-# build_query(question="Which works have been composed in 1836 ?", template="Works", filters={})
-# has_quantity_of(subject="expCreation", property="time-span", type="range", value="01-01-1836", valueEnd="01-01-1837", query_id=query_id)
 # query:
 SELECT DISTINCT ?expression, sql:BEST_LANGMATCH(?title, 'en, en-gb;q=0.8, fr=0.6; *;q=0.1', 'en') as ?title, ?start, ?end
 WHERE {
