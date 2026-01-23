@@ -3,8 +3,7 @@ import pathlib
 
 # Read cq .rq files from data directory
 project_root = pathlib.Path(__file__).parent.parent.parent.parent
-competency_dir = project_root / "data" / "competency_questions"
-user_dir = project_root / "data" / "user_questions"
+competency_dir = project_root / "data" / "eval_dataset"
 
 def load_rq_files(directory):
     examples = []
@@ -104,13 +103,9 @@ def load_rq_files(directory):
                 "metadata": metadata,
                 "split": split
             })
-            
     return examples
 
-cq_examples = load_rq_files(competency_dir)
-user_examples = load_rq_files(user_dir)
-
-examples_queries = cq_examples + user_examples
+examples_queries = load_rq_files(competency_dir)
 
 def test_print_examples():
     """Prints the examples in the evaluation dataset."""
