@@ -1,6 +1,6 @@
 # category: "Recordings"
 # split: "medium"
-# tag: competency_question
+# origin: competency_question
 # question: "Give me all the recordings of Don Giovanni by Mozart"
 # query:
 SELECT DISTINCT ?rec

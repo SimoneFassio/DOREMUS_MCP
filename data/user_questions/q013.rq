@@ -1,6 +1,6 @@
 # category: "Artists"
 # split: "medium"
-# tag: user_question
+# origin: user_question
 # question: "Give me name and birth date of artists that played a cello in 21th century"
 # query:
 SELECT DISTINCT ?artist ?name ?birthDate

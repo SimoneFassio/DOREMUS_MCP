@@ -1,6 +1,6 @@
 # category: "Works and Expressions"
 # split: "hard"
-# tag: competency_question
+# origin: competency_question
 # question: "Give me the works written for violin, clarinet and piano (strictly)"
 # build_query(question="Give me the works written for violin, clarinet and piano (strictly)", template="Works", filters={})
 # associate_to_N_entities(subject="expression", obj="violin", query_id=query_id)

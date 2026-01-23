@@ -1,6 +1,6 @@
 # category: "Works and Expressions"
 # split: "hard"
-# tag: user_question
+# origin: user_question
 # question: "How many works did Claude Debussy composed?"
 # query:
 SELECT (COUNT(DISTINCT ?expression) AS ?count)

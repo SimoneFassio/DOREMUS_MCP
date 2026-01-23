@@ -3,9 +3,7 @@ import sys
 import pathlib
 import argparse
 from collections import Counter
-
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
-from rdf_assistant.eval.doremus_dataset import examples_queries
+from doremus_dataset import examples_queries
 
 def remove_comments(query):
     lines = query.splitlines()

@@ -1,6 +1,6 @@
 # category: "Performances"
 # split: "medium"
-# tag: user_question
+# origin: user_question
 # question: "Performances performed in January 2016, at the Philharmonie de Paris"
 # query:
 SELECT DISTINCT ?performance ?title ?date

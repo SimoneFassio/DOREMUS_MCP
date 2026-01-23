@@ -1,6 +1,6 @@
 # category: "Tracks"
 # split: "easy"
-# tag: user_question
+# origin: user_question
 # question: "Give me the titles of all tracks that are recordings of work symphonie n° 5."
 # query:
 SELECT DISTINCT ?track ?trackTitle

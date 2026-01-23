@@ -14,14 +14,16 @@ def load_rq_files(directory):
     for file_path in sorted(directory.glob("*.rq")):
         with open(file_path, "r") as f:
             content = f.read()
+
+        # get the relative path from the project root
+        relative_path = file_path.relative_to(project_root)
             
         # Initialize fields
         metadata = {
             "category": None,
-            "split": None,
-            "tag": None,
+            "origin": None,
             "workflow": [],
-            "file_path": str(file_path)
+            "file_path": str(relative_path)
         }
         question = ""
         query_lines = []
@@ -46,14 +48,14 @@ def load_rq_files(directory):
             # Split
             match_split = re.match(r'^\s*#\s*split\s*:\s*(.*)', stripped, re.IGNORECASE)
             if match_split:
-                metadata["split"] = match_split.group(1).strip().strip('"')
+                split = match_split.group(1).strip().strip('"')
                 in_workflow = False
                 continue
 
-            # Tag
-            match_tag = re.match(r'^\s*#\s*tag\s*:\s*(.*)', stripped, re.IGNORECASE)
-            if match_tag:
-                metadata["tag"] = match_tag.group(1).strip().strip('"')
+            # Origin
+            match_origin = re.match(r'^\s*#\s*origin\s*:\s*(.*)', stripped, re.IGNORECASE)
+            if match_origin:
+                metadata["origin"] = match_origin.group(1).strip().strip('"')
                 in_workflow = False
                 continue
 
@@ -83,15 +85,14 @@ def load_rq_files(directory):
 
             
             # Workflow content
-            elif in_workflow and stripped.startswith("#"):
-                # Clean up workflow line
-                wf_line = stripped.lstrip("#").strip()
-                if wf_line:
-                    metadata["workflow"].append(wf_line)
+            elif in_workflow:
+                 # Clean up workflow line
+                 wf_line = stripped.lstrip("#").strip()
+                 if wf_line:
+                     metadata["workflow"].append(wf_line)
             
             # Query content (non-comment lines that are not empty)
             elif not stripped.startswith("#") and stripped:
-                in_workflow = False
                 query_lines.append(line)
             
         query = "\n".join(query_lines).strip()
@@ -100,7 +101,8 @@ def load_rq_files(directory):
             examples.append({
                 "inputs": {"query_input": question},
                 "outputs": {"rdf_query": query},
-                "metadata": metadata
+                "metadata": metadata,
+                "split": split
             })
             
     return examples

@@ -1,6 +1,6 @@
 # category: "Performances"
 # split: "medium"
-# tag: competency_question
+# origin: competency_question
 # question: "Give me all the performances in which a composer interprets his or her works"
 # query:
 SELECT DISTINCT ?performance SAMPLE(?title) as ?title ?composerName

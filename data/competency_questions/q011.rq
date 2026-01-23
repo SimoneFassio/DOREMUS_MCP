@@ -1,6 +1,6 @@
 # category: "Works and Expressions"
 # split: "hard"
-# tag: competency_question
+# origin: competency_question
 # question: "Give me all the melodies for baritone voice between 1870 and 1913."
 # build_query(question="Give me all the melodies written for baritone voice between 1870 and 1913", template="Works", filters={"genre": "melody"})
 # associated_to_N_entities(expression, baritone)

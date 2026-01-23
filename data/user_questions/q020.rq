@@ -1,6 +1,6 @@
 # category: "Works and Expressions"
 # split: "easy"
-# tag: user_question
+# origin: user_question
 # question: "Give me works with genre Sonata."
 # used_tools: ["find_candidate_entities", "build_query", "apply_filter", "add_select", "execute_query"]
 # query:

@@ -1,6 +1,6 @@
 # category: "Works and Expressions"
 # split: "hard"
-# tag: competency_question
+# origin: competency_question
 # question: "Which works have been written for string quartet?"
 # build_query(question="Which works have been written for string quartet?", template="Works", filters={})
 # associate_to_N_entities(subject="expression", obj="violin", query_id=query_id, n=2)

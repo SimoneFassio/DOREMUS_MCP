@@ -1,6 +1,6 @@
 # category: "Publications"
 # split: "impossible"
-# tag: competency_question
+# origin: competency_question
 # question: "Give me pairs of recorded tracksets that are composed with the same key"
 # query:
 SELECT DISTINCT ?work1 SAMPLE(?title1) as ?title1 ?work2 SAMPLE(?title2) as ?title2 ?key

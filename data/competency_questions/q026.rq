@@ -1,6 +1,6 @@
 # category: "Artists"
 # split: "easy"
-# tag: competency_question
+# origin: competency_question
 # question: "Give me the name and the birth date of artists that played the oboe"
 # query:
 SELECT DISTINCT ?artist ?name ?birthDate

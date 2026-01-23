@@ -1,6 +1,6 @@
 # category: "Tracks"
 # split: "hard"
-# tag: user_question
+# origin: user_question
 # question: "List the 5 longest tracks titled 'Kyrie'."
 # tools: build_query, filter, has_quantity_of, select_variable, execute_query
 # query:

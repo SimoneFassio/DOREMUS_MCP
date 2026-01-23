@@ -1,6 +1,6 @@
 # category: "Works and Expressions"
 # split: "medium"
-# tag: user_question
+# origin: user_question
 # question: "List all Symphonies composed by Louise Farrenc."
 # query:
 SELECT DISTINCT ?expression ?title

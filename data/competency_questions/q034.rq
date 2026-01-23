@@ -1,6 +1,6 @@
 # category: "Recordings"
 # split: "hard"
-# tag: competency_question
+# origin: competency_question
 # question: "Give me the list of all the concerts recorded by Radio France at the Philharmonie de Paris between 1995 and 2014"
 # query:
 SELECT DISTINCT ?concert SAMPLE(?title) year(?time)

@@ -32,6 +32,16 @@ DOREMUS_MCP_URL = os.getenv("DOREMUS_MCP_URL", "http://localhost:8000/mcp")
 API_KEYS_LIST = os.getenv("API_KEYS_LIST", "").split(",")
 API_KEYS_LIST = [k.strip() for k in API_KEYS_LIST if k.strip()]
 
+DATASET_NAME = os.getenv( "EVALUATION_DATASET_NAME","Doremus Dataset")
+DATASET_SPLITS = [s.strip() for s in os.getenv("EVALUATION_DATASET_SPLITS", "easy,medium,hard").split(",") if s.strip()]
+DATASET_ORIGIN = os.getenv("EVALUATION_DATASET_ORIGIN", "")
+if DATASET_ORIGIN not in ["competency_question", "user_question"]:
+    DATASET_ORIGIN = ""
+print(f"Using dataset: {DATASET_NAME}")
+print(f"Using splits: {DATASET_SPLITS}")
+if DATASET_ORIGIN:
+    print(f"Using origin: {DATASET_ORIGIN}")
+
 class KeyManager:
     def __init__(self, keys):
         self.keys = keys
@@ -49,32 +59,8 @@ class KeyManager:
         return self.keys[self.current_index]
 
 key_manager = KeyManager(API_KEYS_LIST)
-RELOAD = False
 
 async def main():
-    # DATASET CREATION
-    dataset_name = os.getenv( "EVALUATION_DATASET_NAME","Default Dataset")
-    if RELOAD:
-        if client.has_dataset(dataset_name=dataset_name):
-            print("Reloading Dataset")
-            dataset = client.read_dataset(dataset_name=dataset_name)
-            client.delete_dataset(dataset_id=dataset.id)
-            print(f"Dataset '{dataset_name}' has been deleted.")
-
-    # Create dataset if it doesn't exist
-    if not client.has_dataset(dataset_name=dataset_name):
-        print("Created Dataset")
-        dataset = client.create_dataset(
-            dataset_name=dataset_name, 
-            description="A dataset of competency questions and their SPARQL queries."
-        )
-        # Add examples to the dataset
-        inputs = [example["inputs"] for example in examples_queries]
-        outputs = [example["outputs"] for example in examples_queries]
-
-        client.create_examples(dataset_id=dataset.id, inputs=inputs, outputs=outputs)
-
-
     async def target_doremus_assistant(inputs: dict) -> dict:
         """Process a user input through the doremus assistant and capture the generated query."""
         messages = []
@@ -516,16 +502,25 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
                 os.environ.pop("LANGCHAIN_TRACING_V2", None)
 
     # RUN EVALUATION
-    run_expt = True
-    if run_expt:
-        evaluation = await client.aevaluate(
-            target_doremus_assistant,
-            data=dataset_name,
-            evaluators=[combined_evaluator],
-            # Name of the experiment
-            experiment_prefix=EXPERIMENT_PREFIX, 
-            max_concurrency=1
-        )
+    if DATASET_ORIGIN:
+        dataset = client.list_examples(
+            dataset_name=DATASET_NAME,
+            splits=DATASET_SPLITS,
+            metadata={"origin": DATASET_ORIGIN}
+            )
+    else:
+        dataset = client.list_examples(
+            dataset_name=DATASET_NAME,
+            splits=DATASET_SPLITS
+            )
+
+    evaluation = await client.aevaluate(
+        target_doremus_assistant,
+        data=dataset,
+        evaluators=[combined_evaluator],
+        experiment_prefix=EXPERIMENT_PREFIX, 
+        max_concurrency=1
+    )
 
 if __name__ == "__main__":
     asyncio.run(main())
