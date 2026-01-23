@@ -22,6 +22,7 @@ nanoid = "^2.0.0"
 openai = "^1.0.0"
 groq = "^0.37.1"
 ollama = "^0.6.1"
+zai-sdk = "*"
 
 # --- Group for Evaluator/Client-Only Dependencies ---
 [tool.poetry.group.eval]

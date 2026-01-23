@@ -29,7 +29,8 @@ evaluation_models = {
     "anthropic": "claude-sonnet-4-5-20250929", 
     "mistral": "mistral-7b-instant",
     "ollama": "gpt-oss:120b",
-    "cerebras": "llama3.1-70b"
+    "cerebras": "llama3.1-70b",
+    "zai": "glm-4.7-flash"
 }
 
 connections = {
@@ -50,30 +51,37 @@ cerebras_rate_limiter = InMemoryRateLimiter(
 )
 
 # Helper function to create model based on provider
-def create_model(provider: str, model_name=None):
+def create_model(provider: str, model_name=None, api_key=None):
     """Create a chat model based on provider"""
     if model_name is None:
         model_name = evaluation_models[provider]
     
     if provider == "openai":
-        return ChatOpenAI(model=model_name, temperature=0)
+        return ChatOpenAI(model=model_name, temperature=0, api_key=api_key or os.getenv("OPENAI_API_KEY"))
     elif provider == "groq":
-        return ChatGroq(model=model_name, temperature=0)
+        return ChatGroq(model=model_name, temperature=0, api_key=api_key or os.getenv("GROQ_API_KEY"))
     elif provider == "anthropic":
-        return ChatAnthropic(model=model_name, temperature=0)
+        return ChatAnthropic(model=model_name, temperature=0, api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
     elif provider == "cerebras":
         return ChatOpenAI(
             base_url="https://api.cerebras.ai/v1",
-            api_key=os.getenv("CEREBRAS_API_KEY"),
+            api_key=api_key or os.getenv("CEREBRAS_API_KEY"),
             model=model_name,
             temperature=0,
             rate_limiter=cerebras_rate_limiter
+        )
+    elif provider == "zai":
+        return ChatOpenAI(
+            base_url="https://api.z.ai/api/paas/v4",
+            api_key=api_key or os.getenv("ZAI_API_KEY"),
+            model=model_name,
+            temperature=0
         )
     elif provider == "ollama":
         return ChatOllama(
             base_url=os.getenv("OLLAMA_API_URL"),
             model=model_name,
-            client_kwargs={"headers": {"Authorization": f"Basic {os.getenv('OLLAMA_API_KEY')}"}},
+            client_kwargs={"headers": {"Authorization": f"Bearer {os.getenv('OLLAMA_API_KEY')}"}},
             stream=True,
             temperature=0,
             num_ctx=32768,
@@ -172,7 +180,7 @@ async def fix_hallucinated_json(request, handler):
     return response
     
 # AGENT LLM: Initialize the LLM, bind the tools from the MCP client
-async def initialize_agent():
+async def initialize_agent(api_key=None):
     tools = await client.get_tools()
     
     # Patch tools to ignore 'runtime' argument injected by LangGraph
@@ -191,7 +199,7 @@ async def initialize_agent():
                 kwargs.pop("runtime", None)
                 return original_func(*args, **kwargs)
             tool.func = wrapped_func
-    llm = create_model(provider, model_name)
+    llm = create_model(provider, model_name, api_key=api_key)
 
     print("DOREMUS Assistant configuration:")
     print(f"  provider: {provider}")

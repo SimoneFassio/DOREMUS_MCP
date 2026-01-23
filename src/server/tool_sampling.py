@@ -7,6 +7,7 @@ from fastmcp.server.dependencies import get_context
 from openai import OpenAI
 from groq import Groq
 from ollama import Client
+from zai import ZaiClient
 from typing import Callable, Optional, Dict, Any
 import time
 
@@ -17,7 +18,8 @@ sampling_models = {
     "openai": "gpt-5.2",
     "groq": "llama-3.3-70b-versatile",
     "cerebras": "llama-3.3-70b",
-    "ollama": "gpt-oss:120b"
+    "ollama": "gpt-oss:120b",
+    "zai": "glm-4.7-flash"
 }
 load_dotenv()
 
@@ -38,6 +40,8 @@ elif sampling_provider == "cerebras":
         api_key=os.getenv("CEREBRAS_API_KEY"),
         base_url="https://api.cerebras.ai/v1"
     )
+elif sampling_provider == "zai":
+    fallback_client = ZaiClient(api_key=os.getenv("ZAI_API_KEY"))
 else:
     fallback_client = Client(
         host=os.getenv("OLLAMA_API_URL"),
@@ -148,7 +152,7 @@ Based on the user's intent, select the most appropriate option by its index numb
 You MUST reply with exactly one token: the integer index only — nothing else, no punctuation, no commentary.
             """
             
-            if sampling_provider == "openai" or sampling_provider == "groq" or sampling_provider == "cerebras":
+            if sampling_provider == "openai" or sampling_provider == "groq" or sampling_provider == "cerebras" or sampling_provider == "zai":
                 response = fallback_client.chat.completions.create(
                     model=sampling_model,
                     messages=[
