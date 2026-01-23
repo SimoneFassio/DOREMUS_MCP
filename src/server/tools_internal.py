@@ -1116,7 +1116,7 @@ async def groupBy_having_internal(
                 raise Exception(f"Subject variable ?{subject} not found in query.")
 
         if obj:
-            obj = obj.lower()
+            obj = obj
             # Validate Object
             if ":" in obj:
                 #the LLM passed a label or URI
@@ -1127,30 +1127,34 @@ async def groupBy_having_internal(
                 obj = tmp_obj
             
 
-            triple = qc.get_triple_object(subject, obj)
-            if not triple:
-                raise Exception(f"Unable to find a triple between {subject} and {obj}")
-            
-            aggr_obj_name = "all"+triple["obj"]["var_name"]
-            new_triple = {
-                "subj": triple["subj"],
-                "pred": triple["pred"],
-                "obj": {
-                    "var_name": aggr_obj_name,
-                    "uri": triple["obj"]["var_label"],
-                    "type": "var"
+            logger.info(f"The aggregation variable {obj} has count {qc.get_var_count(obj)} with registery: {qc.variable_registry}")
+            if qc.get_var_count(obj) > 1:
+                triple = qc.get_triple_object(subject, obj)
+                if not triple:
+                    raise Exception(f"Unable to find a triple between {subject} and {obj}")
+                
+                aggr_obj_name = "all"+triple["obj"]["var_name"]
+                new_triple = {
+                    "subj": triple["subj"],
+                    "pred": triple["pred"],
+                    "obj": {
+                        "var_name": aggr_obj_name,
+                        "uri": triple["obj"]["var_label"],
+                        "type": "var"
+                    }
                 }
-            }
-            logger.info(f"New triple for aggregation: {new_triple}")
-            triples = [new_triple]
-                    
-            # Add module to QC
-            await qc.add_module({
-                "id": f"group_by_path_{subject}_{obj}",
-                "type": "pattern",
-                "scope": "main",
-                "triples": triples
-            })
+                logger.info(f"New triple for aggregation: {new_triple}")
+                triples = [new_triple]
+                        
+                # Add module to QC
+                await qc.add_module({
+                    "id": f"group_by_path_{subject}_{obj}",
+                    "type": "pattern",
+                    "scope": "main",
+                    "triples": triples
+                })
+            else:
+                aggr_obj_name = obj
 
         # CONSTRUCT GROUP BY: Group by the subject + any other non-aggregated variable in SELECT
         # We first update the select to include the subject of the group By (which might not be

@@ -861,9 +861,13 @@ You should select an option different to 0 ONLY if the variable represent a new 
                         self._modify_var(final_module, current_var_in_module, chosen_var)
                         if chosen_var not in self.variable_registry:
                             self._update_variable_counter(var_label)
+                            if var_name in self.variable_registry:
+                                count = self.variable_registry[var_name]["count"]
+                            else:
+                                count = 1
                             self.variable_registry[chosen_var] = {
                                 "var_label": var_label,
-                                "count": 1
+                                "count": count
                             }
                         else:
                             self._update_variable_counter(var_label)
@@ -883,6 +887,11 @@ You should select an option different to 0 ONLY if the variable represent a new 
             if val["var_label"] == var_uri:
                 return var
         return None
+
+    def get_var_count(self, var_name: str) -> int:
+        if var_name in self.variable_registry.keys():
+            return self.variable_registry[var_name]["count"]
+        return 0
     
     def get_triple_object(self, subj_name: str, obj_name: str) -> Dict[str, Any]:
         #TODO: check that group by link is only in where
