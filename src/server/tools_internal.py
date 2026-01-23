@@ -1006,14 +1006,14 @@ async def add_triplet_internal(
         obj_class = contract_uri(obj_class)
             
         # 1. Check property existence
-        if not explorer.class_has_property(subject_class, property):
+        if not explorer.class_has_property(subject_class, property) and property != "a":
              raise Exception(f"Property {property} does not exist for class {subject_class}.")
             
         # 2. Prepare Triples
         triples = [{
             "subj": create_triple_element(subject, subject_class, "var"),
             "pred": create_triple_element(property, property, "uri"),
-            "obj": create_triple_element(obj, obj_class, "var")
+            "obj": create_triple_element(obj, obj_class, "uri") if property == "a" else create_triple_element(subject, subject_class, "var")
         }]
         
         module_id = f"add_triplet_{subject}_{property}_{obj}"

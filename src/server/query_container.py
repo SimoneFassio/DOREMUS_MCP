@@ -1077,7 +1077,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
                     # If object is a variable and it is used only once (here), skip it.
                     if for_execution and t.get("obj", {}).get("type") == "var":
                         obj_name = t["obj"]["var_name"]
-                        if var_counts.get(obj_name, 0) <= 1:
+                        if var_counts.get(obj_name, 0) <= 1 and ":" not in obj_name:
                             logger.info(f"Dead code elimination: Skipping triple {t} because variable {obj_name} is used only once.")
                             continue
 
