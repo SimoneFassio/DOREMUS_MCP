@@ -4,8 +4,6 @@ import pathlib
 import argparse
 from collections import Counter
 
-# Import the dataset loader
-# Assuming this script is in src/rdf_assistant/eval/
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
 from rdf_assistant.eval.doremus_dataset import examples_queries
 
@@ -13,18 +11,7 @@ def remove_comments(query):
     lines = query.splitlines()
     cleaned = []
     for line in lines:
-        # Remove comments, but be careful with # inside strings?
-        # Simple approach: split by #, take first part.
-        # This is risky if # is in a URI or string.
-        # Better: basic tokenizer or regex.
-        # For now, simplistic approach assuming standard SPARQL formatting where # starts a comment.
         if "#" in line:
-            # Check if # is inside quotes (basic check)
-            # This is hard to do perfectly without a lexer.
-            # We'll use a safer regex approach if possible, or just strip for now.
-            # Majority of DOREMUS queries have comments at start of line or end of line.
-            # But URIs don't usually contain # (fragments) in the DOREMUS dataset (mostly slash URIs), 
-            # except standard vocabs like RDF syntax.
             pass
         cleaned.append(line)
     return "\n".join(cleaned) # Placeholder, actual logic below
