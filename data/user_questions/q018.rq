@@ -12,3 +12,9 @@ WHERE {
           mus:U31_had_function <http://data.doremus.org/vocabulary/function/composer> .
   VALUES ?composer { <http://data.doremus.org/artist/c536e11e-7871-3469-b913-1883b0b60e98> }
 }
+
+# workflow
+# find_candidate_entities(name="Erik Satie", entity_type="artist")
+# build_query(question="List works composed by Erik Satie.", template="expression")
+# apply_filter(query_id="q18", base_variable="expression", template="expression", filters={"composer_name": "http://data.doremus.org/artist/c536e11e-7871-3469-b913-1883b0b60e98"})
+# execute_query(query_id="q18")

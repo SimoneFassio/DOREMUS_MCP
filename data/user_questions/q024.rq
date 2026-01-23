@@ -11,3 +11,8 @@ WHERE {
   ?work rdfs:label ?workTitle .
   FILTER (REGEX(?workTitle, "Variations Goldberg", "i"))
 }
+
+# workflow
+# build_query(question="List tracks from publications(works) with title 'Variations Goldberg'.", template="track")
+# apply_filter(query_id="q24", base_variable="track", template="track", filters={"work_title": "Variations Goldberg"})
+# execute_query(query_id="q24")

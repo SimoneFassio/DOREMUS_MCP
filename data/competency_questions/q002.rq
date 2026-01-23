@@ -14,3 +14,8 @@ WHERE {
 
   FILTER ( ?start <= "1836"^^xsd:gYear AND ?end >= "1836"^^xsd:gYear )
 }
+
+# workflow
+build_query(question="Which works have been composed in 1836 ?", template="expression")
+filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1836", valueEnd="1836", query_id=query_id)
+execute_query(query_id=query_id)

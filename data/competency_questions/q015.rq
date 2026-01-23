@@ -15,3 +15,9 @@ WHERE {
 
   FILTER ( ?start >= "1900"^^xsd:gYear AND ?end < "2000"^^xsd:gYear )
 }
+
+# workflow
+build_query(question="Give me a list of melodies of 20th century", template="expression")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "melody"})
+filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1900", valueEnd="2000", query_id=query_id)
+execute_query(query_id=query_id)

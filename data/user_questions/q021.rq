@@ -10,3 +10,8 @@ WHERE {
   ?work rdfs:label ?workTitle .
   FILTER ( REGEX(?workTitle, 'Bol[eé]ro', 'i') )
 }
+
+# workflow
+# build_query(question="Give me recordings of the work Bolero.", template="track")
+# apply_filter(query_id="q21", base_variable="track", template="track", filters={"work_title": "Bolero"})
+# execute_query(query_id="q21")

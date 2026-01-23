@@ -9,3 +9,11 @@ VALUES ?artist { <http://data.doremus.org/artist/4802a043-23bb-3b8d-a443-4a3bd22
 ?artist schema:birthPlace ?birthPlace .
 ?birthPlace rdfs:label ?placeLabel . 
 }
+
+# workflow
+# find_candidate_entities(name="Mozart", entity_type="artist")
+# build_query(question="Where is Mozart born?", template="artist")
+# apply_filter(query_id="q5", base_variable="artist", template="artist", filters={"name": "http://data.doremus.org/artist/4802a043-23bb-3b8d-a443-4a3bd22ccc63"})
+# apply_filter(query_id="q5", base_variable="artist", template="artist", filters={"birth_place": ""})
+# select_aggregate_variable(query_id="q5", variable="birthPlace", aggregator=None)
+# execute_query(query_id="q5")

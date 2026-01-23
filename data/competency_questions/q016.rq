@@ -23,3 +23,9 @@ WHERE {
 
   FILTER ( contains(str(?genre), "chambre") AND ?start >= "1800"^^xsd:gYear AND ?end < "1900"^^xsd:gYear )
 }
+
+# workflow
+build_query(question="Give me a list of works of chamber music composed in the 19th century by Norwegian composers", template="expression")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chamber music", "composer_nationality": "NO"})
+filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1800", valueEnd="1900", query_id=query_id)
+execute_query(query_id=query_id)

@@ -14,3 +14,13 @@ WHERE {
           mus:U1_used_medium_of_performance <http://data.doremus.org/vocabulary/iaml/mop/svc> .
   FILTER (?date >= "2001"^^xsd:gYear)
 }
+
+# workflow
+# find_candidate_entities(name="cello", entity_type="vocabulary")
+# build_query(question="Give me name and birth date of artists that played a cello in 21th century", template="performance")
+# add_component_constraint(query_id="q13", subject="performance", obj="http://data.doremus.org/vocabulary/iaml/mop/svc")
+# filter_by_quantity(query_id="q13", subject="performance", property="ecrm:P4_has_time-span", type="more", value="2001")
+# add_triplet(query_id="q13", subject="performer", subject_class="ecrm:E21_Person", property="schema:birthDate", obj="birthDate", obj_class="xsd:date")
+# select_aggregate_variable(query_id="q13", variable="performer", aggregator=None)
+# select_aggregate_variable(query_id="q13", variable="birthDate", aggregator=None)
+# execute_query(query_id="q13")

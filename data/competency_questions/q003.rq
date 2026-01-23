@@ -34,3 +34,14 @@ WHERE {
 }
 GROUP BY ?expression ?casting
 HAVING (COUNT(?allCastingDets) = 3)
+
+# workflow
+build_query(question="Which works have been written for string quartet?", template="expression")
+find_candidate_entities(name="violin", entity_type="vocabulary")
+add_component_constraint(subject="expression", obj="violin", n=2, query_id=query_id)
+find_candidate_entities(name="viola", entity_type="vocabulary")
+add_component_constraint(subject="expression", obj="viola", n=1, query_id=query_id)
+find_candidate_entities(name="cello", entity_type="vocabulary")
+add_component_constraint(subject="expression", obj="cello", n=1, query_id=query_id)
+groupBy_having(subject="casting", obj="castingDetail", function="COUNT", logic_type="equal", valueStart="3", query_id=query_id)
+execute_query(query_id=query_id)

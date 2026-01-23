@@ -10,3 +10,9 @@ WHERE {
 
   FILTER(xsd:dayTimeDuration(str(?duration))> "PT1H"^^xsd:duration)
 }
+
+# workflow
+build_query(question="Give me all the recordings of opera whose duration is greater than 1 hour", template="track")
+apply_filter(query_id=query_id, base_variable="track", template="track", filters={"genre": "opera"})
+filter_by_quantity(subject="track", property="mus:U53_has_duration", type="more", value="PT1H", query_id=query_id)
+execute_query(query_id=query_id)

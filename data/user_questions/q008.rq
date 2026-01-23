@@ -10,3 +10,9 @@ WHERE {
           ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end .
   FILTER (?start >= "1800"^^xsd:gYear && ?end <= "1800"^^xsd:gYear)
 }
+
+# workflow
+# build_query(question="How many works have been composed in 1800?", template="expression")
+# filter_by_quantity(query_id="q8", subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1800", valueEnd="1800")
+# select_aggregate_variable(query_id="q8", variable="expression", aggregator="COUNT")
+# execute_query(query_id="q8")

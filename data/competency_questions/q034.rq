@@ -16,3 +16,11 @@ WHERE {
 
  FILTER (year(?time) >= 1995 AND year(?time) <= 2014 )
 }
+
+# workflow
+find_candidate_entities(name="Radio France", entity_type="artist")
+find_candidate_entities(name="Philharmonie de Paris", entity_type="place")
+build_query(question="Give me the list of all the concerts recorded by Radio France at the Philharmonie de Paris between 1995 and 2014", template="recording_event")
+apply_filter(query_id=query_id, base_variable="recordingEvent", template="recording_event", filters={"recorded_by": "Radio France", "location": "Philharmonie de Paris"})
+filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1995", valueEnd="2014", query_id=query_id)
+execute_query(query_id=query_id)

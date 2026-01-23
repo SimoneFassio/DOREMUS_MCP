@@ -13,3 +13,13 @@ WHERE {
             mus:U41_has_catalogue_number ?catNum .
   FILTER (?catNum >= 30 and ?catNum <= 70 )
 }
+
+# workflow
+find_candidate_entities(name="Johann Sebastian Bach", entity_type="artist")
+build_query(question="Give me the list of works of J.S. Bach between BWV 30 and BWV 70", template="expression")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"composer_name": "Johann Sebastian Bach"})
+add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="mus:U16_has_catalogue_statement", obj="catalogue", obj_class="efrbroo:F33_Catalogue_Statement", query_id=query_id)
+add_triplet(subject="catalogue", subject_class="efrbroo:F33_Catalogue_Statement", property="mus:U40_has_catalogue_name", obj="catalogueName", obj_class="efrbroo:F33_Catalogue_Statement", query_id=query_id)
+add_triplet(subject="catalogueName", subject_class="efrbroo:F33_Catalogue_Statement", property="modsrdf:identifier", obj="bwv", obj_class="xsd:string", query_id=query_id)
+filter_by_quantity(subject="catalogue", property="mus:U41_has_catalogue_number", type="range", value="30", valueEnd="70", query_id=query_id)
+execute_query(query_id=query_id)

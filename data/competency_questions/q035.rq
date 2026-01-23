@@ -14,3 +14,11 @@ WHERE {
 
   FILTER (contains(str(?title), "Don Giovanni"))
 }
+
+# workflow
+find_candidate_entities(name="Don Giovanni", entity_type="work")
+find_candidate_entities(name="Wolfgang Amadeus Mozart", entity_type="artist")
+build_query(question="Retrieve the tracks and corresponding tracksets for all recordings of the opera Don Giovanni by Mozart", template="track")
+apply_filter(query_id=query_id, base_variable="track", template="track", filters={"work_title": "Don Giovanni", "composer_name": "Wolfgang Amadeus Mozart"})
+add_triplet(subject="track", subject_class="mus:M24_Track", property="^efrbroo:R5_has_component", obj="trackset", obj_class="mus:M46_Set_of_Tracks", query_id=query_id)
+execute_query(query_id=query_id)

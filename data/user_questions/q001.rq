@@ -1,4 +1,6 @@
 # category: "Works and Expressions"
+# split: easy
+# tag: user_question
 # question: "List all Symphonies composed by Louise Farrenc."
 # query:
 SELECT DISTINCT ?expression ?title
@@ -10,3 +12,11 @@ WHERE {
           ecrm:P9_consists_of / ecrm:P14_carried_out_by ?composer .
   VALUES ?composer {<http://data.doremus.org/artist/1d78b116-b274-3a8f-88dd-a32e77f30ee9>}
 }
+
+# workflow
+# find_candidate_entities(name="Louise Farrenc", entity_type="artist")
+# build_query(question="List all Symphonies composed by Louise Farrenc.", template="expression")
+# apply_filter(query_id="q1", base_variable="expression", template="expression", filters={"composer_name": "http://data.doremus.org/artist/1d78b116-b274-3a8f-88dd-a32e77f30ee9"})
+# find_candidate_entities(name="Symphony", entity_type="vocabulary")
+# apply_filter(query_id="q1", base_variable="expression", template="expression", filters={"genre": "http://data.doremus.org/vocabulary/iaml/genre/sy"})
+# execute_query(query_id="q1")

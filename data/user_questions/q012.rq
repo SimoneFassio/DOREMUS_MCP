@@ -8,3 +8,8 @@ WHERE {
   ?artist foaf:name ?name .
 FILTER ( ?deathDate >= "2015"^^xsd:gYear AND ?deathDate <= "2015"^^xsd:gYear)
 }
+
+# workflow
+# build_query(question="List artists who died in 2015.", template="artist")
+# filter_by_quantity(query_id="q12", subject="artist", property="schema:deathDate", type="range", value="2015", valueEnd="2015")
+# execute_query(query_id="q12")

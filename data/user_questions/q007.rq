@@ -10,3 +10,8 @@ WHERE {
           ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end .
   FILTER (?start >= "1799-12-31"^^xsd:date && ?end <= "1799-12-31"^^xsd:date)
 }
+
+# workflow
+# build_query(question="Which works were composed on 31st December 1799?", template="expression")
+# filter_by_quantity(query_id="q7", subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1799-12-31", valueEnd="1799-12-31")
+# execute_query(query_id="q7")

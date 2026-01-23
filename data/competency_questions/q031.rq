@@ -1,5 +1,5 @@
 # category: "Performances"
-# category2: "Impossible"
+# split "impossible"
 # question: "Give me all the works interpreted on at least one mop different from the casting of the work"
 # query:
 SELECT DISTINCT ?expression, ?performance, ?mop

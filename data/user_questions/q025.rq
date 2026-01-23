@@ -11,3 +11,10 @@ WHERE {
 }
 ORDER BY DESC(?duration)
 LIMIT 5
+
+# workflow
+# build_query(question="List the 5 longest tracks titled 'Kyrie'.", template="track")
+# apply_filter(query_id="q25", base_variable="track", template="track", filters={"title": "Kyrie"})
+# add_triplet(query_id="q25", subject="track", subject_class="mus:M24_Track", property="mus:U53_has_duration", obj="duration", obj_class="xsd:duration")
+# select_aggregate_variable(query_id="q25", variable="duration", aggregator=None)
+# execute_query(query_id="q25", limit=5, order_by_variable="duration", order_by_desc=True)

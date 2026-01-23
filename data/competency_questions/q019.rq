@@ -16,3 +16,10 @@ WHERE {
 
   FILTER ( year(?compositionDate) - year(?death) <= 5 )
 }
+
+# workflow
+find_candidate_entities(name="Wolfgang Amadeus Mozart", entity_type="artist")
+get_entity_properties(entity_uri="http://data.doremus.org/artist/4802a043-23bb-3b8d-a443-4a3bd22ccc63")
+build_query(question="Give me the list of works composed by Mozart in the last 5 years of his life", template="expression")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"composer_name": "Wolfgang Amadeus Mozart"})
+execute_query(query_id=query_id)

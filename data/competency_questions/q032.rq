@@ -12,3 +12,13 @@ WHERE {
  ?artist foaf:name ?artistName
 } GROUP BY ?artist
 HAVING (COUNT(DISTINCT ?rec) > 10)
+
+# workflow
+find_candidate_entities(name="Radio France", entity_type="artist")
+build_query(question="Give me the artists that have been recorded more than 10 times by Radio France", template="recording_event")
+apply_filter(query_id=query_id, base_variable="recordingEvent", template="recording_event", filters={"recorded_by": "Radio France"})
+add_triplet(subject="recordingEvent", subject_class="efrbroo:F29_Recording_Event", property="efrbroo:R20_recorded", obj="performance", obj_class="efrbroo:F31_Performance", query_id=query_id)
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of", obj="part", obj_class="ecrm:E7_Activity", query_id=query_id)
+add_triplet(subject="part", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="artist", obj_class="ecrm:E21_Person", query_id=query_id)
+groupBy_having(subject="artist", obj="recordingEvent", function="COUNT", logic_type="more", valueStart="10", query_id=query_id)
+execute_query(query_id=query_id)

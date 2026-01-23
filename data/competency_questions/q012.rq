@@ -19,3 +19,10 @@ WHERE {
 
   VALUES (?cello) { (<http://data.doremus.org/vocabulary/iaml/mop/svc>) (<http://www.mimo-db.eu/InstrumentsKeywords/3582>) }
 }
+
+# workflow
+build_query(question="Give me all titles of chamber music that foresee at least one cello", template="expression")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chamber music"})
+find_candidate_entities(name="cello", entity_type="vocabulary")
+add_component_constraint(subject="expression", obj="cello", query_id=query_id)
+execute_query(query_id=query_id)

@@ -16,3 +16,11 @@ WHERE {
   ?castingDetail mus:U2_foresees_use_of_medium_of_performance ?piano .
   VALUES ?piano { <http://www.mimo-db.eu/InstrumentsKeywords/2299> <http://data.doremus.org/vocabulary/iaml/mop/kfp> <http://data.doremus.org/vocabulary/iaml/mop/kpf>} # piano
 }
+
+# workflow
+# find_candidate_entities(name="Ravel", entity_type="artist")
+# find_candidate_entities(name="Piano", entity_type="vocabulary")
+# build_query(question="List works composed by Ravel involving a Piano.", template="expression")
+# apply_filter(query_id="q14", base_variable="expression", template="expression", filters={"composer_name": "http://data.doremus.org/artist/1b1205f9-b99a-3bb8-ba77-256689af2e00"})
+# add_component_constraint(query_id="q14", subject="expression", obj="http://www.mimo-db.eu/InstrumentsKeywords/2299")
+# execute_query(query_id="q14")

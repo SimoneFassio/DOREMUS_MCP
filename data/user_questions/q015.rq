@@ -7,3 +7,8 @@ WHERE {
           foaf:name ?name .
   FILTER REGEX(?name, "simone", "i")
 }
+
+# workflow
+# build_query(question="Find artists with 'Simone' in their name.", template="artist")
+# apply_filter(query_id="q15", base_variable="artist", template="artist", filters={"name": "Simone"})
+# execute_query(query_id="q15")

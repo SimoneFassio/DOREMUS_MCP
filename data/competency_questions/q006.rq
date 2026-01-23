@@ -24,3 +24,12 @@ WHERE {
 
   FILTER ( ?start > "1900"^^xsd:gYear )
 }
+
+# workflow
+build_query(question="Give me the works written for oboe and orchestra after the 1900", template="expression")
+find_candidate_entities(name="oboe", entity_type="vocabulary")
+add_component_constraint(subject="expression", obj="oboe", n=1, query_id=query_id)
+find_candidate_entities(name="orchestra", entity_type="vocabulary")
+add_component_constraint(subject="expression", obj="orchestra", n=1, query_id=query_id)
+filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="more", value="1900", query_id=query_id)
+execute_query(query_id=query_id)

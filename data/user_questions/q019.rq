@@ -9,3 +9,9 @@ WHERE {
           ecrm:P7_took_place_at ?place .
   VALUES ?place { <http://sws.geonames.org/2988507/> }
 }
+
+# workflow
+# find_candidate_entities(name="Paris", entity_type="place")
+# build_query(question="Give me performances held in Paris.", template="performance")
+# apply_filter(query_id="q19", base_variable="performance", template="performance", filters={"location": "http://sws.geonames.org/2988507/"})
+# execute_query(query_id="q19")

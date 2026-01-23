@@ -14,3 +14,15 @@ WHERE {
      mus:U31_had_function
           <http://data.doremus.org/vocabulary/function/chief_conductor> .
 }
+
+# workflow
+find_candidate_entities(name="chief conductor", entity_type="vocabulary")
+build_query(question="Give me all the performances in which a composer directs one of his works", template="performance")
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="efrbroo:R25_performed/ecrm:P165_incorporates", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
+add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="^efrbroo:R17_created", obj="expCreation", obj_class="efrbroo:F28_Expression_Creation", query_id=query_id)
+add_triplet(subject="expCreation", subject_class="efrbroo:F28_Expression_Creation", property="ecrm:P9_consists_of", obj="activity", obj_class="ecrm:E7_Activity", query_id=query_id)
+add_triplet(subject="activity", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="composer", obj_class="ecrm:E21_Person", query_id=query_id)
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of", obj="perfActivity", obj_class="ecrm:E7_Activity", query_id=query_id)
+add_triplet(subject="perfActivity", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="composer", obj_class="ecrm:E21_Person", query_id=query_id)
+add_triplet(subject="perfActivity", subject_class="ecrm:E7_Activity", property="mus:U31_had_function", obj="conductorFunc", obj_class="skos:Concept", query_id=query_id)
+execute_query(query_id=query_id)

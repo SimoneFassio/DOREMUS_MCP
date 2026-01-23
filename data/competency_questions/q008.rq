@@ -27,3 +27,14 @@ WHERE {
 
   FILTER contains(str(?genre), "chambre")
 }
+
+# workflow
+build_query(question="Give me the works of chamber music that involves at least violin, clarinet and piano", template="expression")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chamber music"})
+find_candidate_entities(name="violin", entity_type="vocabulary")
+add_component_constraint(subject="expression", obj="violin", n=1, query_id=query_id)
+find_candidate_entities(name="clarinet", entity_type="vocabulary")
+add_component_constraint(subject="expression", obj="clarinet", n=1, query_id=query_id)
+find_candidate_entities(name="piano", entity_type="vocabulary")
+add_component_constraint(subject="expression", obj="piano", n=1, query_id=query_id)
+execute_query(query_id=query_id)

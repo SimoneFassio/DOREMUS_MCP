@@ -7,3 +7,8 @@ WHERE {
           rdfs:label ?title .
   FILTER REGEX(?title, "Moonlight", "i")
 }
+
+# workflow
+# build_query(question="Find works with 'Moonlight' in the title.", template="expression")
+# apply_filter(query_id="q6", base_variable="expression", template="expression", filters={"title": "Moonlight"})
+# execute_query(query_id="q6")

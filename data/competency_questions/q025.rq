@@ -5,3 +5,8 @@ SELECT * WHERE {
    ?expression rdfs:label ?label ;
         mus:U65_has_geographical_context []
 }
+
+# workflow
+build_query(question="Find musical works that are specifically categorized by their geographical or regional origin.", template="expression")
+add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="mus:U65_has_geographical_context", obj="geoContext", obj_class="ecrm:E1_CRM_Entity", query_id=query_id)
+execute_query(query_id=query_id)

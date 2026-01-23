@@ -8,3 +8,9 @@ WHERE {
           schema:birthPlace ?place .
   VALUES ?place { <http://sws.geonames.org/3165524/> }
 }
+
+# workflow
+# find_candidate_entities(name="Turin", entity_type="place")
+# build_query(question="List musicians born in Turin.", template="artist")
+# apply_filter(query_id="q10", base_variable="artist", template="artist", filters={"birth_place": "http://sws.geonames.org/3165524/"})
+# execute_query(query_id="q10")

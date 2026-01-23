@@ -13,3 +13,17 @@ WHERE {
   ?activityMus ecrm:P14_carried_out_by ?conductor ;
     mus:U1_used_medium_of_performance / skos:exactMatch* <http://www.mimo-db.eu/InstrumentsKeywords/3573> .
 }
+
+# workflow
+find_candidate_entities(name="Philharmonie de Paris", entity_type="place")
+find_candidate_entities(name="chief conductor", entity_type="vocabulary")
+find_candidate_entities(name="violin", entity_type="vocabulary")
+build_query(question="Give me the list of concerts given at the Philharmonie de Paris in which the orchestra is directed by the solo violin", template="performance")
+apply_filter(query_id=query_id, base_variable="performance", template="performance", filters={"location": "Philharmonie de Paris"})
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of+", obj="activityDir", obj_class="ecrm:E7_Activity", query_id=query_id)
+add_triplet(subject="activityDir", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="conductor", obj_class="ecrm:E21_Person", query_id=query_id)
+add_triplet(subject="activityDir", subject_class="ecrm:E7_Activity", property="mus:U31_had_function", obj="chiefConductor", obj_class="skos:Concept", query_id=query_id)
+add_triplet(subject="performance", subject_class="efrbroo:F31_Performance", property="ecrm:P9_consists_of+", obj="activityMus", obj_class="ecrm:E7_Activity", query_id=query_id)
+add_triplet(subject="activityMus", subject_class="ecrm:E7_Activity", property="ecrm:P14_carried_out_by", obj="conductor", obj_class="ecrm:E21_Person", query_id=query_id)
+add_triplet(subject="activityMus", subject_class="ecrm:E7_Activity", property="mus:U1_used_medium_of_performance", obj="violin", obj_class="skos:Concept", query_id=query_id)
+execute_query(query_id=query_id)

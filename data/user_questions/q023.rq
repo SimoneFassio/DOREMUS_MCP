@@ -9,3 +9,8 @@ WHERE {
           ecrm:P4_has_time-span / time:hasBeginning / time:inXSDDate ?start .
   FILTER ( ?start >= "2000"^^xsd:gYear AND ?start <= "2001"^^xsd:gYear )
 }
+
+# workflow
+# build_query(question="Give me performances between 2000 and 2001.", template="performance")
+# filter_by_quantity(query_id="q23", subject="performance", property="ecrm:P4_has_time-span", type="range", value="2000", valueEnd="2001")
+# execute_query(query_id="q23")

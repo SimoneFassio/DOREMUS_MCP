@@ -8,3 +8,11 @@ WHERE {
           foaf:name ?name .
   VALUES ?artist { <http://data.doremus.org/artist/60f784a6-2927-38e4-9379-e4bf4fc695b2> }
 }
+
+# workflow
+# find_candidate_entities(name="Maria Callas", entity_type="artist")
+# build_query(question="When was Maria Callas born?", template="artist")
+# apply_filter(query_id="q9", base_variable="artist", template="artist", filters={"name": "http://data.doremus.org/artist/60f784a6-2927-38e4-9379-e4bf4fc695b2"})
+# add_triplet(query_id="q9", subject="artist", subject_class="ecrm:E21_Person", property="schema:birthDate", obj="birthDate", obj_class="xsd:date")
+# select_aggregate_variable(query_id="q9", variable="birthDate", aggregator=None)
+# execute_query(query_id="q9")

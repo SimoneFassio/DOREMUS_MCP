@@ -24,3 +24,13 @@ WHERE {
 
   FILTER ( ?start >= "1800"^^xsd:gYear AND ?end <= "1850"^^xsd:gYear )
 }
+
+# workflow
+find_candidate_entities(name="Royal Albert Hall", entity_type="place")
+build_query(question="Retrieve all the works that have been written by German composers between 1800 and 1850 and performed at the Royal Albert Hall", template="expression")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"composer_nationality": "DE"})
+filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1800", valueEnd="1850", query_id=query_id)
+add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="^ecrm:P165_incorporates", obj="perf_version", obj_class="efrbroo:F25_Performance_Plan", query_id=query_id)
+add_triplet(subject="perf_version", subject_class="efrbroo:F25_Performance_Plan", property="^efrbroo:R25_performed", obj="performance", obj_class="efrbroo:F31_Performance", query_id=query_id)
+apply_filter(query_id=query_id, base_variable="performance", template="performance", filters={"location": "http://sws.geonames.org/6944344/"})
+execute_query(query_id=query_id)

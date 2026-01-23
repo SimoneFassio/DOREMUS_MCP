@@ -15,3 +15,10 @@ WHERE {
 
   FILTER (contains(str(?title), "Don Giovanni"))
 }
+
+# workflow
+find_candidate_entities(name="Don Giovanni", entity_type="work")
+find_candidate_entities(name="Wolfgang Amadeus Mozart", entity_type="artist")
+build_query(question="Give me all the recordings of Don Giovanni by Mozart", template="track")
+apply_filter(query_id=query_id, base_variable="track", template="track", filters={"work_title": "Don Giovanni", "composer_name": "Wolfgang Amadeus Mozart"})
+execute_query(query_id=query_id)

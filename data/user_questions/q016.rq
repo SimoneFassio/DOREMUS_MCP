@@ -10,3 +10,10 @@ WHERE {
 
   FILTER (?date >= "2016-01-01"^^xsd:date && ?date <= "2016-01-31"^^xsd:date)
 }
+
+# workflow
+# find_candidate_entities(name="Philharmonie de Paris", entity_type="place")
+# build_query(question="Performances performed in January 2016, at the Philharmonie de Paris", template="performance")
+# apply_filter(query_id="q16", base_variable="performance", template="performance", filters={"location": "http://data.doremus.org/place/bd21be9c-3f2b-3aa3-a460-114d579eabe6"})
+# filter_by_quantity(query_id="q16", subject="performance", property="ecrm:P4_has_time-span", type="range", value="2016-01-01", valueEnd="2016-01-31")
+# execute_query(query_id="q16")
