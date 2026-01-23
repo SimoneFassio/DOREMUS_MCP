@@ -1013,7 +1013,7 @@ async def add_triplet_internal(
         triples = [{
             "subj": create_triple_element(subject, subject_class, "var"),
             "pred": create_triple_element(property, property, "uri"),
-            "obj": create_triple_element(obj, obj_class, "uri") if property == "a" else create_triple_element(subject, subject_class, "var")
+            "obj": create_triple_element(obj_class, obj_class, "uri") if property == "a" else create_triple_element(obj, obj_class, "var")
         }]
         
         module_id = f"add_triplet_{subject}_{property}_{obj}"
