@@ -19,8 +19,6 @@ WHERE {
 }
 
 # workflow
-# find_candidate_entities(name="Giuseppe Verdi", entity_type="artist")
-# find_candidate_entities(name="Opera", entity_type="vocabulary")
 # build_query(question="Show me the Operas composed by Giuseppe Verdi in 1853.", template="expression")
 # apply_filter(query_id="q3", base_variable="expression", template="expression", filters={"composer_name": "Giuseppe Verdi"})
 # apply_filter(query_id="q3", base_variable="expression", template="expression", filters={"genre": "Opera"})

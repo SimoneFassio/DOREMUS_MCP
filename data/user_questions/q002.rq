@@ -11,7 +11,6 @@ WHERE {
 }
 
 # workflow
-# find_candidate_entities(name="clavichord", entity_type="vocabulary")
 # build_query(question="What works have been written specifically for clavichord?", template="expression")
 # add_component_constraint(query_id="q2", subject="expression", obj="clavichord", n=None)
 # execute_query(query_id="q2")

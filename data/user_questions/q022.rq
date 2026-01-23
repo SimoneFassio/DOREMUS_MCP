@@ -16,8 +16,6 @@ WHERE {
 }
 
 # workflow
-# find_candidate_entities(name="Tommaso Albinoni", entity_type="artist")
-# find_candidate_entities(name="C major", entity_type="vocabulary")
 # build_query(question="Give me works composed by Tommaso Albinoni in C major.", template="expression")
 # apply_filter(query_id="q22", base_variable="expression", template="expression", filters={"composer_name": "http://data.doremus.org/artist/a82b0c56-ccdf-31b6-a8b4-ad065f3405e5"})
 # apply_filter(query_id="q22", base_variable="expression", template="expression", filters={"musical_key": "http://data.doremus.org/vocabulary/key/c"})

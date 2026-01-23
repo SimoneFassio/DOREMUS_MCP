@@ -15,7 +15,6 @@ WHERE {
 }
 
 # workflow
-# find_candidate_entities(name="Claude Debussy", entity_type="artist")
 # build_query(question="How many works did Claude Debussy composed?", template="expression")
 # apply_filter(query_id="q4", base_variable="expression", template="expression", filters={"composer_name": "Claude Debussy"})
 # select_aggregate_variable(query_id="q4", variable="expression", aggregator="COUNT")

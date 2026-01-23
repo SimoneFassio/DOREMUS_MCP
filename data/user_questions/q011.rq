@@ -13,7 +13,6 @@ WHERE {
 }
 
 # workflow
-# find_candidate_entities(name="Trumpet", entity_type="vocabulary")
 # build_query(question="Which artists are known for playing the Trumpet?", template="performance")
 # add_component_constraint(query_id="q11", subject="performance", obj="http://data.doremus.org/vocabulary/iaml/mop/btr")
 # select_aggregate_variable(query_id="q11", variable="performer", aggregator=None)
