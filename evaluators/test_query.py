@@ -18,7 +18,7 @@ warnings.filterwarnings(
 # Add src to path for local development
 sys.path.insert(0, 'src')
 
-from rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider, model_name
+from rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider, model_name, initialize_agent
 from rdf_assistant.eval.doremus_dataset import examples_queries
 from server.utils import execute_sparql_query
 
@@ -29,8 +29,26 @@ load_dotenv(".env")
 
 EXPERIMENT_PREFIX = os.getenv("EXPERIMENT_PREFIX", "")
 DOREMUS_MCP_URL = os.getenv("DOREMUS_MCP_URL", "http://localhost:8000/mcp")
+API_KEYS_LIST = os.getenv("API_KEYS_LIST", "").split(",")
+API_KEYS_LIST = [k.strip() for k in API_KEYS_LIST if k.strip()]
 
-# Set to True to reload the dataset and update it
+class KeyManager:
+    def __init__(self, keys):
+        self.keys = keys
+        self.current_index = 0
+    
+    def get_next_key(self):
+        if not self.keys:
+            return None
+        self.current_index = (self.current_index + 1) % len(self.keys)
+        return self.keys[self.current_index]
+    
+    def get_current_key(self):
+        if not self.keys:
+            return None
+        return self.keys[self.current_index]
+
+key_manager = KeyManager(API_KEYS_LIST)
 RELOAD = False
 
 async def main():
@@ -60,21 +78,51 @@ async def main():
     async def target_doremus_assistant(inputs: dict) -> dict:
         """Process a user input through the doremus assistant and capture the generated query."""
         messages = []
-        try:
-            # Use astream with stream_mode="values" to capture state updates
-            # This allows us to retain the latest messages even if recursion limit is hit
-            async for chunk in doremus_assistant.astream(
-                {"messages": [{"role": "user", "content": inputs["query_input"]}]},
-                stream_mode="values"
-            ):
-                if "messages" in chunk:
-                    messages = chunk["messages"]
-        except GraphRecursionError:
-            print(f"⚠️ Recursion Limit Hit for: {inputs.get('query_input', '')[:30]}... processing partial messages.")
-        except ValidationError as e:
-             print(f"⚠️ Pydantic Validation Error for: {inputs.get('query_input', '')[:30]}... Error: {e}")
-        except Exception as e:
-            print(f"Error during ainvoke: {e}")
+        # Retry loop for API errors
+        max_retries = len(key_manager.keys) if key_manager.keys else 1
+        # If no keys list, we just run once with default environment key (so essentially 1 try)
+        if not key_manager.keys:
+             max_retries = 1
+        else:
+             max_retries = len(key_manager.keys) + 1 # Allow initial run + retries for all keys
+
+        current_agent = doremus_assistant
+        
+        for attempt in range(max_retries):
+            try:
+                # Use astream with stream_mode="values" to capture state updates
+                # This allows us to retain the latest messages even if recursion limit is hit
+                async for chunk in current_agent.astream(
+                    {"messages": [{"role": "user", "content": inputs["query_input"]}]},
+                    stream_mode="values"
+                ):
+                    if "messages" in chunk:
+                        messages = chunk["messages"]
+                
+                # If we finish the stream successfully, break the retry loop
+                break
+
+            except GraphRecursionError:
+                print(f"⚠️ Recursion Limit Hit for: {inputs.get('query_input', '')[:30]}... processing partial messages.")
+                break # Don't retry on recursion error, just process partial
+            except ValidationError as e:
+                 print(f"⚠️ Pydantic Validation Error for: {inputs.get('query_input', '')[:30]}... Error: {e}")
+                 break
+            except Exception as e:
+                error_str = str(e).lower()
+                if "429" in error_str or "limit" in error_str or "quota" in error_str:
+                     print(f"⚠️ API Limit/Error encountered: {e}")
+                     new_key = key_manager.get_next_key()
+                     if new_key:
+                         print(f"🔄 Switching to next API Key (Index {key_manager.current_index})...")
+                         current_agent = await initialize_agent(api_key=new_key)
+                         continue
+                     else:
+                         print("❌ No more API keys to try.")
+                         break
+                else:
+                    print(f"Error during ainvoke: {e}")
+                    break
 
         # State tracking
         query_map = {} # query_id -> generated_query content
@@ -235,7 +283,7 @@ async def main():
             print("⚠️ No URIs or Values found for comparison. Using LLM Judge fallback...")
             
             # Instantiate judge
-            llm = create_model(provider, model_name)
+            llm = create_model(provider, model_name, key_manager.get_current_key())
             
             question = outputs.get("question", "")
             final_answer = outputs.get("final_answer", "")
@@ -311,7 +359,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
         """Use an LLM to evaluate the semantic correctness of the generated query."""
         
         # Instantiate the judge model (using same config as agent)
-        llm = create_model(provider, model_name)
+        llm = create_model(provider, model_name, key_manager.get_current_key())
         
         generated_query = outputs.get("generated_query", "")
         reference_query = reference_outputs["rdf_query"] # ground truth query
@@ -370,7 +418,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
         """Use an LLM to evaluate if the query is practically correct ignoring minor details."""
         
         # Instantiate the judge model (using same config as agent)
-        llm = create_model(provider, model_name)
+        llm = create_model(provider, model_name, key_manager.get_current_key())
         
         generated_query = outputs.get("generated_query", "")
         reference_query = reference_outputs["rdf_query"] # ground truth query
@@ -433,13 +481,47 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
             print(f"LLM Evaluator Error: {e}")
             return {"score": 0, "comment": f"Evaluation failed: {e}"}
 
+    async def combined_evaluator(run, example):
+        """
+        Combined evaluator that runs all three evaluation logics in a single trace.
+        This reduces LangSmith traces from 3 to 1 per example.
+        Disables LangChain tracing for internal LLM calls to save on span limits.
+        """
+        # Disable LangChain tracing for evaluator LLM calls to save on span limits
+        prev_tracing = os.environ.get("LANGCHAIN_TRACING_V2")
+        os.environ["LANGCHAIN_TRACING_V2"] = "false"
+        
+        try:
+            # 1. Logic from accuracy()
+            acc_score = await accuracy(run.outputs, example.outputs)
+            
+            # 2. Logic from llm_score()
+            score_data = await llm_score(run.outputs, example.outputs)
+            
+            # 3. Logic from llm_is_correct()
+            is_correct_data = await llm_is_correct(run.outputs, example.outputs)
+
+            return {
+                "results": [
+                    {"key": "accuracy", "score": acc_score},
+                    {"key": "llm_score", "score": score_data["score"], "comment": score_data.get("comment", "")},
+                    {"key": "llm_is_correct", "score": is_correct_data["score"], "comment": is_correct_data.get("comment", "")}
+                ]
+            }
+        finally:
+            # Restore previous tracing state
+            if prev_tracing is not None:
+                os.environ["LANGCHAIN_TRACING_V2"] = prev_tracing
+            else:
+                os.environ.pop("LANGCHAIN_TRACING_V2", None)
+
     # RUN EVALUATION
     run_expt = True
     if run_expt:
         evaluation = await client.aevaluate(
             target_doremus_assistant,
             data=dataset_name,
-            evaluators=[accuracy, llm_score, llm_is_correct],
+            evaluators=[combined_evaluator],
             # Name of the experiment
             experiment_prefix=EXPERIMENT_PREFIX, 
             max_concurrency=1

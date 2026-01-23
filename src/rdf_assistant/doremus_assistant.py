@@ -78,14 +78,25 @@ def create_model(provider: str, model_name=None, api_key=None):
             temperature=0
         )
     elif provider == "ollama":
-        return ChatOllama(
-            base_url=os.getenv("OLLAMA_API_URL"),
-            model=model_name,
-            client_kwargs={"headers": {"Authorization": f"Bearer {os.getenv('OLLAMA_API_KEY')}"}},
-            stream=True,
-            temperature=0,
-            num_ctx=32768,
+        if api_key:
+            return ChatOllama(
+                base_url=os.getenv("OLLAMA_API_URL"),
+                model=model_name,
+                client_kwargs={"headers": {"Authorization": f"Bearer {api_key}"}},
+                stream=True,
+                temperature=0,
+                num_ctx=32768,
             )
+        else:
+            return ChatOllama(
+                base_url=os.getenv("OLLAMA_API_URL"),
+                model=model_name,
+                client_kwargs={"headers": {"Authorization": f"Basic {os.getenv('OLLAMA_API_KEY')}"}},
+                stream=True,
+                temperature=0,
+                num_ctx=32768,
+            )
+
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -216,4 +227,4 @@ async def initialize_agent(api_key=None):
     )
     return agent.with_config({"recursion_limit": recursion_limit})
 
-doremus_assistant = asyncio.run(initialize_agent())
+doremus_assistant = asyncio.run(initialize_agent(os.getenv("API_KEYS_LIST", "").split(",")[0]))

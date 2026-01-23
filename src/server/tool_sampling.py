@@ -30,23 +30,45 @@ if sampling_provider not in sampling_models:
 
 sampling_model = os.getenv("LLM_SAMPLING_MODEL", os.getenv("LLM_EVAL_MODEL", "gpt-oss:120b"))
 
-# Fallback client for sampling if needed (matches sampling provider)
-if sampling_provider == "openai":
-    fallback_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-elif sampling_provider == "groq":
-    fallback_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-elif sampling_provider == "cerebras":
-    fallback_client = OpenAI(
-        api_key=os.getenv("CEREBRAS_API_KEY"),
-        base_url="https://api.cerebras.ai/v1"
-    )
-elif sampling_provider == "zai":
-    fallback_client = ZaiClient(api_key=os.getenv("ZAI_API_KEY"))
-else:
-    fallback_client = Client(
-        host=os.getenv("OLLAMA_API_URL"),
-        headers= {"Authorization": f"Basic {os.getenv('OLLAMA_API_KEY')}"},
+
+API_KEYS_LIST = os.getenv("API_KEYS_LIST", "").split(",")
+API_KEYS_LIST = [k.strip() for k in API_KEYS_LIST if k.strip()]
+current_key_index = 0
+
+def create_fallback_client(api_key=None):
+    if sampling_provider == "openai":
+        return OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+    elif sampling_provider == "groq":
+        return Groq(api_key=api_key or os.getenv("GROQ_API_KEY"))
+    elif sampling_provider == "cerebras":
+        return OpenAI(
+            api_key=api_key or os.getenv("CEREBRAS_API_KEY"),
+            base_url="https://api.cerebras.ai/v1"
         )
+    elif sampling_provider == "zai":
+        return ZaiClient(api_key=api_key or os.getenv("ZAI_API_KEY"))
+    elif api_key:
+        return Client(
+            host=os.getenv("OLLAMA_API_URL"),
+            headers= {"Authorization": f"Bearer {api_key}"},
+        )
+    else:
+        return Client(
+            host=os.getenv("OLLAMA_API_URL"),
+            headers= {"Authorization": f"Basic {os.getenv('OLLAMA_API_KEY')}"},
+        )
+
+fallback_client = create_fallback_client(os.getenv("API_KEYS_LIST", "").split(",")[0])
+
+def rotate_fallback_client():
+    global fallback_client, current_key_index
+    if not API_KEYS_LIST:
+        return False
+    current_key_index = (current_key_index + 1) % len(API_KEYS_LIST)
+    new_key = API_KEYS_LIST[current_key_index]
+    logger.info(f"🔄 Rotating Sampling API Key to index {current_key_index}")
+    fallback_client = create_fallback_client(new_key)
+    return True
 
 # Helper to format paths for the LLM
 def format_paths_for_llm(paths):
@@ -152,27 +174,39 @@ Based on the user's intent, select the most appropriate option by its index numb
 You MUST reply with exactly one token: the integer index only — nothing else, no punctuation, no commentary.
             """
             
-            if sampling_provider == "openai" or sampling_provider == "groq" or sampling_provider == "cerebras" or sampling_provider == "zai":
-                response = fallback_client.chat.completions.create(
-                    model=sampling_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message}
-                    ],
-                    max_completion_tokens=20,
-                    temperature=0
-                )
-                llm_response = response.choices[0].message.content
-            else:
-                response = fallback_client.chat(
-                    model=sampling_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message}
-                    ],
-                    options={"temperature":0}
-                )
-                llm_response = response.message.content
+            # Retry loop for API errors
+            max_retries = len(API_KEYS_LIST) + 1 if API_KEYS_LIST else 1
+            for attempt in range(max_retries):
+                try:
+                    if sampling_provider == "openai" or sampling_provider == "groq" or sampling_provider == "cerebras" or sampling_provider == "zai":
+                        response = fallback_client.chat.completions.create(
+                            model=sampling_model,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_message}
+                            ],
+                            max_completion_tokens=20,
+                            temperature=0
+                        )
+                        llm_response = response.choices[0].message.content
+                    else:
+                        response = fallback_client.chat(
+                            model=sampling_model,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_message}
+                            ],
+                            options={"temperature":0}
+                        )
+                        llm_response = response.message.content
+                    # Success
+                    break
+                except Exception as call_error:
+                    error_str = str(call_error).lower()
+                    if ("429" in error_str or "limit" in error_str or "quota" in error_str) and API_KEYS_LIST:
+                         if rotate_fallback_client():
+                             continue
+                    raise call_error
             logger.info(f"Fallback LLM response: {llm_response}")
             # Consider last number found, if the LLM is reasoning before it is ignored
             numbers = re.findall(r'\d+', llm_response)
