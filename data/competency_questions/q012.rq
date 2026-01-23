@@ -1,4 +1,6 @@
 # category: "Works and Expressions"
+# split: "medium"
+# tag: competency_question
 # question: "Give me all titles of chamber music that foresee at least one cello"
 # build_query(question="Give me all the slow movements of chamber music that foresee at least one cello", template="Works", filters={"genre": "chamber music"})
 # associate_to_N_entities(subject="expression", obj="cello", query_id=query_id)

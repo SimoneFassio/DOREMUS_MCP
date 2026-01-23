@@ -1,5 +1,6 @@
 # category: "Works and Expressions"
-# split "impossible"
+# split: "impossible"
+# tag: competency_question
 # question: "Give me pairs of works and components that together share a single piano casting."
 # query:
 SELECT ?expression (SAMPLE(?title) AS ?title) ?work2 (SAMPLE(?title2) AS ?title2)

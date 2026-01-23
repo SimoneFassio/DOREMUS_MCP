@@ -1,4 +1,6 @@
 # category: "Works and Expressions"
+# split: "hard"
+# tag: competency_question
 # question: "Give me a cycle of melodies whose author of text is the same for each melody"
 # build_query(question="Give me a cycle of melodies whose author of text is the same for each melody", template="Works", filters={"genre": "melody"})
 # groupBy_having(subject="expression", query_id=query_id, obj="author", function="COUNT", logic_type="equal", valueStart="1")

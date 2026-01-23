@@ -1,4 +1,6 @@
 # category: "Performances"
+# split: "easy"
+# tag: user_question
 # question: "Give me performances between 2000 and 2001."
 # used_tools: ["build_query", "has_quantity_of", "add_select", "execute_query"]
 # query:

@@ -1,4 +1,6 @@
 # category: "Publications"
+# split: "medium"
+# tag: competency_question
 # question: "Give me all the recordings of opera whose duration is greater than 1 hour"
 # query:
 SELECT DISTINCT ?t ?duration

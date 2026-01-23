@@ -1,4 +1,6 @@
 # category: "Recordings"
+# split: "hard"
+# tag: competency_question
 # question: "Give me the artists that have been recorded more than 10 times by Radio France"
 # query:
 SELECT DISTINCT ?artist SAMPLE(?artistName) as ?name COUNT(DISTINCT ?rec) as ?recording_num

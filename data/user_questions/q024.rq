@@ -1,4 +1,6 @@
 # category: "Tracks"
+# split: "easy"
+# tag: user_question
 # question: "List tracks from publications(works) with title 'Variations Goldberg'."
 # tools: build_query, filter
 # query:

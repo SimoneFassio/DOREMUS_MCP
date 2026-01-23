@@ -1,4 +1,6 @@
 # category: "Performances"
+# split: "medium"
+# tag: competency_question
 # question: "Give me the list of concerts given at the Philharmonie de Paris in which the orchestra is directed by the solo violin"
 # query:
 SELECT DISTINCT ?concert

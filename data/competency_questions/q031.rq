@@ -1,5 +1,6 @@
 # category: "Performances"
-# split "impossible"
+# split: "impossible"
+# tag: competency_question
 # question: "Give me all the works interpreted on at least one mop different from the casting of the work"
 # query:
 SELECT DISTINCT ?expression, ?performance, ?mop

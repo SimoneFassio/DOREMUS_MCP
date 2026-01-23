@@ -1,4 +1,6 @@
 # category: "Artists"
+# split: "easy"
+# tag: user_question
 # question: "Find artists with 'Simone' in their name."
 # query:
 SELECT DISTINCT ?artist ?name

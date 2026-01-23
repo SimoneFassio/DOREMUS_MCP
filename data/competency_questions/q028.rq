@@ -1,4 +1,6 @@
 # category: "Performances"
+# split: "medium"
+# tag: competency_question
 # question: "Give me all the performances in which a composer directs one of his works"
 # query:
 SELECT DISTINCT ?performance, SAMPLE(?title) as ?title, ?name

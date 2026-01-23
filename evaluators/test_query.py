@@ -505,7 +505,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
                 "results": [
                     {"key": "accuracy", "score": acc_score},
                     {"key": "llm_score", "score": score_data["score"], "comment": score_data.get("comment", "")},
-                    {"key": "llm_is_correct", "score": is_correct_data["score"], "comment": is_correct_data.get("comment", "")}
+                    # {"key": "llm_is_correct", "score": is_correct_data["score"], "comment": is_correct_data.get("comment", "")}
                 ]
             }
         finally:

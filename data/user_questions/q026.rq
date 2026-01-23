@@ -1,4 +1,6 @@
 # category: "Recordings"
+# split: "hard"
+# tag: user_question
 # question: "Count the number of tracks for each genre, showing the top 5."
 # tools: build_query, add_triplet, groupBy_having, execute_query
 # query:

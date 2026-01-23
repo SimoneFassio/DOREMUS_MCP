@@ -1,4 +1,6 @@
 # category: "Recordings"
+# split: "easy"
+# tag: user_question
 # question: "Give me recordings of the work Bolero."
 # used_tools: ["build_query", "apply_filter", "add_select", "execute_query"]
 # query:

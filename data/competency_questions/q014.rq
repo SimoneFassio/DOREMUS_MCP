@@ -1,4 +1,6 @@
 # category: "Works and Expressions"
+# split: "hard"
+# tag: competency_question
 # question: "Give me all the operas of which the composer is also the librettist"
 # build_query(question="Give me all the operas of which the composer is also the librettist", template="Works", filters={"genre": "opera"})
 # associate_to_N_entities(subject="expression", obj="composer", query_id=query_id)

@@ -1,4 +1,6 @@
 # category: "Works and Expressions"
+# split: "hard"
+# tag: competency_question
 # question: "Give me the list of all symphonies that include 5 components"
 # build_query(question="Give me the list of all symphonies that include 5 components", template="Works", filters={"genre": "symphony"})
 # groupBy_having(subject="work", query_id=query_id, obj="component", function="COUNT", logic_type="more", valueStart="5")

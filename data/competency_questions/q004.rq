@@ -1,5 +1,6 @@
 # category: "Works and Expressions"
 # split: "impossible"
+# tag: competency_question
 # question: "What works are linked to a particular work and what type of link connect them?"
 # build_query(question="What works are linked to a particular work and what type of link connect them?", template="Works", filters={})
 # query:

@@ -1,4 +1,6 @@
 # category: "Works and Expressions"
+# split: "hard"
+# tag: competency_question
 # question: "Retrieve all the works that have been written by German composers between 1800 and 1850 and performed at the Royal Albert Hall"
 # build_query(question="Retrieve all the works that have been written by German composers between 1800 and 1850 and performed at the Royal Albert Hall", template="Works", filters={"composer_nationality": "DE"})
 # # Filter(performance.performed == expression and performance.took_place_at == “Royal Albert Hall”)

@@ -1,4 +1,6 @@
 # category: "Works and Expressions"
+# split: "medium"
+# tag: competency_question
 # question: "Give me the works written for oboe and orchestra after the 1900"
 # build_query(question="Give me the works written for oboe and orchestra after the 1900", template="Works", filters={})
 # associate_to_N_entities(subject="expression", obj="oboe", query_id=query_id)

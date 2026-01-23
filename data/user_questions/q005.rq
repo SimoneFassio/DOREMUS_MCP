@@ -1,4 +1,6 @@
 # category: "Works and Expressions"
+# split: "easy"
+# tag: user_question
 # question: "Where is Mozart born?"
 # query:
 SELECT DISTINCT ?placeLabel

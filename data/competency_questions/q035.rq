@@ -1,4 +1,6 @@
 # category: "Recordings"
+# split: "medium"
+# tag: competency_question
 # question: "Retrieve the tracks and corresponding tracksets for all recordings of the opera Don Giovanni by Mozart"
 # query:
 SELECT DISTINCT ?trackset ?track

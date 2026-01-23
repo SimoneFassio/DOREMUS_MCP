@@ -1,4 +1,6 @@
 # category: "Performances"
+# split: "easy"
+# tag: user_question
 # question: "Give me performances held in Paris."
 # used_tools: ["find_candidate_entities", "build_query", "apply_filter", "add_select", "execute_query"]
 # query:
