@@ -55,10 +55,6 @@ def find_candidate_entities_internal(
     except Exception as e:
         raise ToolError(f"Error finding candidate entities: {e}")
 
-
-
-    
-    
 def get_entity_properties_internal(
     entity_uri: str
 ) -> Dict[str, Any]:
@@ -115,12 +111,19 @@ def get_entity_properties_internal(
                     properties[key] = ""
                     for p in prop:
                         properties[key] += f"{p}, "
-                
+            
+            class_prop = ""
+            try:
+                class_prop = explorer.explore_graph_schema(path='/' + entity_type)
+            except:
+                logger.warning(f"Error getting class properties for {entity_type}")
+            
             response = {
                 "entity_uri": entity_uri,
                 "entity_label": entity_label,
                 "entity_type": entity_type,
-                "properties": properties
+                "properties": properties,
+                "class_properties": class_prop
             }
             return response
         else:
@@ -1006,8 +1009,12 @@ async def add_triplet_internal(
         obj_class = contract_uri(obj_class)
             
         # 1. Check property existence
-        if not explorer.class_has_property(subject_class, property) and property != "a":
-             raise Exception(f"Property {property} does not exist for class {subject_class}.")
+        if property.startswith("^"):
+            if not explorer.class_has_property(obj_class, property[1:]):
+                raise Exception(f"Property {property} does not exist for class {obj_class}.")
+        else:
+            if not explorer.class_has_property(subject_class, property) and property != "a":
+                raise Exception(f"Property {property} does not exist for class {subject_class}.")
             
         # 2. Prepare Triples
         triples = [{

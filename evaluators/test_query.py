@@ -31,6 +31,7 @@ EXPERIMENT_PREFIX = os.getenv("EXPERIMENT_PREFIX", "")
 DOREMUS_MCP_URL = os.getenv("DOREMUS_MCP_URL", "http://localhost:8000/mcp")
 API_KEYS_LIST = os.getenv("API_KEYS_LIST", "").split(",")
 API_KEYS_LIST = [k.strip() for k in API_KEYS_LIST if k.strip()]
+EVALUATION_NUM_REPETITIONS = os.getenv("EVALUATION_NUM_REPETITIONS", 1)
 
 DATASET_NAME = os.getenv( "EVALUATION_DATASET_NAME","Doremus Dataset")
 DATASET_SPLITS = [s.strip() for s in os.getenv("EVALUATION_DATASET_SPLITS", "easy,medium,hard").split(",") if s.strip()]
@@ -519,7 +520,8 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
         data=dataset,
         evaluators=[combined_evaluator],
         experiment_prefix=EXPERIMENT_PREFIX, 
-        max_concurrency=1
+        max_concurrency=1,
+        num_repetitions=EVALUATION_NUM_REPETITIONS
     )
 
 if __name__ == "__main__":

@@ -57,7 +57,6 @@ class GraphSchemaExplorer:
 
         # Build the Markdown string
         md = f"## {title}\n\n"
-        md += "Here is the relevant subgraph:\n\n"
         
         for source, edges in graph_dict.items():
             md += f"### Node: `{source}`\n"
@@ -188,7 +187,7 @@ class GraphSchemaExplorer:
         triples = self._get_neighborhood(class_name, depth)
         
         return self._format_output(
-            title=f"Neighborhood for `{class_name}` (Depth={depth})",
+            title=f"Neighborhood for `{class_name}`",
             triples=triples
         )
 
