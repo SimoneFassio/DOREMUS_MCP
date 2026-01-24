@@ -44,7 +44,6 @@ def create_dataset_script():
     inputs = [ex["inputs"] for ex in examples_queries]
     outputs = [ex["outputs"] for ex in examples_queries]
     metadatas = [ex["metadata"] for ex in examples_queries]
-    splits = [ex["split"] for ex in examples_queries]
 
     # Validate data count
     print(f"Found {len(examples_queries)} examples to upload.")
@@ -56,13 +55,12 @@ def create_dataset_script():
         inputs=inputs,
         outputs=outputs,
         metadata=metadatas,
-        splits=splits
     )
     
     print("Successfully uploaded all examples.")
     print("Examples preview:")
     for i in range(min(3, len(metadatas))):
-        print(f"[{i}] Input: {inputs[i]['query_input'][:50]}... | Split: {splits[i]}")
+        print(f"[{i}] Input: {inputs[i]['query_input'][:50]}...")
 
 if __name__ == "__main__":
     create_dataset_script()

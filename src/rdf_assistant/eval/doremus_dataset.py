@@ -47,7 +47,7 @@ def load_rq_files(directory):
             # Split
             match_split = re.match(r'^\s*#\s*split\s*:\s*(.*)', stripped, re.IGNORECASE)
             if match_split:
-                split = match_split.group(1).strip().strip('"')
+                metadata["split"] = match_split.group(1).strip().strip('"')
                 in_workflow = False
                 continue
 
@@ -101,7 +101,6 @@ def load_rq_files(directory):
                 "inputs": {"query_input": question},
                 "outputs": {"rdf_query": query},
                 "metadata": metadata,
-                "split": split
             })
     return examples
 
