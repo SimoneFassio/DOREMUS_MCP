@@ -19,7 +19,8 @@ sampling_models = {
     "groq": "llama-3.3-70b-versatile",
     "cerebras": "llama-3.3-70b",
     "ollama": "gpt-oss:120b",
-    "zai": "glm-4.7-flash"
+    "zai": "glm-4.7-flash",
+    "custom": "gpt-5.2"
 }
 load_dotenv()
 
@@ -44,6 +45,11 @@ def create_fallback_client(api_key=None):
         return OpenAI(
             api_key=api_key or os.getenv("CEREBRAS_API_KEY"),
             base_url="https://api.cerebras.ai/v1"
+        )
+    elif sampling_provider == "custom":
+        return OpenAI(
+            base_url="http://localhost:8964/v1/",
+            api_key="1234"
         )
     elif sampling_provider == "zai":
         return ZaiClient(api_key=api_key or os.getenv("ZAI_API_KEY"))

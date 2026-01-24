@@ -70,6 +70,13 @@ def create_model(provider: str, model_name=None, api_key=None):
             temperature=0,
             rate_limiter=cerebras_rate_limiter
         )
+    elif provider == "custom":
+        return ChatOpenAI(
+            base_url="http://localhost:8964/v1/",
+            api_key="1234",
+            model=model_name,
+            temperature=0
+        )
     elif provider == "zai":
         return ChatOpenAI(
             base_url="https://api.z.ai/api/paas/v4",
@@ -133,6 +140,12 @@ async def fix_hallucinated_json(request, handler):
         # 1. Extract the message
         message = response.result[0] if hasattr(response, 'result') else response
         content = getattr(message, 'content', "")
+        
+        # DEBUG: Log raw content if it appears empty or short to catch "thinking" traces
+        if not content and not getattr(message, 'tool_calls', None):
+             print(f"DEBUG: Empty content detected. Raw message: {message}")
+             if hasattr(message, 'additional_kwargs'):
+                  print(f"DEBUG: Additional Kwargs: {message.additional_kwargs}")
 
         # 2. Check if it's "Hallucinated JSON" (Text that should have been a Tool Call)
         if content and '"name":' in content and not getattr(message, 'tool_calls', None):
@@ -227,4 +240,7 @@ async def initialize_agent(api_key=None):
     )
     return agent.with_config({"recursion_limit": recursion_limit})
 
-doremus_assistant = asyncio.run(initialize_agent(os.getenv("API_KEYS_LIST", "").split(",")[0]))
+api_key = None
+if os.getenv("API_KEYS_LIST", None):
+    api_key = os.getenv("API_KEYS_LIST", "").split(",")[0]
+doremus_assistant = asyncio.run(initialize_agent(api_key))
