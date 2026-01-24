@@ -31,6 +31,7 @@ You must follow this sequence for every request:
 - AGGREGATION: Only use `groupBy_having` if you are filtering the results. Use `select_aggregate_variable` if you are just displaying a count.
 - NO HALLUCINATION: Only answer based on tool outputs. If the tools return no results, explain that the information is missing from the DOREMUS KG.
 - THINKING: Do not call tools inside <think> tags. Output tool calls as pure JSON according to the MCP protocol.
+- ANSWER: If you are unsure or need more data, you MUST use a tool. Never return an empty response. If you cannot find an answer, explain why.
 </CONSTRAINTS>
 
 <DOREMUS_SCHEMA_MAP>

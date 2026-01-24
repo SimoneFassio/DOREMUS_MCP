@@ -34,7 +34,7 @@ API_KEYS_LIST = [k.strip() for k in API_KEYS_LIST if k.strip()]
 EVALUATION_NUM_REPETITIONS = os.getenv("EVALUATION_NUM_REPETITIONS", 1)
 
 DATASET_NAME = os.getenv( "EVALUATION_DATASET_NAME","Doremus Dataset")
-DATASET_SPLITS = [s.strip() for s in os.getenv("EVALUATION_DATASET_SPLITS", "easy,medium,hard").split(",") if s.strip()]
+DATASET_SPLITS = [s.strip() for s in os.getenv("EVALUATION_DATASET_SPLITS", "").split(",") if s.strip()]
 DATASET_ORIGIN = os.getenv("EVALUATION_DATASET_ORIGIN", "")
 if DATASET_ORIGIN not in ["competency_question", "user_question"]:
     DATASET_ORIGIN = ""
@@ -687,16 +687,24 @@ Reasoning must be very concise bullet points (max 3 bullets).
                 os.environ.pop("LANGCHAIN_TRACING_V2", None)
 
     # RUN EVALUATION
-    if DATASET_ORIGIN:
+    if DATASET_ORIGIN and DATASET_SPLITS:
         dataset = client.list_examples(
             dataset_name=DATASET_NAME,
-            splits=DATASET_SPLITS,
+            metadata={"origin": DATASET_ORIGIN, "split": DATASET_SPLITS}
+            )
+    elif DATASET_ORIGIN:
+        dataset = client.list_examples(
+            dataset_name=DATASET_NAME,
             metadata={"origin": DATASET_ORIGIN}
+            )
+    elif DATASET_SPLITS:
+        dataset = client.list_examples(
+            dataset_name=DATASET_NAME,
+            metadata={"split": DATASET_SPLITS}
             )
     else:
         dataset = client.list_examples(
-            dataset_name=DATASET_NAME,
-            splits=DATASET_SPLITS
+            dataset_name=DATASET_NAME
             )
 
     evaluation = await client.aevaluate(
