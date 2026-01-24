@@ -577,7 +577,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
 
         return type_II_errors
     
-    def type_III_error(outputs: dict, reference_output: dict) -> dict:
+    def type_III_error(outputs: dict) -> dict:
         """
         Checks the final answer of the LLM to see if the LLM has actually
         answered the right question.
@@ -647,10 +647,10 @@ Only output the JSON.
             type_I_errors = type_I_error(run.outputs)
 
             # 5. Logic from type_II_error()
-            type_II_errors = type_II_error(run.outputs, example)
+            type_II_errors = type_II_error(run.outputs, example.outputs)
 
             # 6. Logic from type_III_error()
-            type_III_data = type_III_error(run.outputs, example)
+            type_III_data = type_III_error(run.outputs)
 
             return {
                 "results": [
