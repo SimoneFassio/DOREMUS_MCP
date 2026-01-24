@@ -6,7 +6,7 @@ via SPARQL endpoint at https://data.doremus.org/sparql/
 """
 import os
 import logging
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, Callable, Set
 from fastmcp import FastMCP, Context
 from fastmcp.server.dependencies import get_context
 from fastmcp.prompts.prompt import Message, PromptMessage, TextContent
@@ -33,6 +33,37 @@ from server.tools_internal import (
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("doremus-mcp")
+
+# ------------------------
+# TOOL ACTIVATIONS
+# ------------------------
+
+def _parse_csv_env(name: str) -> Set[str]:
+    raw = os.getenv(name, "build_query,apply_filter,add_component_constraint,groupBy_having,filter_by_quantity,add_triplet,select_aggregate_variable").strip()
+    if not raw:
+        return set()
+    return {x.strip() for x in raw.split(",") if x.strip()}
+
+MCP_ENABLED_TOOLS = _parse_csv_env("MCP_ENABLED_TOOLS")
+
+def is_tool_enabled(tool_name: str) -> bool:
+    if tool_name not in MCP_ENABLED_TOOLS:
+        return False
+    else:
+        return tool_name in MCP_ENABLED_TOOLS
+    
+def tool_if_enabled(tool_name: str) -> Callable:
+    """
+    Decorator: registers the function as an MCP tool only if enabled.
+    Disabled tools won't appear in the server's advertised tool list.
+    """
+    def _decorator(fn):
+        if is_tool_enabled(tool_name):
+            logger.info(f"[tools] enabled: {tool_name}")
+            return mcp.tool()(fn)
+        logger.info(f"[tools] disabled: {tool_name}")
+        return fn  # not registered as a tool
+    return _decorator
 
 # Initialize templates at startup
 try:
@@ -114,7 +145,7 @@ It is designed to describe how a musical idea is created, realized, and performe
     return PromptMessage(role="user", content=TextContent(type="text", text=instructions))
 
 
-@mcp.tool()
+@tool_if_enabled("build_query")
 async def build_query(
     question: str,
     template: str
@@ -152,7 +183,7 @@ Example:
     return await build_query_v2_internal(question, template)
 
 
-@mcp.tool()
+@tool_if_enabled("apply_filter")
 async def apply_filter(
     query_id: str,
     base_variable: str,
@@ -216,7 +247,7 @@ Call: apply_filter(
     return await filter_internal(query_id, base_variable, template, filters)
 
 
-@mcp.tool()
+@tool_if_enabled("add_component_constraint")
 async def add_component_constraint(
     subject: str, 
     obj: str, 
@@ -270,7 +301,7 @@ Call: add_component_constraint(
     return await associate_to_N_entities_internal(subject, obj, query_id, n)
 
 
-@mcp.tool()
+@tool_if_enabled("groupBy_having")
 async def groupBy_having(
         subject: str, 
         query_id: str, 
@@ -334,7 +365,7 @@ Call: groupBy_having(
     return await groupBy_having_internal(subject.lower(), query_id, function, obj, logic_type, valueStart, valueEnd)
 
 
-@mcp.tool()
+@tool_if_enabled("filter_by_quantity")
 async def filter_by_quantity(subject: str, property: str, type: str, value: str, valueEnd: str | None, query_id: str) -> Dict[str, Any]:
     """
 Applies NUMERICAL or TEMPORAL constraints to the query. 
@@ -402,7 +433,7 @@ Call: filter_by_quantity(
     return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
 
 
-@mcp.tool()
+@tool_if_enabled("add_triplet")
 async def add_triplet(
     subject: str, 
     subject_class: str, 
@@ -453,7 +484,7 @@ Call: add_triplet(
     return await add_triplet_internal(subject, subject_class, property, obj, obj_class, query_id)
 
 
-@mcp.tool()
+@tool_if_enabled("select_aggregate_variable")
 async def select_aggregate_variable(
     variable: str,
     query_id: str,

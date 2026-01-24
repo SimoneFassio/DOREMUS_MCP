@@ -5,9 +5,9 @@ This directory contains the scripts necessary to run evaluations on the DOREMUS 
 ## Prerequisites
 
 1.  **Environment Variables**: Ensure you have a `.env` file in the project root with the following keys:
-    *   `LANGCHAIN_API_KEY`: Your LangSmith API key.
-    *   `LANGCHAIN_PROJECT`: Your LangSmith project name.
-    *   `DOREMUS_MCP_URL`: URL of the MCP server (default: `http://localhost:8000/mcp`).
+    - `LANGCHAIN_API_KEY`: Your LangSmith API key.
+    - `LANGCHAIN_PROJECT`: Your LangSmith project name.
+    - `DOREMUS_MCP_URL`: URL of the MCP server (default: `http://localhost:8000/mcp`).
 
 ## Workflow
 
@@ -21,9 +21,9 @@ Run the following command to calculate splits and **write them back** to the `.r
 python src/rdf_assistant/eval/split_dataset.py --write
 ```
 
-*   This script analyzes the SPARQL queries in `data/competency_questions` and `data/user_questions`.
-*   It updates the `# split: "..."` header in each `.rq` file.
-*   **Note**: Questions marked as `impossible` are skipped.
+- This script analyzes the SPARQL queries in `data/competency_questions` and `data/user_questions`.
+- It updates the `# split: "..."` header in each `.rq` file.
+- **Note**: Questions marked as `impossible` are skipped.
 
 ### Step 2: Create/Refresh Dataset (LangSmith)
 
@@ -35,8 +35,8 @@ Run:
 python evaluators/create_dataset.py --dataset-name "Doremus Dataset"
 ```
 
-*   **--dataset-name**: (Optional) The name of the dataset in LangSmith. Defaults to the `EVALUATION_DATASET_NAME` env var or "Doremus Dataset".
-*   **Warning**: This script will **DELETE** any existing dataset with the same name and recreate it with the latest data from your local `.rq` files.
+- **--dataset-name**: (Optional) The name of the dataset in LangSmith. Defaults to the `EVALUATION_DATASET_NAME` env var or "Doremus Dataset".
+- **Warning**: This script will **DELETE** any existing dataset with the same name and recreate it with the latest data from your local `.rq` files.
 
 ### Step 3: Run Evaluation
 
@@ -52,12 +52,13 @@ python evaluators/test_query.py
 
 You can control the evaluation behavior using these environment variables in your command line or `.env` file:
 
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `EVALUATION_DATASET_NAME` | The name of the dataset on LangSmith to use. | "Doremus Dataset" |
-| `EVALUATION_DATASET_SPLITS` | Comma-separated list of splits to evaluate. e.g. "easy,medium" | "easy,medium,hard" |
-| `EVALUATION_DATASET_ORIGIN` | Filter by question origin: `competency_question` or `user_question`. Leave empty for all. | "" (All) |
-| `EXPERIMENT_PREFIX` | A prefix for the experiment run name in LangSmith. | "" |
+| Variable                    | Description                                                                                   | Default            |
+| :-------------------------- | :-------------------------------------------------------------------------------------------- | :----------------- |
+| `EVALUATION_DATASET_NAME`   | The name of the dataset on LangSmith to use.                                                  | "Doremus Dataset"  |
+| `EVALUATION_DATASET_SPLITS` | Comma-separated list of splits to evaluate. e.g. "easy,medium"                                | "easy,medium,hard" |
+| `EVALUATION_DATASET_ORIGIN` | Filter by question origin: `competency_question` or `user_question`. Leave empty for all.     | "" (All)           |
+| `EXPERIMENT_PREFIX`         | A prefix for the experiment run name in LangSmith.                                            | ""                 |
+| `MCP_ENABLED_TOOLS`         | Comma-separated allowlist of MCP tool names to expose (if set, only these tools are enabled). | "" (All enabled)   |
 
 #### Example: Running only "Hard" Competency Questions
 
@@ -71,6 +72,7 @@ python evaluators/test_query.py
 ## Evaluation Logic
 
 The evaluation script `test_query.py` uses three methods to score performance:
+
 1.  **Accuracy**: Checks if the URIs returned by the generated SPARQL query match the ground truth.
 2.  **LLM Score (Semantic)**: Uses an LLM to compare the generated SPARQL with the reference SPARQL for semantic equivalence.
 
