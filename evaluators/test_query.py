@@ -127,7 +127,6 @@ async def main():
         for message in messages:
             # 1. Capture Final Answer (Text from AI)
             # We assume the last message with text content from AI is the final answer
-            print(f"message: {message}")
             if message.type == "ai" and message.content:
                 if isinstance(message.content, str):
                    final_answer = message.content
