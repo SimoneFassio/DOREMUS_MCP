@@ -592,18 +592,35 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
         question = outputs.get("question", "")
 
         prompt = f"""
-You are an expert evaluator tasked with determining whether a given answer correctly addresses a specific question.
+You are grading ONLY "intent understanding" (Type III). Not accuracy.
+
+Given a Question and an Answer, decide whether the Answer shows the assistant understood the user's intent.
+Return is_outOfTopic=true ONLY if the assistant answered a DIFFERENT question/intent than asked.
+
+Important:
+- DO NOT penalize missing results, inability, refusals, or "I couldn't find it". If the response is about the same intent but lacks data, is_outOfTopic=false.
+- DO NOT penalize vague/partial but on-topic answers. If it’s clearly trying to answer the right question, is_outOfTopic=false.
+- Penalize intent mismatch: wrong task type (count vs list, yes/no vs explanation), wrong entity, wrong relation, wrong target.
+
+Steps:
+1) Infer the expected answer type from the Question (e.g., COUNT/NUMBER, LIST, BOOLEAN, DESCRIPTION).
+2) Check whether the Answer matches that intent and target.
+
+Examples:
+- Q: "How many operas by Schubert?"  A: "Here are some Schubert operas: ..." -> is_outOfTopic=true (list instead of count)
+- Q: "List operas by Schubert"       A: "Schubert wrote 3 operas"          -> is_outOfTopic=true (count instead of list)
+- Q: "How many operas by Schubert?"  A: "I couldn't find the number."      -> is_outOfTopic=false (intent understood, no result)
+- Q: "How many operas by Schubert?"  A: "Schubert composed operas."        -> is_outOfTopic=false (vague but aligned)
+
 Question: {question}
 Answer: {final_answer}
 
-Task:
-- If the answer directly addresses the question and provides relevant information, return True.
-- If the answer is off-topic, irrelevant, or does not address the question posed, return False.
-Output a JSON object with:
-- "is_outOfTopic": boolean (true if off-topic, false otherwise)
-- "reasoning": A brief explanation of the errors in the generated query. Be very concise, use bullet points to list reasons.
-        
-Only output the JSON.
+Output ONLY valid JSON:
+{{
+  "is_outOfTopic": boolean,
+  "reasoning": string
+}}
+Reasoning must be very concise bullet points (max 3 bullets).
         """
         try:
             response = llm.invoke(prompt)
