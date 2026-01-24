@@ -521,7 +521,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
         evaluators=[combined_evaluator],
         experiment_prefix=EXPERIMENT_PREFIX, 
         max_concurrency=1,
-        num_repetitions=EVALUATION_NUM_REPETITIONS
+        num_repetitions=int(EVALUATION_NUM_REPETITIONS)
     )
 
 if __name__ == "__main__":
