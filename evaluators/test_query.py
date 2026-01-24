@@ -18,7 +18,7 @@ warnings.filterwarnings(
 # Add src to path for local development
 sys.path.insert(0, 'src')
 
-from rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, provider, model_name, initialize_agent
+from rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, initialize_agent
 from rdf_assistant.eval.doremus_dataset import examples_queries
 from server.utils import execute_sparql_query
 
@@ -42,6 +42,10 @@ print(f"Using dataset: {DATASET_NAME}")
 print(f"Using splits: {DATASET_SPLITS}")
 if DATASET_ORIGIN:
     print(f"Using origin: {DATASET_ORIGIN}")
+
+# LLM evaluator setup
+provider = "ollama"
+model_name = "gpt-oss:120b"
 
 class KeyManager:
     def __init__(self, keys):
@@ -118,10 +122,12 @@ async def main():
         executed_query_id = None
         final_answer = ""
         sampling_requests = []
+        tool_calls_responses = []
 
         for message in messages:
             # 1. Capture Final Answer (Text from AI)
             # We assume the last message with text content from AI is the final answer
+            print(f"message: {message}")
             if message.type == "ai" and message.content:
                 if isinstance(message.content, str):
                    final_answer = message.content
@@ -136,6 +142,14 @@ async def main():
 
             # 3. Capture Generated Queries from Tool Outputs
             messContent = message.content if hasattr(message, "content") else ""
+
+            # 4 Capture Toolmessages Responses
+            if message.type == "tool" and message.content:
+                tool_calls_responses.append({
+                    "tool_name": message.name,
+                    "status": message.status,
+                    "content": message.content
+                })
             
             # Helper to normalize content to string
             content_str = ""
@@ -196,6 +210,7 @@ async def main():
             "generated_query": final_query,
             "final_answer": final_answer,
             "sampling_requests": sampling_requests,
+            "tool_calls_responses": tool_calls_responses,
             "question": inputs["query_input"]
         }
 
@@ -467,6 +482,147 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
         except Exception as e:
             print(f"LLM Evaluator Error: {e}")
             return {"score": 0, "comment": f"Evaluation failed: {e}"}
+        
+    def type_I_error(outputs: dict) -> int:
+        """
+        Check for each tool call if there was a wrong use of the schema.
+        If the arguments passed to the tool are not compatible or are not of the
+        requested type, count as a type I error.
+
+        Returns:
+            int: the number of type I errors detected.
+        """
+        type_I_errors = 0
+        tool_calls = outputs.get("tool_calls_responses", [])
+        
+        for tool_call in tool_calls:
+            tool_name = tool_call.get("tool_name", "")
+            status = tool_call.get("status", "")
+            if status == "error" and "Dry Run" not in tool_call.get("content", ""):
+                type_I_errors += 1
+        
+        return type_I_errors
+    
+    def type_II_error(outputs: dict, reference_output: dict) -> int:
+        """
+        Check the list of tool calls and compares it to the reference 
+        workflow to identify wrong or missing tool calls.
+
+        Are considered type II errors:
+        - Missing tool calls that are in the reference workflow.
+        - Extra tool calls that are not in the reference workflow.
+        - Tool calls in the wrong order that lead to errors.
+
+        Exploratory tools are ignored in the comparison.
+
+        Returns:
+            int: the number of type II errors detected.
+        """
+        type_II_errors = 0
+
+        exploratory_tools = ["find_candidate_entities", "get_entity_properties", "get_usage_guide"]
+        if not reference_output.get("metadata", {}).get("workflow", []):
+            # There is no reference workflow to compare against -> anything is acceptable
+            return type_II_errors
+        
+        tool_calls = outputs.get("tool_calls_responses", [])
+        reference_tool_calls = [{"name":line.split("(")[0], "used": False} for line in reference_output.get("metadata", {}).get("workflow", [])]
+        start = False
+        for tool_call in tool_calls:
+            tool_name = tool_call.get("tool_name", "")
+            status = tool_call.get("status", "")
+            if tool_name in exploratory_tools:
+                continue
+            if tool_name == reference_tool_calls[0]["name"] and status == "success" and not start:
+                start = True
+                reference_tool_calls[0]["used"] = True
+                continue
+            if start:
+                remaining_list = [rtc for rtc in reference_tool_calls if not rtc["used"]]
+                if tool_name not in [rtc["name"] for rtc in remaining_list]:
+                    # Extra tool call not in reference
+                    type_II_errors += 1
+                    continue
+                elif tool_name != remaining_list[0]["name"]:
+                    # Tool call out of order -> either missing or wrong order
+                    if status == "success":
+                        # The wrong order did not create an error -> flexibility is possible
+                        # find the first occurrence and mark as used
+                        for rtc in reference_tool_calls:
+                            if rtc["name"] == tool_name and not rtc["used"]:
+                                rtc["used"] = True
+                                break
+                    else:
+                        # Error occurred -> order matters
+                        type_II_errors += 1
+                else:
+                    # Correct tool call in order
+                    if status == "success":
+                        for rtc in reference_tool_calls:
+                            if rtc["name"] == tool_name and not rtc["used"]:
+                                rtc["used"] = True
+                                break
+                    else:
+                        # This will likely be a type I error, not type II
+                        pass
+            else:
+                # Haven't started matching yet, wrong initial tool call
+                type_II_errors += 1
+        # Remainings not used are missing tool calls
+        for rtc in reference_tool_calls:
+            if not rtc["used"]:
+                type_II_errors += 1
+        if not start:
+            # The agent never actually started the workflow correctly -> only this time cap the errors to the full length of the reference
+            type_II_errors = len(reference_tool_calls)
+
+        return type_II_errors
+    
+    def type_III_error(outputs: dict, reference_output: dict) -> dict:
+        """
+        Checks the final answer of the LLM to see if the LLM has actually
+        answered the right question.
+        The goal is to evaluate wether the LLM has understood the question
+        and the user intent correctly.
+        """
+
+        # Instantiate the judge model (using same config as agent)
+        llm = create_model(provider, model_name, key_manager.get_current_key())
+
+        final_answer = outputs.get("final_answer", "")
+        question = outputs.get("question", "")
+
+        prompt = f"""
+You are an expert evaluator tasked with determining whether a given answer correctly addresses a specific question.
+Question: {question}
+Answer: {final_answer}
+
+Task:
+- If the answer directly addresses the question and provides relevant information, return True.
+- If the answer is off-topic, irrelevant, or does not address the question posed, return False.
+Output a JSON object with:
+- "is_outOfTopic": boolean (true if off-topic, false otherwise)
+- "reasoning": A brief explanation of the errors in the generated query. Be very concise, use bullet points to list reasons.
+        
+Only output the JSON.
+        """
+        try:
+            response = llm.invoke(prompt)
+            content = response.content
+
+            # extract json
+            clean_content = content.strip()
+            if clean_content.startswith("```json"):
+                clean_content = clean_content[7:]
+            if clean_content.endswith("```"):
+                clean_content = clean_content[:-3]
+            data = json.loads(clean_content.strip())
+            is_outOfTopic = data.get("is_outOfTopic", False)
+            return {"score": 1 if is_outOfTopic else 0, "comment": "".join(data.get("reasoning", ""))}
+        except Exception as e:
+            print(f" LLM Judge Error: {e}")
+            return {"score": 0, "comment": f"Evaluation failed: {e}"}
+
 
     async def combined_evaluator(run, example):
         """
@@ -488,10 +644,22 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
             # 3. Logic from llm_is_correct()
             is_correct_data = await llm_is_correct(run.outputs, example.outputs)
 
+            # 4. Logic from type_I_error()
+            type_I_errors = type_I_error(run.outputs)
+
+            # 5. Logic from type_II_error()
+            type_II_errors = type_II_error(run.outputs, example)
+
+            # 6. Logic from type_III_error()
+            type_III_data = type_III_error(run.outputs, example)
+
             return {
                 "results": [
                     {"key": "accuracy", "score": acc_score},
                     {"key": "llm_score", "score": score_data["score"], "comment": score_data.get("comment", "")},
+                    {"key": "type_I_errors", "score": type_I_errors},
+                    {"key": "type_II_errors", "score": type_II_errors},
+                    {"key": "type_III_is_outOfTopic", "score": type_III_data["score"], "comment": type_III_data.get("comment", "")},
                     # {"key": "llm_is_correct", "score": is_correct_data["score"], "comment": is_correct_data.get("comment", "")}
                 ]
             }
