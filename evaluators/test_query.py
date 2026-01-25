@@ -49,8 +49,8 @@ if DATASET_ORIGIN:
     print(f"Using origin: {DATASET_ORIGIN}")
 
 # LLM evaluator setup
-provider = "groq"
-model_name = "openai/gpt-oss-120b"
+provider = "ollama"
+model_name = "gpt-oss:120b"
 
 class KeyManager:
     def __init__(self, keys):

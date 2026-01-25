@@ -20,7 +20,8 @@ sampling_models = {
     "cerebras": "llama-3.3-70b",
     "ollama": "gpt-oss:120b",
     "zai": "glm-4.7-flash",
-    "custom": "gpt-5.2"
+    "custom": "gpt-5.2",
+    "nvidia": "gpt-oss:120b"
 }
 load_dotenv()
 
@@ -51,6 +52,12 @@ def create_fallback_client(api_key=None):
             base_url="http://localhost:8964/v1/",
             api_key="1234"
         )
+    elif sampling_provider == "nvidia":
+        return OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key or os.getenv("NVIDIA_API_KEY"),
+        )
+
     elif sampling_provider == "zai":
         return ZaiClient(api_key=api_key or os.getenv("ZAI_API_KEY"))
     elif api_key:

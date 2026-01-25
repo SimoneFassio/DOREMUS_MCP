@@ -30,7 +30,8 @@ evaluation_models = {
     "mistral": "mistral-7b-instant",
     "ollama": "gpt-oss:120b",
     "cerebras": "llama3.1-70b",
-    "zai": "glm-4.7-flash"
+    "zai": "glm-4.7-flash",
+    "nvidia": "openai/gpt-oss:120b"
 }
 
 connections = {
@@ -83,6 +84,12 @@ def create_model(provider: str, model_name=None, api_key=None):
             api_key=api_key or os.getenv("ZAI_API_KEY"),
             model=model_name,
             temperature=0
+        )
+    elif provider == "nvidia":
+        return ChatOpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key or os.getenv("NVIDIA_API_KEY"),
+            model=model_name
         )
     elif provider == "ollama":
         if api_key:
