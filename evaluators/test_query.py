@@ -220,6 +220,7 @@ async def main():
             except Exception as e:
                 print(f"Failed to fetch sampling logs: {e}")
 
+        print(f"TOOL CALLS captured: {tool_calls_responses}")
         return {
             "generated_query": final_query,
             "final_answer": final_answer,
@@ -517,7 +518,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
         
         return type_I_errors
     
-    def type_II_error(outputs: dict, reference_output: dict) -> int:
+    def type_II_error(outputs: dict, reference_metadata: dict) -> int:
         """
         Check the list of tool calls and compares it to the reference 
         workflow to identify wrong or missing tool calls.
@@ -535,24 +536,31 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
         type_II_errors = 0
 
         exploratory_tools = ["find_candidate_entities", "get_entity_properties", "get_usage_guide"]
-        if not reference_output.get("metadata", {}).get("workflow", []):
+        workflow = reference_metadata.get("workflow", [])
+        if not workflow:
             # There is no reference workflow to compare against -> anything is acceptable
             return type_II_errors
         
         tool_calls = outputs.get("tool_calls_responses", [])
-        reference_tool_calls = [{"name":line.split("(")[0], "used": False} for line in reference_output.get("metadata", {}).get("workflow", [])]
+        reference_tool_calls = [{"name":line.split("(")[0], "used": False} for line in workflow]
         start = False
         for tool_call in tool_calls:
             tool_name = tool_call.get("tool_name", "")
             status = tool_call.get("status", "")
             if tool_name in exploratory_tools:
                 continue
-            if tool_name == reference_tool_calls[0]["name"] and status == "success" and not start:
+            if tool_name == reference_tool_calls[0]["name"] and status == "success":
+                # Every time we see the first tool call successfully executed, we restart the matching
+                print(" Starting reference workflow matching...")
                 start = True
                 reference_tool_calls[0]["used"] = True
+                # RESET all others to unused
+                for rtc in reference_tool_calls[1:]:
+                    rtc["used"] = False
                 continue
             if start:
                 remaining_list = [rtc for rtc in reference_tool_calls if not rtc["used"]]
+                print(f"Current tool call should be {remaining_list[0]['name'] if remaining_list else 'N/A'}, got {tool_name} (status: {status})")
                 if tool_name not in [rtc["name"] for rtc in remaining_list]:
                     # Extra tool call not in reference
                     type_II_errors += 1
@@ -679,7 +687,7 @@ Reasoning must be very concise bullet points (max 3 bullets).
             type_I_errors = type_I_error(run.outputs)
 
             # 5. Logic from type_II_error()
-            type_II_errors = type_II_error(run.outputs, example.outputs)
+            type_II_errors = type_II_error(run.outputs, example.metadata)
 
             # 6. Logic from type_III_error()
             type_III_data = type_III_error(run.outputs)
@@ -687,10 +695,10 @@ Reasoning must be very concise bullet points (max 3 bullets).
             return {
                 "results": [
                     {"key": "accuracy", "score": acc_score},
-                    {"key": "llm_score", "score": score_data["score"], "comment": score_data.get("comment", "")},
-                    {"key": "type_I_errors", "score": type_I_errors},
-                    {"key": "type_II_errors", "score": type_II_errors},
-                    {"key": "type_III_is_outOfTopic", "score": type_III_data["score"], "comment": type_III_data.get("comment", "")},
+                    {"key": "llm score", "score": score_data["score"], "comment": score_data.get("comment", "")},
+                    {"key": "type 1 errors", "score": type_I_errors},
+                    {"key": "type 2 errors", "score": type_II_errors},
+                    {"key": "type 3 errors", "score": type_III_data["score"], "comment": type_III_data.get("comment", "")},
                     # {"key": "llm_is_correct", "score": is_correct_data["score"], "comment": is_correct_data.get("comment", "")}
                 ]
             }
