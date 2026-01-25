@@ -1,15 +1,15 @@
 # category: "Works and Expressions"
 # split: "medium"
 # origin: competency_question
-# question: "Give me all titles of chamber music (in general) that foresee at least one cello"
+# question: "Give me all titles of chamber opera that foresee at least one cello"
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title
 WHERE {
   ?expression a efrbroo:F22_Self-Contained_Expression ;
           rdfs:label ?title ;
           mus:U13_has_casting ?casting ;
-          mus:U12_has_genre / skos:prefLabel ?genre.
-  FILTER contains(str(?genre), "chambre") .
+          mus:U12_has_genre ?genre .
+  VALUES (?genre) { (<http://data.doremus.org/vocabulary/iaml/genre/cho>) }
 
   ?work a efrbroo:F14_Individual_Work;
         efrbroo:R9_is_realised_in ?expression .
@@ -21,7 +21,7 @@ WHERE {
 }
 
 # workflow
-build_query(question="Give me all titles of chamber music that foresee at least one cello", template="expression")
-apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chambre"})
+build_query(question="Give me all titles of chamber opera that foresee at least one cello", template="expression")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chamber opera"})
 add_component_constraint(subject="expression", obj="cello", query_id=query_id)
 execute_query(query_id=query_id)

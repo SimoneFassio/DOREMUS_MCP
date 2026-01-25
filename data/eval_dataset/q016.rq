@@ -1,13 +1,14 @@
 # category: "Works and Expressions"
 # split: "hard"
 # origin: competency_question
-# question: "Give me a list of works of chamber music (in general) composed in the 19th century by Norwegian composers"
+# question: "Give me a list of works of genre sonata composed in the 19th century by Norwegian composers"
 # query:
-SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?composerName, SAMPLE(?genre) AS ?genre
+SELECT DISTINCT ?expression, SAMPLE(?title) as ?title
 WHERE {
   ?expression a efrbroo:F22_Self-Contained_Expression ;
           rdfs:label ?title ;
-          mus:U12_has_genre / skos:prefLabel ?genre.
+          mus:U12_has_genre ?genre.
+  VALUES ?genre { <http://data.doremus.org/vocabulary/iaml/genre/sn> }
 
   ?expCreation efrbroo:R17_created ?expression ;
           ecrm:P4_has_time-span / time:hasEnd / time:inXSDDate ?end ;
@@ -17,14 +18,14 @@ WHERE {
   ?activity ecrm:P14_carried_out_by ?composer  ;
             mus:U31_had_function <http://data.doremus.org/vocabulary/function/composer> .
 
-  ?composer foaf:name ?composerName ; schema:birthPlace / geonames:countryCode ?norwegian.
+  ?composer schema:birthPlace / geonames:countryCode ?norwegian.
   VALUES ?norwegian { 'NO' }
 
-  FILTER ( contains(str(?genre), "chambre") AND ?start >= "1800"^^xsd:gYear AND ?end < "1900"^^xsd:gYear )
+  FILTER (?start >= "1800"^^xsd:gYear AND ?end < "1900"^^xsd:gYear )
 }
 
 # workflow
-build_query(question="Give me a list of works of chamber music composed in the 19th century by Norwegian composers", template="expression")
-apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chambre", "composer_nationality": "NO"})
+build_query(question="Give me a list of works of genre sonata composed in the 19th century by Norwegian composers", template="expression")
+apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "sonata", "composer_nationality": "NO"})
 filter_by_quantity(subject="expCreation", property="ecrm:P4_has_time-span", type="range", value="1800", valueEnd="1900", query_id=query_id)
 execute_query(query_id=query_id)
