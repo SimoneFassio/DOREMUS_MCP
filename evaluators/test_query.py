@@ -1,3 +1,14 @@
+import warnings
+import logging
+
+# Filter warnings immediately and aggressively
+warnings.simplefilter("ignore")
+warnings.filterwarnings("ignore")
+
+# Also capture warnings to logging and suppress them
+logging.captureWarnings(True)
+logging.getLogger("py.warnings").setLevel(logging.ERROR)
+
 import asyncio
 import json
 import os
@@ -6,14 +17,7 @@ import logging
 import httpx
 from dotenv import load_dotenv
 from langgraph.errors import GraphRecursionError
-import warnings
 from pydantic import ValidationError
-
-warnings.filterwarnings(
-    "ignore",
-    message=r"Use `streamable_http_client` instead\.",
-    category=DeprecationWarning,
-)
 
 # Add src to path for local development
 sys.path.insert(0, 'src')
@@ -23,11 +27,12 @@ from rdf_assistant.eval.doremus_dataset import examples_queries
 from server.utils import execute_sparql_query
 
 # Suppress httpx INFO logs
-logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.ERROR)
 
 load_dotenv(".env")
 
 EXPERIMENT_PREFIX = os.getenv("EXPERIMENT_PREFIX", "")
+LLM_EVAL_MODEL = os.getenv("LLM_EVAL_MODEL", "")
 DOREMUS_MCP_URL = os.getenv("DOREMUS_MCP_URL", "http://localhost:8000/mcp")
 API_KEYS_LIST = os.getenv("API_KEYS_LIST", "").split(",")
 API_KEYS_LIST = [k.strip() for k in API_KEYS_LIST if k.strip()]
@@ -44,8 +49,8 @@ if DATASET_ORIGIN:
     print(f"Using origin: {DATASET_ORIGIN}")
 
 # LLM evaluator setup
-provider = "ollama"
-model_name = "gpt-oss:120b"
+provider = "groq"
+model_name = "openai/gpt-oss-120b"
 
 class KeyManager:
     def __init__(self, keys):
@@ -65,6 +70,8 @@ class KeyManager:
 
 key_manager = KeyManager(API_KEYS_LIST)
 
+EVALUATION_TIMEOUT_SECONDS = int(os.getenv("EVALUATION_TIMEOUT_SECONDS", 500))
+
 async def main():
     async def target_doremus_assistant(inputs: dict) -> dict:
         """Process a user input through the doremus assistant and capture the generated query."""
@@ -79,20 +86,28 @@ async def main():
 
         current_agent = doremus_assistant
         
+        # Helper to run the stream with timeout
+        async def process_stream():
+            nonlocal messages
+            # Use astream with stream_mode="values" to capture state updates
+            async for chunk in current_agent.astream(
+                {"messages": [{"role": "user", "content": inputs["query_input"]}]},
+                stream_mode="values"
+            ):
+                if "messages" in chunk:
+                    messages = chunk["messages"]
+
         for attempt in range(max_retries):
             try:
-                # Use astream with stream_mode="values" to capture state updates
-                # This allows us to retain the latest messages even if recursion limit is hit
-                async for chunk in current_agent.astream(
-                    {"messages": [{"role": "user", "content": inputs["query_input"]}]},
-                    stream_mode="values"
-                ):
-                    if "messages" in chunk:
-                        messages = chunk["messages"]
+                # Enforce time limit on the generation process
+                await asyncio.wait_for(process_stream(), timeout=EVALUATION_TIMEOUT_SECONDS)
                 
                 # If we finish the stream successfully, break the retry loop
                 break
 
+            except asyncio.TimeoutError:
+                print(f"⚠️ Timeout Limit ({EVALUATION_TIMEOUT_SECONDS}s) Hit for: {inputs.get('query_input', '')[:30]}... processing partial messages.")
+                break # Don't retry on timeout, just process partial results
             except GraphRecursionError:
                 print(f"⚠️ Recursion Limit Hit for: {inputs.get('query_input', '')[:30]}... processing partial messages.")
                 break # Don't retry on recursion error, just process partial
@@ -711,7 +726,7 @@ Reasoning must be very concise bullet points (max 3 bullets).
         target_doremus_assistant,
         data=dataset,
         evaluators=[combined_evaluator],
-        experiment_prefix=EXPERIMENT_PREFIX, 
+        experiment_prefix=EXPERIMENT_PREFIX + "-" + LLM_EVAL_MODEL, 
         max_concurrency=1,
         num_repetitions=int(EVALUATION_NUM_REPETITIONS)
     )
