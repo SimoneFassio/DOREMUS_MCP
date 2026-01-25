@@ -1,7 +1,7 @@
 # category: "Works and Expressions"
 # split: "hard"
 # origin: competency_question
-# question: "Give me the works of chamber music that involves at least violin, clarinet and piano"
+# question: "Give me the works of chamber music (in general) that involves at least violin, clarinet and piano"
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?genre, ?casting
 WHERE {
@@ -27,9 +27,9 @@ WHERE {
 }
 
 # workflow
-build_query(question="Give me the works of chamber music that involves at least violin, clarinet and piano", template="expression")
+build_query(question="Give me the works of chamber music (in general) that involves at least violin, clarinet and piano", template="expression")
 apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "chambre"})
-add_component_constraint(subject="expression", obj="violin", n=1, query_id=query_id)
-add_component_constraint(subject="expression", obj="clarinet", n=1, query_id=query_id)
-add_component_constraint(subject="expression", obj="piano", n=1, query_id=query_id)
+add_component_constraint(subject="expression", obj="violin", query_id=query_id)
+add_component_constraint(subject="expression", obj="clarinet", query_id=query_id)
+add_component_constraint(subject="expression", obj="piano", query_id=query_id)
 execute_query(query_id=query_id)

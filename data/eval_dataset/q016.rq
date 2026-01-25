@@ -1,7 +1,7 @@
 # category: "Works and Expressions"
 # split: "hard"
 # origin: competency_question
-# question: "Give me a list of works of chamber music composed in the 19th century by Norwegian composers"
+# question: "Give me a list of works of chamber music (in general) composed in the 19th century by Norwegian composers"
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?composerName, SAMPLE(?genre) AS ?genre
 WHERE {

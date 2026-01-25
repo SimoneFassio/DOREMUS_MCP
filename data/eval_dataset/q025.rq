@@ -1,7 +1,7 @@
 # category: "Works and Expressions"
 # split: "easy"
 # origin: competency_question
-# question: "Find musical works that are specifically categorized by their geographical or regional origin."
+# question: "Find musical works that are specifically categorized by their geographical context."
 # query:
 SELECT * WHERE {
    ?expression rdfs:label ?label ;
@@ -9,6 +9,6 @@ SELECT * WHERE {
 }
 
 # workflow
-build_query(question="Find musical works that are specifically categorized by their geographical or regional origin.", template="expression")
+build_query(question="Find musical works that are specifically categorized by their geographical context.", template="expression")
 add_triplet(subject="expression", subject_class="efrbroo:F22_Self-Contained_Expression", property="mus:U65_has_geographical_context", obj="geoContext", obj_class="ecrm:E1_CRM_Entity", query_id=query_id)
 execute_query(query_id=query_id)

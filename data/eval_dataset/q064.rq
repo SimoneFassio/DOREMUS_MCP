@@ -23,5 +23,5 @@ LIMIT 5
 # workflow
 # build_query(question="Count the number of tracks for each genre, showing the top 5.", template="track")
 # apply_filter(query_id="q26", base_variable="track", template="track", filters={"genre": ""})
-# groupBy_having(query_id="q26", subject="genre", obj="track", function="COUNT", logic_type="more", valueStart="0")
+# groupBy_having(query_id="q26", subject="genre", obj="track", function="COUNT")
 # execute_query(query_id="q26", limit=5, order_by_variable="track_count", order_by_desc=True)

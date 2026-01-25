@@ -1,7 +1,7 @@
 # category: "Works and Expressions"
 # split: "impossible"
 # origin: competency_question
-# question: "Give me the works of chamber music that involves at most violin, clarinet and piano"
+# question: "Give me the works of chamber music (in general) that involves at most violin, clarinet and piano"
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?groupCount AS ?nbInstruments, ?isViolin, ?isClarinet, ?isPiano, ?casting
 WHERE {

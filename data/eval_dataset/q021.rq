@@ -1,6 +1,6 @@
 # category: "Works and Expressions"
 # origin: competency_question
-# split "impossible"
+# split: "impossible"
 # question: "Give me a list of works composed between 1860 and 1880, for small formation (maximum 6 instrumentalists) including 1 piano"
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title, ?start as ?compositionDate, ?nbInstruments, ?casting

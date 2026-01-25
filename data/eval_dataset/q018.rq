@@ -1,7 +1,7 @@
 # category: "Works and Expressions"
 # split: "hard"
 # origin: competency_question
-# question: "Give me the list of all symphonies that include 5 components"
+# question: "Give me the list of all symphonies that include 5 or more movements"
 # query:
 SELECT DISTINCT ?work, SAMPLE(?title) as ?title
 WHERE {
@@ -16,7 +16,7 @@ WHERE {
 HAVING ( COUNT(DISTINCT ?components) >= 5 )
 
 # workflow
-build_query(question="Give me the list of all symphonies that include 5 components", template="expression")
+build_query(question="Give me the list of all symphonies that include 5 or more movements", template="expression")
 apply_filter(query_id=query_id, base_variable="expression", template="expression", filters={"genre": "symphony"})
 add_triplet(subject="work", subject_class="efrbroo:F14_Individual_Work", property="efrbroo:R9_is_realised_in", obj="expression", obj_class="efrbroo:F22_Self-Contained_Expression", query_id=query_id)
 add_triplet(subject="work", subject_class="efrbroo:F14_Individual_Work", property="ecrm:P148_has_component", obj="component", obj_class="ecrm:E89_Propositional_Object", query_id=query_id)

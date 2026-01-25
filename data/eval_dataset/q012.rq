@@ -1,7 +1,7 @@
 # category: "Works and Expressions"
 # split: "medium"
 # origin: competency_question
-# question: "Give me all titles of chamber music that foresee at least one cello"
+# question: "Give me all titles of chamber music (in general) that foresee at least one cello"
 # query:
 SELECT DISTINCT ?expression, SAMPLE(?title) as ?title
 WHERE {
