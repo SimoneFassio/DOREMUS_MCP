@@ -220,7 +220,6 @@ async def main():
             except Exception as e:
                 print(f"Failed to fetch sampling logs: {e}")
 
-        print(f"TOOL CALLS captured: {tool_calls_responses}")
         return {
             "generated_query": final_query,
             "final_answer": final_answer,
@@ -560,7 +559,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
                 continue
             if start:
                 remaining_list = [rtc for rtc in reference_tool_calls if not rtc["used"]]
-                print(f"Current tool call should be {remaining_list[0]['name'] if remaining_list else 'N/A'}, got {tool_name} (status: {status})")
+                # print(f"Current tool call should be {remaining_list[0]['name'] if remaining_list else 'N/A'}, got {tool_name} (status: {status})")
                 if tool_name not in [rtc["name"] for rtc in remaining_list]:
                     # Extra tool call not in reference
                     type_II_errors += 1

@@ -1,5 +1,7 @@
 import asyncio
 import os
+import json
+import uuid
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
@@ -10,6 +12,7 @@ from langchain.agents.middleware import wrap_tool_call, wrap_model_call
 from langchain.messages import ToolMessage
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from pydantic import ValidationError
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 from .prompts import agent_system_prompt
 from .extended_mcp_client import ExtendedMCPClient
@@ -136,8 +139,33 @@ async def handle_tool_errors(request, handler):
             status="error"
         )
 
-import json
-import uuid
+@wrap_model_call
+async def inject_step_count(request, handler):
+    # Count how many AI messages (turns) have happened so far
+    messages = request if isinstance(request, list) else getattr(request, "messages", [])
+    
+    current_step = sum(1 for m in messages if isinstance(m, AIMessage))
+    limit = int(recursion_limit)
+    remaining_steps = int((limit / 2) - 1 - current_step)
+    
+    if remaining_steps <= 5:
+        if remaining_steps == 1:
+            content = "FINAL STEP WARNING: This is your absolute last turn. You MUST call 'execute_query' NOW even if partial results are returned or the session will terminate without results."
+        elif remaining_steps == 2:
+            content = "BUDGET ALERT: 2 steps left. Finalize your filters and move to execution."
+        else:
+            content = f"{remaining_steps} STEPS LEFT: You are approaching the limit. Prepare your final query."
+
+        hint_msg = HumanMessage(content=content)
+        
+        # Modify the request messages. 
+        # If request is a list, we can append. If it's an object, we modify .messages
+        if isinstance(request, list):
+            request.append(hint_msg)
+        elif hasattr(request, "messages"):
+            request.messages = list(request.messages) + [hint_msg]
+            
+    return await handler(request)
 
 @wrap_model_call
 async def fix_hallucinated_json(request, handler):
@@ -243,7 +271,7 @@ async def initialize_agent(api_key=None):
         model=llm,
         tools=tools,
         system_prompt=agent_system_prompt,
-        middleware=[handle_tool_errors, fix_hallucinated_json],
+        middleware=[handle_tool_errors, fix_hallucinated_json], # inject_step_count
     )
     return agent.with_config({"recursion_limit": recursion_limit})
 
