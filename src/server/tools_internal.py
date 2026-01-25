@@ -187,9 +187,10 @@ async def build_query_v2_internal(
         await qc.add_module(core_module)
         
         # Add all variables from the template's SELECT clause
-        for var_name in template_def.default_select_vars:
+        for select_var in template_def.default_select_vars:
+            var_name = select_var.name
             var_label = template_def.var_classes.get(var_name, "")
-            qc.add_select(var_name, var_label)
+            qc.add_select(var_name, var_label, aggregator=select_var.aggregator)
         
         # Store query
         QUERY_STORAGE[query_id] = qc
@@ -545,7 +546,7 @@ async def associate_to_N_entities_internal(subject: str, obj: str, query_id: str
             qc.sampling_logs.append(log_data)
 
         # RETRIEVE SUBJECT URI
-        subject = subject.strip().lower()
+        subject = subject.strip()
         subject_uri = qc.get_variable_uri(subject)
         # FAILSAFE: debug
         if not subject_uri:
@@ -1174,15 +1175,13 @@ async def groupBy_having_internal(
                 })
             else:
                 aggr_obj_name = obj
-
+        
         # CONSTRUCT GROUP BY: Group by the subject + any other non-aggregated variable in SELECT
         # We first update the select to include the subject of the group By (which might not be
         # in it) and then extract the variables in the select that are not sampled
         
         qc.add_select(subject, subject_uri)
-        group_vars = qc.get_non_aggregated_vars()
-        qc.set_group_by(group_vars)
-
+        
         # Add the aggregated variable to the SELECT
         if function:
             var_label = ""
@@ -1228,6 +1227,57 @@ async def groupBy_having_internal(
                 
                 if having_clause:
                     qc.add_having(having_clause)
+
+        # Handle Dangling Variables with Sampling
+        all_non_aggr_vars = qc.get_non_aggregated_vars()
+        group_vars = [subject]
+        
+        exclude_vars = {subject, aggr_obj_name} if obj else {subject}
+        dangling_vars = [v for v in all_non_aggr_vars if v["var_name"] not in exclude_vars]
+        
+        # Define logging callback
+        def log_sampling(log_data: Dict[str, Any]):
+            qc.sampling_logs.append(log_data)
+
+        for d_var in dangling_vars:
+            var_name = d_var["var_name"]
+            
+            # Construct prompt for LLM
+            current_query = qc.to_string()
+            system_prompt = """You are a SPARQL expert optimizing GROUP BY clauses.
+When grouping by a specific entity (e.g. Composer), other variables in the SELECT clause (e.g. Title, Date) must be handled:
+0. GROUP BY: Use this if the variable is unique to the group (e.g. Birth Date of the Composer) or if we want to segment the groups by this variable too.
+1. SAMPLE: Use this if the variable can have multiple values per group (e.g. Titles of works by the Composer) and we just want to show one example.
+"""
+            pattern_intent = f"""Decide how to handle variable '?{var_name}' given that we are grouping by '?{subject}'.
+            
+Question: "{qc.get_question()}"
+
+Current Query Preview:
+{current_query}
+
+Options:
+0. Add '?{var_name}' to GROUP BY
+1. Keep SAMPLE(?{var_name}) in SELECT
+"""
+            llm_answer = await tool_sampling_request(system_prompt, pattern_intent, log_callback=log_sampling, caller_tool_name="groupBy_having")
+            
+            choice = 1
+            try:
+                match = re.search(r'\d+', llm_answer)
+                if match:
+                    choice = int(match.group())
+            except Exception:
+                pass
+                
+            if choice == 0:
+                group_vars.append(var_name)
+                logger.info(f"Grouping by additional variable: {var_name}")
+            else:
+                qc.add_select(var_name, d_var.get("var_label", ""), aggregator="SAMPLE")
+                logger.info(f"Sampling variable: {var_name}")
+
+        qc.set_group_by([{"var_name": v} for v in group_vars]) # format as dict expected by query container
 
         return {
             "query_id": query_id, 

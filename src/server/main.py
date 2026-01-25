@@ -359,7 +359,7 @@ Call: groupBy_having(
     having_value_start="8"
 )
     """
-    return await groupBy_having_internal(group_by_variable.lower(), query_id, aggregate_function, aggregated_variable, having_logic_type, having_value_start, having_value_end)
+    return await groupBy_having_internal(group_by_variable, query_id, aggregate_function, aggregated_variable, having_logic_type, having_value_start, having_value_end)
 
 
 @tool_if_enabled("filter_by_quantity")
@@ -447,10 +447,10 @@ Before calling this, you **MUST** have called `get_entity_properties` to verify 
 
 Args:
     subject: The variable name of the start node (MUST already exist in the query, e.g. "expression").
-    subject_class: The full URI Class of the subject (e.g. "http://erlangen-crm.org/efrbroo/F22_Self-Contained_Expression"). Used for validation.
-    property: The specific property URI connecting them (e.g. "http://erlangen-crm.org/efrbroo/R17_created").
+    subject_class: The full URI Class of the subject (e.g. "efrbroo:F22_Self-Contained_Expression"). Used for validation.
+    property: The specific property URI connecting them (e.g. "efrbroo:R17_created").
     obj: The variable name for the new target node (e.g. "creationEvent").
-    obj_class: The full URI Class of the new object.
+    obj_class: The full URI Class of the new object (e.g. "efrbroo:F28_Expression_Creation").
     query_id: The active query ID.
 
 Returns:

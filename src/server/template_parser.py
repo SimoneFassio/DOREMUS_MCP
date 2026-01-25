@@ -49,6 +49,13 @@ class FilterDefinition:
 
 
 @dataclass
+class TemplateSelectVariable:
+    """Represents a variable in the SELECT clause."""
+    name: str          # The output variable name (alias if AS is used)
+    aggregator: Optional[str] = None # e.g., "SAMPLE", "COUNT"
+
+
+@dataclass
 class TemplateDefinition:
     """Represents a parsed template."""
     name: str
@@ -57,7 +64,7 @@ class TemplateDefinition:
     core_triples: List[str]
     filters: Dict[str, FilterDefinition] = field(default_factory=dict)
     var_classes: Dict[str, str] = field(default_factory=dict)  # Maps variable names to their classes
-    default_select_vars: List[str] = field(default_factory=list) # Variables to select by default
+    default_select_vars: List[TemplateSelectVariable] = field(default_factory=list) # Variables to select by default
 
 
 class TemplateParseError(Exception):
@@ -471,15 +478,63 @@ def parse_template_file(filepath: str) -> TemplateDefinition:
     if not select_match:
          raise TemplateParseError(f"Could not find SELECT DISTINCT clause in {path.name}")
     
-    select_content = select_match.group(1)
-    # Extract vars including those with regex (though simple ?var is expected for templates)
-    select_vars = re.findall(r'\?(\w+)', select_content)
+    select_content = select_match.group(1).strip()
     
-    if not select_vars:
+    # Parse select variables, handling aggregators
+    # Pattern to match: 
+    # 1. Simple var: ?var
+    # 2. Aliased agg: SAMPLE(?var) AS ?alias
+    # 3. Aliased simple (rare but possible): ?var AS ?alias
+    
+    # We iterate over the content to extract tokens
+    default_select_vars = []
+    
+    # Clean up newlines
+    select_content = select_content.replace('\n', ' ')
+    
+    # Regex for tokens: 
+    # Group 1: Aggregator (SAMPLE, COUNT, etc)
+    # Group 2: Inner variable (?var)
+    # Group 3: Alias (?alias) - if AS is present
+    # Group 4: Simple variable (?var) - if no aggregator
+    
+    # Regex explanation:
+    # (?:(\w+)\(\s*\?(\w+)\s*\)\s+AS\s+\?(\w+))  -> Matches AGG(?var) AS ?alias
+    # |                                          -> OR
+    # \?(\w+)                                    -> Matches ?var (simple)
+    
+    token_pattern = r'(?:(\w+)\(\s*\?(\w+)\s*\)\s+AS\s+\?(\w+))|(?:\?(\w+))'
+    
+    matches = re.finditer(token_pattern, select_content, re.IGNORECASE)
+    
+    base_variable = None
+    
+    for match in matches:
+        agg, inner_var, alias, simple_var = match.groups()
+        
+        if simple_var:
+            # Simple variable case: ?var
+            default_select_vars.append(TemplateSelectVariable(name=simple_var))
+            if base_variable is None:
+                base_variable = simple_var
+                
+        elif agg and inner_var and alias:
+            # Aggregator case: SAMPLE(?var) AS ?alias
+            # Note: We use the ALIAS as the variable name in our system, 
+            # but we record the aggregator. 
+            # The logic in build_query will re-apply the aggregator.
+            default_select_vars.append(TemplateSelectVariable(name=alias, aggregator=agg.upper()))
+            if base_variable is None:
+                base_variable = alias # Should ideally be the first simple var, but fallback
+                
+        # Skip purely aliased vars without aggregator for now as they are rare in our templates
+        # (e.g. ?x AS ?y) - our regex doesn't catch them explicitly but ?x catches the first part
+        
+    if not default_select_vars:
         raise TemplateParseError(f"No variables found in SELECT clause in {path.name}")
         
-    base_variable = select_vars[0] # Assume first is base
-    default_select_vars = select_vars
+    if base_variable is None and default_select_vars:
+        base_variable = default_select_vars[0].name
     
     # Split content into sections
     sections = re.split(r'(# filter: ".*")', content)
@@ -607,7 +662,8 @@ def initialize_templates():
     for tmpl_name, tmpl_def in _templates_cache.items():
         # Check if all default selected variables have a class
         missing_classes = []
-        for var in tmpl_def.default_select_vars:
+        for var_obj in tmpl_def.default_select_vars:
+            var = var_obj.name
             if var not in tmpl_def.var_classes:
                 missing_classes.append(var)
         

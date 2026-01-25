@@ -952,9 +952,9 @@ You should select an option different to 0 ONLY if the variable represent a new 
     def get_question(self) -> str:
         return self.question
     
-    def get_non_aggregated_vars(self) -> List[str]:
+    def get_non_aggregated_vars(self) -> List[Dict[str, Any]]:
         """Return a list of variables in SELECT that are NOT aggregated."""
-        return [item for item in self.select[2:] if not item.get("aggregator")]
+        return [item for item in self.select if not item.get("aggregator")]
 
     def dry_run_test(self) -> bool:
         """
