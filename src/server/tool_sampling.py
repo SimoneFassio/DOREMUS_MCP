@@ -191,7 +191,7 @@ You MUST reply with exactly one token: the integer index only — nothing else, 
             max_retries = len(API_KEYS_LIST) + 1 if API_KEYS_LIST else 1
             for attempt in range(max_retries):
                 try:
-                    if sampling_provider == "openai" or sampling_provider == "groq" or sampling_provider == "cerebras" or sampling_provider == "zai":
+                    if sampling_provider in ["openai", "groq", "cerebras", "zai", "nvidia", "custom"]:
                         response = fallback_client.chat.completions.create(
                             model=sampling_model,
                             messages=[

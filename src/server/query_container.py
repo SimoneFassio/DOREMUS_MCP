@@ -883,7 +883,11 @@ You should select an option different to 0 ONLY if the variable represent a new 
     def get_variable_uri(self, var_name: str) -> Optional[str]:
         """Retrieve variable info from the registry."""
         if var_name in self.variable_registry.keys():
-            return self.variable_registry[var_name]["var_label"]
+            label = self.variable_registry[var_name]["var_label"]
+            if label:
+                return label
+            else:
+                return var_name
         return None
 
     def get_varName_from_uri(self, var_uri: str) -> Optional[str]:
