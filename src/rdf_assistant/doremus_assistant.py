@@ -48,7 +48,7 @@ client = ExtendedMCPClient(
     connections=connections
 )
 
-cerebras_rate_limiter = InMemoryRateLimiter(
+rate_limiter = InMemoryRateLimiter(
     requests_per_second=0.4, 
     check_every_n_seconds=0.1,
     max_bucket_size=10,
@@ -72,7 +72,7 @@ def create_model(provider: str, model_name=None, api_key=None):
             api_key=api_key or os.getenv("CEREBRAS_API_KEY"),
             model=model_name,
             temperature=0,
-            rate_limiter=cerebras_rate_limiter
+            rate_limiter=rate_limiter
         )
     elif provider == "custom":
         return ChatOpenAI(
@@ -92,7 +92,9 @@ def create_model(provider: str, model_name=None, api_key=None):
         return ChatOpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
             api_key=api_key or os.getenv("NVIDIA_API_KEY"),
-            model=model_name
+            model=model_name,
+            temperature=0,
+            rate_limiter=rate_limiter
         )
     elif provider == "ollama":
         if api_key:

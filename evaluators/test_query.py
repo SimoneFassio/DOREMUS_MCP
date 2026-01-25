@@ -117,15 +117,21 @@ async def main():
             except Exception as e:
                 error_str = str(e).lower()
                 if "429" in error_str or "limit" in error_str or "quota" in error_str:
-                     print(f"⚠️ API Limit/Error encountered: {e}")
-                     new_key = key_manager.get_next_key()
-                     if new_key:
-                         print(f"🔄 Switching to next API Key (Index {key_manager.current_index})...")
-                         current_agent = await initialize_agent(api_key=new_key)
-                         continue
-                     else:
-                         print("❌ No more API keys to try.")
-                         break
+                    if os.getenv("API_KEYS_LIST"):
+                        print(f"⚠️ API Limit/Error encountered: {e}")
+                        new_key = key_manager.get_next_key()
+                        if new_key:
+                            print(f"🔄 Switching to next API Key (Index {key_manager.current_index})...")
+                            current_agent = await initialize_agent(api_key=new_key)
+                            continue
+                        else:
+                            print("❌ No more API keys to try.")
+                            break
+                    else:
+                        print(f"⚠️ API Limit/Error encountered: {e}, retrying in 10 seconds...")
+                        await asyncio.sleep(10)
+                        current_agent = await initialize_agent()
+                        continue
                 else:
                     print(f"Error during ainvoke: {e}")
                     break
@@ -550,7 +556,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
                 continue
             if tool_name == reference_tool_calls[0]["name"] and status == "success":
                 # Every time we see the first tool call successfully executed, we restart the matching
-                print(" Starting reference workflow matching...")
+                # print(" Starting reference workflow matching...")
                 start = True
                 reference_tool_calls[0]["used"] = True
                 # RESET all others to unused
