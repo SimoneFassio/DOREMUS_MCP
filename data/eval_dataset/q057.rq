@@ -9,10 +9,11 @@ WHERE {
   ?performance a efrbroo:F31_Performance ;
           rdfs:label ?title ;
           ecrm:P7_took_place_at ?place .
-  VALUES ?place { <http://sws.geonames.org/2988507/> }
+  ?place geonames:name ?placeName .
+  FILTER ( REGEX(?placeName, 'Paris', 'i') )
 }
 
 # workflow
 # build_query(question="Give me performances held in Paris.", template="performance")
-# apply_filter(query_id="q19", base_variable="performance", template="performance", filters={"location": "http://sws.geonames.org/2988507/"})
+# apply_filter(query_id="q19", base_variable="performance", template="performance", filters={"location": "Paris"})
 # execute_query(query_id="q19")
