@@ -355,6 +355,19 @@ async def filter_internal(
                 f"Variable '{base_variable}' not found in query. "
                 f"Available variables: {list(qc.variable_registry.keys())}"
             )
+
+        # Check if the class of the base variable is compatible with the template
+        variable_class = qc.variable_registry[base_variable]["var_label"]
+        # Use template_def to get the expected class
+        template_class = template_def.var_classes.get(template_def.base_variable, "")
+        
+        if variable_class and template_class and variable_class != template_class:
+            raise ToolError(
+                f"Base variable '{base_variable}' class '{variable_class}' "
+                f"does not match template '{template}' class '{template_class}'."
+                f"Probably the correct target variable is '{template}'"
+            )
+
         
         # Apply each filter
         for filter_name, filter_value in filters.items():
@@ -859,7 +872,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
             raise Exception("Invalid filter type.")
 
         if type in ["less", "more", "equal"] and valueEnd is not None:
-            raise Exception("Value End is not allowed for this type.")
+            valueEnd = None
         if type == "range" and valueEnd is None:
             raise Exception("Value End is required for this type.")
         
@@ -1168,36 +1181,53 @@ async def groupBy_having_internal(
         
         qc.add_select(subject, subject_uri)
         group_vars = qc.get_non_aggregated_vars()
-
         qc.set_group_by(group_vars)
 
-        # CONSTRUCT HAVING
-        if function and aggr_obj_name:
-            
-            # Determine Operator
-            operator = "=" # Default
-            if logic_type == "more": operator = ">"
-            elif logic_type == "less": operator = "<"
-            elif logic_type == "equal": operator = "="
-            elif logic_type == "range": operator = "range"
-
-            having_clause = {
-                    "function":function.upper(),
-                    "variable":aggr_obj_name,
-                    "operator":operator,
-                }
-            
-            # Build Clause
-            if operator == "range":
-                if valueStart and valueEnd:
-                    having_clause["valueStart"] = valueStart
-                    having_clause["valueEnd"] = valueEnd
+        # Add the aggregated variable to the SELECT
+        if function:
+            var_label = ""
+            variable = aggr_obj_name
+            # Try to find label from registry
+            if variable in qc.variable_registry:
+                var_label = qc.variable_registry[variable]["var_label"]
             else:
-                if valueStart:
-                    having_clause["valueStart"] = valueStart
-            
-            if having_clause:
-                qc.add_having(having_clause)
+                # Check if it was already in SELECT
+                for s in qc.select:
+                    if s["var_name"] == variable:
+                        var_label = s["var_label"]
+                        break
+            qc.add_select(variable, var_label, aggregator=function)
+
+            # CONSTRUCT HAVING
+            if logic_type:
+                # Determine Operator
+                if logic_type == "more": operator = ">"
+                elif logic_type == "less": operator = "<"
+                elif logic_type == "equal": operator = "="
+                elif logic_type == "range": operator = "range"
+                else: raise Exception(f"Invalid logic type: {logic_type}")
+
+                having_clause = {
+                        "function":function.upper(),
+                        "variable":aggr_obj_name,
+                        "operator":operator,
+                    }
+                
+                # Build Clause
+                if operator == "range":
+                    if valueStart and valueEnd:
+                        having_clause["valueStart"] = valueStart
+                        having_clause["valueEnd"] = valueEnd
+                    else:
+                        raise Exception(f"Invalid range: {valueStart} - {valueEnd}")
+                else:
+                    if valueStart:
+                        having_clause["valueStart"] = valueStart
+                    else:
+                        raise Exception(f"Invalid value: {valueStart}")
+                
+                if having_clause:
+                    qc.add_having(having_clause)
 
         return {
             "query_id": query_id, 

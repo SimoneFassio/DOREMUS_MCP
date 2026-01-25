@@ -26,11 +26,6 @@ WHERE {
 ?expression mus:U12_has_genre ?expGenre .
 ?expGenre skos:prefLabel ?expGenreLabel .
 
-# filter: "composition_place":"?expCompPlace":"?expCompPlaceLabel":"place"
-?expCreation efrbroo:R17_created ?expression .
-?expCreation ecrm:P7_took_place_at ?expCompPlace .
-?expCompPlace geonames:name ?expCompPlaceLabel .
-
 # filter: "musical_key":"?expKey":"?expKeyLabel":"vocabulary"
 ?expression mus:U11_has_key ?expKey .
 ?expKey skos:prefLabel ?expKeyLabel .

@@ -151,111 +151,118 @@ async def build_query(
     template: str
 ) -> Dict[str, Any]:
     """
-**STEP 1: Create a query from a template.**
+INITIALIZATION TOOL: Sets the entry point for the graph walk. 
+This tool defines the core variables that ALL subsequent tools will reference.
 
-This creates a base SPARQL query and returns available filters.
+**TEMPLATE ARCHITECTURE (KNOW YOUR VARIABLES):**
+Each template initializes a specific set of variables in the SPARQL graph:
+
+1. "artist": Focuses on People (ecrm:E21_Person).
+    - Variables: ?artist, ?name
+2. "expression": Focuses on Musical Works (efrbroo:F22_Self-Contained_Expression).
+    - Variables: ?expression, ?title, ?expCreation (The creation event)
+3. "performance": Focuses on Live Events (efrbroo:F31_Performance).
+    - Variables: ?performance, ?title
+4. "recording_event": Focuses on the Recording Session (efrbroo:F29_Recording_Event).
+    - Variables: ?recordingEvent, ?title
+5. "track": Focuses on Audio Tracks (mus:M24_Track).
+    - Variables: ?track, ?title, ?performance, ?work, ?workTitle
+    - NOTE: This template automatically links the audio track to its underlying performance and work.
+
+**DISTINCTION GUIDE:**
+- Use "performance" for live concerts/historical recitals.
+- Use "recording_event" for the event of a recording session.
+- Use "track" for questions about digital files, albums, or specific audio recordings of a work.
 
 **WHEN TO USE:**
-1. Use `build_query` as STEP 1 to create the base query.
-
-Use `apply_filter` as STEP 2 to add constraints.
-Choose the template based on the type of entity the question is asking about.
+- Always use this tool as the **FIRST STEP** for any new question.
+- Select the template based on the *primary subject* the user is asking about.
 
 Args:
     question: The user's natural language question.
-    template: Template to use. Options:
-        - "expression": Musical works/expressions (efrbroo:F22_Self-Contained_Expression)
-        - "performance": Performances/concerts (efrbroo:F31_Performance)
-        - "artist": Artists/composers/performers (ecrm:E21_Person)
-        - "recording_event": Recording sessions (efrbroo:F29_Recording_Event)
-        - "track": Recorded tracks, e.g. recordings (mus:M24_Track)
+    template: Options: "expression", "performance", "artist", "recording_event", "track".
 
 Returns:
-    Dict with query_id, generated_query, and available_filters list.
+    Dict: Includes `query_id` (required for all other tools) and the `generated_sparql`.
 
-Example:
-    build_query(question="Works by Mozart", template="expression")
-    build_query(question="Name of artist that ...", template="artist")
-    build_query(question="Concerts/performances at ...", template="performance")
-    build_query(question="Recordings of ...", template="track") #Attention! a recording is a track
-    build_query(question="Have been recorded ...", template="recording_event") #This is an EVENT
-    """
+**FEW-SHOT EXAMPLES:**
+- User: "Find sonatas by Beethoven" -> template="expression"
+- User: "Who is the composer of..." -> template="artist"
+- User: "Concerts in Paris during 2024" -> template="performance"
+- User: "Recordings of 'The Magic Flute'" -> template="track" #Attention! a recording is a track
+- User: "Have been recorded ..." -> template="recording_event" #This is an EVENT
+"""
     return await build_query_v2_internal(question, template)
 
 
 @tool_if_enabled("apply_filter")
 async def apply_filter(
     query_id: str,
-    base_variable: str,
-    template: str,
+    target_variable: str,
+    schema_template: str,
     filters: Dict[str, str]
 ) -> Dict[str, Any]:
     """
-Step 2 (Optional): Refines the query by adding specific constraints (WHERE clauses).
-Use this after `build_query` if the initial filters were not enough, or to filter specific sub-variables.
+REFINEMENT TOOL: Adds RDF triplets to the query (WHERE clauses) to bind new variables or filter existing ones.
+Use this to filter by names, titles, locations, etc.
 
-**WHEN TO USE:**
-- To restrict results by attribute (e.g. "Written by Mozart", "In Key of C").
-- To check for the *existence* of an attribute without filtering a specific value (pass an empty string "").
+**CRITICAL USAGE RULES:**
+1. `target_variable`: The variable ALREADY in the query you want to filter (e.g., 'expression').
+    - *Usually* this is the main variable chosen in build_query (e.g., 'expression', 'work', 'artist', 'recording_event', 'track').
+2. `schema_template`: You MUST choose the correct category to unlock specific filter keys.
+3. `filters`: A dictionary of { "filter_key": "value" }.
+    - **Value = URI/String**: If you have a URI from `find_candidate_entities`, use it as the value!
+    - **Value = ""**: Simply adds the triplets to the graph so the variable can be used later.
 
-**ARGUMENT RULES:**
-- `base_variable`: The specific variable name in the SPARQL query you are filtering. 
-    *Usually* this is the main variable chosen in Step 1 (e.g., 'expression', 'work', 'artist', 'recording_event', 'track'), but it can be any variable currently in the graph.
-- `template`: The class/category of the `base_variable`. This determines valid filter keys.
-    Options: "expression", "performance", "artist", "recording_event", "track".
+**VALID FILTER KEYS BY TEMPLATE:**
+- "expression": title, composer_name, composer_nationality(Country Code), genre, composition_place, musical_key
+- "performance": date, location, performer(Name)
+- "artist": name, birth_place, nationality(Country Code), death_place, work_title
+- "recording_event": title, recorded_by, performed_by, location, recorded_performance
+- "track": work_title, composer_name, genre
 
 Args:
-    query_id: The active query ID from Step 1.
-    base_variable: The SPARQL variable to attach the filter to (e.g. "expression").
-    template: The schema template to use ("expression", "performance", "artist", "recording_event", "track").
-    filters: A dictionary of { "filter_name": "value" }.
-        *Tip: If you have a URI from `search_entity`, use it! Otherwise, passing a string (label) is acceptable.*
-        
-        **Valid Keys per Template:**
-        - Template "expression":
-            "title", "composer_name", "composer_nationality", "genre", "composition_place", "musical_key"
-        - Template "performance":
-            "date", "location", "performer"
-        - Template "artist":
-            "name", "birth_place", "nationality", "death_place", "work_title"
-        - Template "recording_event":
-            "title", "recorded_by", "performed_by", "location", "recorded_performance"
-        - Template "track":
-            "work_title", "composer_name", "genre"
+    query_id: The ID of the active query.
+    target_variable: The variable name to attach the filter/triplets to (e.g., "expression").
+    schema_template: Options: "expression", "performance", "artist", "recording_event", "track".
+    filters: Dictionary of attributes to bind/filter.
 
 Returns:
     Dict: {"success": bool, "query_id": str, "generated_sparql": str}
 
 **FEW-SHOT EXAMPLES:**
 
-User: "...written by Mozart" (Refining a Work)
-Call: apply_filter(
-    query_id="...", 
-    base_variable="expression", 
-    template="expression", 
-    filters={"composer_name": "Wolfgang Amadeus Mozart"}
-)
+Example 1: (Binding a variable for display)
+User: "Show me works and their genres"
+Logic: Bind the 'genre' triplets so 'genre' can be selected later.
+Call: apply_filter(target_variable="expression", schema_template="expression", 
+                    filters={"genre": ""}, query_id="...")
 
-User: "...that has a genre defined" (Existence Check)
-Call: apply_filter(
-    query_id="...", 
-    base_variable="expression", 
-    template="expression", 
-    filters={"genre": ""}  <-- Empty string adds the triplet but no filter logic
-)
-    """
-    return await filter_internal(query_id, base_variable, template, filters)
+Example 2: (Strict filtering)
+User: "Operas by Mozart"
+Logic: Restrict composer to Mozart AND genre to Opera.
+Call: apply_filter(target_variable="expression", schema_template="expression", 
+                    filters={"composer_name": "Wolfgang Amadeus Mozart", "genre": "Opera"}, query_id="...")
+"""
+    return await filter_internal(query_id, target_variable, schema_template, filters)
 
 
 @tool_if_enabled("add_component_constraint")
 async def add_component_constraint(
-    subject: str, 
-    obj: str, 
+    source_variable: str, 
+    target_component: str, 
     query_id: str, 
-    n: int | str | None = None) -> Dict[str, Any]:
+    exact_count: int | str | None = None) -> Dict[str, Any]:
     """
-Adds a constraint to the query to filter items based on their components or instrumentation. 
-It answers questions like "Find [Subject] that has [N] [Objects]".
+RELATIONSHIP TOOL: Automatically finds the path to link a component to a parent entity.
+Use this for any entity found in the vocabulary (Instruments, Genres, Roles, etc.).
+It answers questions like "Find [source_variable] that has optional(exact_count) [target_component]".
+
+**CAPABILITIES:**
+- AUTOMATIC PATHFINDING: This tool discovers the necessary RDF triplets to connect your 
+    `source_variable` to the `target_component` within the DOREMUS ontology.
+- SMART FILTERING: It can handle both existence ("with a violin") and specific 
+    quantities ("for exactly 3 violins").
 
 **WHEN TO USE:**
 Use this tool when the user specifies a QUANTITY of a specific COMPONENT.
@@ -264,144 +271,127 @@ Use this tool when the user specifies a QUANTITY of a specific COMPONENT.
 - "Performances with a **string quarted** (2 violins, 1 viola and 1 cello)
 
 **CRITICAL CONSTRAINTS:**
-1. **Subject Existence:** The `subject` MUST be a variable that is ALREADY defined in the current query (e.g., 'expression', 'work').
-2. **Object vs Subject:** - `subject` = The "Container" or "Main Entity" (e.g., The Symphony).
-    - `obj` = The "Ingredient" or "Instrument" (e.g., The Violin).
+1. `source_variable`: Must be an existing variable in your query (e.g., 'expression', 'performance').
+2. `target_component`: The name of the concept to link (e.g., 'piano', 'baritone', 'sonata'). 
+    *Recommendation: Use `find_candidate_entities` first.*
+3. `exact_count`: 
+    - Pass an **Integer** ONLY if the user specifies a number (e.g., "for 2 flutes").
+    - Pass **None** if the user just mentions the item (e.g., "pieces with flute").
 
 Args:
-    subject: The variable name of the PARENT entity currently being filtered. This variable must typically be contained in the `SELECT`. (e.g., "expression").
-    obj: The specific COMPONENT or INSTRUMENT required. (e.g., "violin", "piano", "cello").
-    query_id: The ID of the active query to modify.
-    n: The specific QUANTITY of the object required. 
-        - Pass an integer (e.g., 3) for exact matches ("for 3 violins") ONLY if the user explicitly asks for an exact number of components.
-        - Pass `None` if the user just asks for the *presence* of the object without a specific count ("for violin").
-
+    source_variable: The existing variable to start the path from (e.g., "expression").
+    target_component: The entity/concept to find and link to (e.g., "cello").
+    query_id: The ID of the active query.
+    exact_count: The specific number required (Optional).
 Returns:
     Dict: {"success": bool, "query_id": str, "generated_query": str}
 
 **FEW-SHOT EXAMPLES:**
 
-User: "Find all musical works composed for exactly 3 violins."
-Context: We are looking for 'works' (subject) that use 'violins' (obj).
-Call: add_component_constraint(
-    subject="expression",
-    obj="violin", 
-    n=3,
-    query_id="current_id"
-)
+Example 1: "Find works for exactly 3 violins"
+Logic: Link 'expression' to 'violin' with a specific count.
+Call: add_component_constraint(source_variable="expression", target_component="violin", exact_count=3, query_id="...")
 
-User: "Show me pieces that use a piano." (No specific count)
-Call: add_component_constraint(
-    subject="expression",
-    obj="piano",
-    n=None,
-    query_id="current_id"
-)
-    """
-    return await associate_to_N_entities_internal(subject, obj, query_id, n)
+Example 2: "Show me pieces that use a piano"
+Logic: Link 'expression' to 'piano' without requiring a specific quantity.
+Call: add_component_constraint(source_variable="expression", target_component="piano", exact_count=None, query_id="...")
+"""
+    return await associate_to_N_entities_internal(source_variable, target_component, query_id, exact_count)
 
 
 @tool_if_enabled("groupBy_having")
 async def groupBy_having(
-        subject: str, 
+        group_by_variable: str, 
         query_id: str, 
-        obj: str | None = None,
-        function: str | None = None,  
-        logic_type: str | None = None, 
-        valueStart: str | None = None, 
-        valueEnd: str | None = None) -> Dict[str, Any]:
+        aggregated_variable: str | None = None,
+        aggregate_function: str | None = None,  
+        having_logic_type: str | None = None, 
+        having_value_start: str | None = None, 
+        having_value_end: str | None = None) -> Dict[str, Any]:
     """
-Applies a GROUP BY aggregation to an existing SPARQL query, specifically to filter groups based on calculated metrics (like counts or averages).
+Performs a GROUP BY aggregation and applies an optional HAVING filter to the results.
+
+**SPARQL STRUCTURE:**
+SELECT ?group_by_variable (?aggregate_function(?aggregated_variable) AS ?count)
+WHERE { ... }
+GROUP BY ?group_by_variable
+HAVING (?count [having_logic_type] having_value_start)
 
 **WHEN TO USE:**
-Use this tool ONLY when the user asks for:
-1. Aggregations: "Count the number of...", "Calculate the average..."
-2. Group Filters: "...which are written for a string quarted (exactly 4 instruments)", "...with an average rating LESS than 3".
+Use this to filter "buckets" of data based on a count or average.
+- "Find works (group_by) with exactly 3 (value) instruments (aggregated)."
+- "List composers (group_by) with more than 10 (value) performances (aggregated)."
 
 **DO NOT USE:**
 - For simple property filters (e.g., "Find works released in 2020"). Use the standard `build_query` tool for that.
 - If the user has not yet started a query (requires a valid `query_id`).
 
 Args:
-    subject: The variable/entity to GROUP BY. This is the "bucket" or "category". (e.g., If counting instruments per Casting, this is 'casting').
-    query_id: The ID of the active query to modify.
-    obj: The variable/entity to MEASURE or COUNT inside the group. (e.g., If counting movies per Director, this is 'Movie'). 
-            REQUIRED if a 'function' is specified.
-    function: The mathematical operation to apply to the 'obj'. 
-            Valid options: 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX'.
-    logic_type: The comparison operator for the HAVING clause. 
-            Valid options:
-            - 'more' (applies >)
-            - 'less' (applies <)
-            - 'equal' (applies =)
-            - 'range' (applies a filter between valueStart and valueEnd)
-    valueStart: The threshold number for the logic_type. (e.g., if logic_type is 'more', and valueStart is '5', it means '> 5').
-    valueEnd: The upper bound number. ONLY used if logic_type is 'range'.
+    group_by_variable: The main entity that stays in the result list (e.g., "expression", "artist", "genre").
+    query_id: The ID of the active query.
+    aggregated_variable: The sub-entity being counted or measured (e.g., "castingDetail", "track").
+    aggregate_function: The math operation: 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX'.
+    having_logic_type: Comparison for the HAVING clause: 'more' (>), 'less' (<), 'equal' (=), 'range' (BETWEEN).
+    having_value_start: The threshold number for the logic.
+    having_value_end: Only required if having_logic_type is 'range'.
 
 Returns:
     Dict: {"success": bool, "query_id": str, "generated_query": str}
 
 **FEW-SHOT EXAMPLES:**
 
-User: "Give me works that are written for three instruments"
+User: "Give me works that are written for 3 instruments"
 Context: We are grouping castings by the count of casting details
 Call: groupBy_having(
-    subject="Casting",
-    obj="castingDetail",
-    function="COUNT",
-    logic_type="equal",
-    valueStart="3"
+    group_by_variable="Casting",
+    aggregated_variable="castingDetail",
+    aggregate_function="COUNT",
+    having_logic_type="equal",
+    having_value_start="3"
 )
 
 User: "List directors with an average movie rating higher than 8."
 Call: groupBy_having(
-    subject="Director", 
-    obj="Rating", 
-    function="AVG", 
-    logic_type="more", 
-    valueStart="8"
+    group_by_variable="Director", 
+    aggregated_variable="Rating", 
+    aggregate_function="AVG", 
+    having_logic_type="more", 
+    having_value_start="8"
 )
     """
-    return await groupBy_having_internal(subject.lower(), query_id, function, obj, logic_type, valueStart, valueEnd)
+    return await groupBy_having_internal(group_by_variable.lower(), query_id, aggregate_function, aggregated_variable, having_logic_type, having_value_start, having_value_end)
 
 
 @tool_if_enabled("filter_by_quantity")
-async def filter_by_quantity(subject: str, property: str, type: str, value: str, valueEnd: str | None, query_id: str) -> Dict[str, Any]:
+async def filter_by_quantity(filter_target_variable: str, quantity_property: str, math_operator: str, value_start: str, value_end: str | None, query_id: str) -> Dict[str, Any]:
     """
-Applies NUMERICAL or TEMPORAL constraints to the query. 
-Use this for questions involving Dates ("after 1900"), Durations ("longer than 5 minutes"), or Quantities.
-This tool adds the property and the filter to the query.
+NUMERICAL/TEMPORAL FILTER: Applies filters for Dates, Durations, and Quantities.
+
+**SPARQL MAPPING:**
+?filter_target_variable quantity_property ?value .
+FILTER ( ?value [math_operator] value_start )
 
 **WHEN TO USE:**
 1. **Dates/Time:** "Composed before 1850", "Written between 1900 and 1920".
 2. **Durations:** "Longer than 10 minutes", "Short pieces under 3 minutes".
 
-**CRITICAL CONFIGURATION RULES:**
-
---- SCENARIO A: FILTERING BY DATE ---
-* **subject:** MUST be the *Creation Event* variable (usually `expCreation`), NOT the Work itself (`expression`).
-* **property:** Use `"ecrm:P4_has_time-span"`, `schema:deathDate` or another date property if it is in the query (e.g., `schema:deathDate` because deathDate is in the query).
-* **value format:** "YYYY" (e.g., "1850") or "YYYY-MM-DD".
-* **type:** "less" (before), "more" (after), "range" (between and for specific years/dates).
-* **IMPORTANT** if the user asks for a specific year (e.g., "in 1900"), use type="range" with value="1900" and valueEnd="1900".
-
---- SCENARIO B: FILTERING BY DURATION ---
-* **subject:** The Work/Expression variable (e.g., `expression`).
-* **property:** Use `"mus:U78_estimated_duration"`.
-* **value format:** MUST use ISO 8601 Duration standard.
-    - "10 minutes" -> "PT10M"
-    - "1 hour" -> "PT1H"
-    - "4 minutes 33 seconds" -> "PT4M33S"
-* **type:** "less" (shorter than), "more" (longer than).
+**CRITICAL SCENARIOS:**
+1. DATES (Composed in/before/after):
+    - target_variable: "expCreation" (The Creation Event).
+    - property_uri: "ecrm:P4_has_time-span".
+    - Format: "YYYY" (e.g., "1850").
+    - math_operator: use "range" for specific years/dates, "more" for after, "less" for before.
+2. DURATIONS (Longer/Shorter than):
+    - target_variable: "expression" (The Work).
+    - property_uri: "mus:U78_estimated_duration".
+    - Format: ISO 8601 (e.g., "PT10M" for 10 mins, "PT1H" for 1 hour).
 
 Args:
-    subject: The variable name to filter (See Scenarios above to choose the right one).
-    property: The URI of the property. Select from:
-                - "ecrm:P4_has_time-span" (for Dates)
-                - "mus:U78_estimated_duration" (for Durations)
-    type: The operator: "less", "more", "equal", "range".
-    value: The threshold value. (Start value if range).
-    valueEnd: The end value. REQUIRED if type="range".
+    filter_target_variable: The variable to filter (e.g., "expCreation" for dates).
+    quantity_property: The RDF property (e.g., "ecrm:P4_has_time-span").
+    math_operator: 'less' (<), 'more' (>), 'equal' (=), 'range' (BETWEEN).
+    value_start: The threshold or start value.
+    value_end: Only required if math_operator is 'range'.
     query_id: The active query ID.
 
 Returns:
@@ -412,25 +402,25 @@ Returns:
 User: "... in 1900"
 Context: Date filter. Must apply to the 'Creation Event', not the 'Work'.
 Call: filter_by_quantity(
-    subject="expCreation", 
-    property="ecrm:P4_has_time-span", 
-    type="range", 
-    value="1900",
-    valueEnd="1900", 
+    filter_target_variable="expCreation", 
+    quantity_property="ecrm:P4_has_time-span", 
+    math_operator="range", 
+    value_start="1900",
+    value_end="1900", 
     query_id="..."
 )
 
 User: "... longer than 15 minutes"
 Context: Duration filter. Applies to 'expression'. Format must be ISO.
 Call: filter_by_quantity(
-    subject="expression", 
-    property="mus:U78_estimated_duration", 
-    type="more", 
-    value="PT15M", 
+    filter_target_variable="expression", 
+    quantity_property="mus:U78_estimated_duration", 
+    math_operator="more", 
+    value_start="PT15M", 
     query_id="..."
 )
     """
-    return await has_quantity_of_internal(subject, property, type, value, valueEnd, query_id)
+    return await has_quantity_of_internal(filter_target_variable, quantity_property, math_operator, value_start, value_end, query_id)
 
 
 @tool_if_enabled("add_triplet")
@@ -453,7 +443,7 @@ Adds a raw RDF triplet (`?s ?p ?o`) to the query graph.
 - **ONLY USE** when you need to traverse the graph in a way no other tool supports (e.g., connecting a Work to its Publisher, or a Performance to its Premiere).
 
 **SAFETY LOCK:**
-Before calling this, you **MUST** have called `get_ontology` (or `search_entity`) to verify that the `property` URI actually exists in the DOREMUS schema. Do not guess URIs.
+Before calling this, you **MUST** have called `get_entity_properties` to verify that the `property` URI actually exists in the DOREMUS schema. Do not guess URIs.
 
 Args:
     subject: The variable name of the start node (MUST already exist in the query, e.g. "expression").
@@ -486,77 +476,58 @@ Call: add_triplet(
 
 @tool_if_enabled("select_aggregate_variable")
 async def select_aggregate_variable(
-    variable: str,
+    projection_variable: str,
     query_id: str,
-    aggregator: Optional[str] = None
+    select_aggregator: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-Modifies the final `SELECT` clause of the SPARQL query. 
-Use this to specify exactly WHAT to show in the final answer, or to count results.
+PROJECTION TOOL: Determines which variables appear in the final answer table.
+    
+**SPARQL MAPPING:**
+SELECT ?projection_variable -> (When select_aggregator is None)
+SELECT ([select_aggregator](?projection_variable) AS ?result) -> (When aggregator is used)
 
 **WHEN TO USE:**
-1. **Counting Results:** "How many works...", "Count the number of..."
-    -> Use aggregator="COUNT".
-2. **Displaying Extras:** "Show me the title AND the composer", "List the dates".
-    -> Use aggregator=None.
+1. DISPLAYING DATA: Use this to ensure a variable (like 'title' or 'date') is shown to the user.
+2. COUNTING TOTALS: Use this for "How many..." questions (set select_aggregator="COUNT").
 
-**CRITICAL DISTINCTION - READ CAREFULLY:**
-* If the user asks: "Find directors who have **more than 5** movies" 
-    -> DO NOT USE THIS TOOL. Use `groupBy_having` (because we are filtering).
-* If the user asks: "Show me **how many** movies each director made" 
-    -> USE THIS TOOL (because we are displaying the count).
+**CRITICAL DISTINCTION:**
+- Use this tool to **DISPLAY** a calculation (e.g., "Show the number of tracks").
+- Use `groupBy_having` to **FILTER** by a calculation (e.g., "Find artists with more than 5 tracks").
 
 Args:
-    variable: The variable name to select/count (e.g., "expression", "creationDate").
-                *Must be a variable that already exists in the query logic.*
-    query_id: The active query ID.
-    aggregator: Optional math function to apply to the output.
-                - "COUNT": Counts the number of items.
-                - "SAMPLE": Pick one random example (good for de-duplicating).
-                - "MIN" / "MAX": First/Last values (e.g. earliest date).
-                - "AVG": Average value.
-                - None: Just display the raw value.
-
-Returns:
-    Dict: {"success": bool, "query_id": str, "generated_sparql": str}
+    projection_variable: The variable name to include in the SELECT clause. 
+                        *Must be a variable already initialized or bound in the query.*
+    query_id: The ID of the active query.
+    select_aggregator: Optional function: "COUNT", "SAMPLE", "MIN", "MAX", "AVG".
 
 **FEW-SHOT EXAMPLES:**
-
-User: "How many works did Mozart compose?"
-Context: We need to see the number (COUNT) in the final answer.
-Call: select_aggregate_variable(
-    variable="expression", 
-    aggregator="COUNT", 
-    query_id="..."
-)
-
-User: "List the titles of works by Bach."
-Context: We just want to ensure 'title' is in the output table.
-Call: select_aggregate_variable(
-    variable="title", 
-    aggregator=None, 
-    query_id="..."
-)
-    """
-    return await add_select_variable_internal(variable, aggregator, query_id)
+- User: "How many works?" -> projection_variable="expression", select_aggregator="COUNT"
+- User: "What are the titles?" -> projection_variable="title", select_aggregator=None
+"""
+    return await add_select_variable_internal(projection_variable, select_aggregator, query_id)
 
 
 @mcp.tool()
 async def execute_query(query_id: str, limit: int = 10, order_by_variable: str | None = None, order_by_desc: bool = False) -> Dict[str, Any]:
     """
-Execute a previously built SPARQL query by its ID.
+FINAL STEP: Executes the SPARQL query associated with the given ID.
 
-Use this tool AFTER calling `build_query`, any other optional tools and verifying the generated SPARQL.
+**WHEN TO USE:**
+- Use this ONLY after you have finished building the query logic with other tools.
+- Call this to retrieve the actual data needed to answer the user's question.
 
 Args:
-    query_id: The UUID returned by `build_query`.
-    limit: Max results (default is 10, max 50).
-    order_by_variable: Optional variable name to sort results by (e.g., "date", "title"). Use only if required.
-    order_by_desc: If True, sort in descending order. Default is False (ascending).
+    query_id: The active query ID.
+    limit: Maximum number of results to return (Default: 10, max 50).
+    order_by_variable: A variable from the query to sort by (e.g. "date", "title").
+    order_by_desc: Set to True for descending order (e.g. newest first).
 
 Returns:
-    The results of the SPARQL query execution.
-    """
+    A dictionary containing the query results.
+**INSTRUCTION:** Analyze these results to provide your final answer. 
+If results are empty, inform the user that no records were found matching their specific criteria.
+"""
     return execute_query_from_id_internal(query_id, limit, order_by_variable, order_by_desc)
 
 
@@ -565,40 +536,44 @@ async def find_candidate_entities(
     name: str, entity_type: str = "others"
 ) -> dict[str, Any]:
     """
-Use this tool to discover the URI identifier for an entity before retrieving
-detailed information or using it in other queries.
-Entity names may have variations, and you need the exact URI to query reliably.
+DISCOVERY TOOL: Converts a natural language name into a unique DOREMUS URI.
+    
+**CRITICAL USAGE RULE:**
+You must call this tool for every named entity (Composer, Instrument, Genre, Place) mentioned in the user's question.
 
 Args:
-    name: The name or keyword to search for (e.g., "Wolfgang Amadeus Mozart", "violin", "Radio France")
-    entity_type: Search scope. Options:
-        - "artist": Broad artist bucket covering people, ensembles, broadcasters, etc. Use COMPLETE names
-        - "vocabulary": SKOS concepts such as genres, media of performance(instruments, etc.), keys (skos:Concept)
-        - "place": ECRM places and geonames (ecrm:E53_Place)
-        - "others": Everything else (rdfs:label), automatic fallback in case no other result is found
+    name: The search term (e.g., "Wolfgang Amadeus Mozart", "piano", "Paris").
+    entity_type: Use "artist" for people/groups, "vocabulary" for instruments/genres, 
+                    "place" for locations, or "others" for general search.
 
 Returns:
-    Dictionary with matching entities, including their URIs, labels, and reported RDF types
-
-Examples:
-    - find_candidate_entities("Ludwig van Beethoven", "artist")
-    - find_candidate_entities("violin", "vocabulary")
-    - find_candidate_entities("Berlin", "place")
-    """
+    A list of candidates. 
+    IMPORTANT: Extract the 'uri' field from the best match and use that URI 
+    in your subsequent SPARQL filter tools.
+"""
     return find_candidate_entities_internal(name, entity_type)
 
 
 @mcp.tool()
 async def get_entity_properties(entity_uri: str) -> dict[str, Any]:
     """
-    It shows all direct properties of a specific entity (e.g., "http://data.doremus.org/artist/...") or of a class (e.g., "ecrm:E21_Person").
+DISCOVERY TOOL: Retrieves all available RDF properties and values for a specific URI or Class.
 
-    Args:
-        entity_uri: The URI of the entity to inspect.
+**WHEN TO USE (CRITICAL):**
+1. BEFORE building a query: If you don't know which filters (properties) are available for a template.
+2. SCHEMA EXPLORATION: To understand the relationship between classes (e.g., how an 'Expression' connects to a 'Creation Event').
+3. URI VERIFICATION: After finding a URI with `find_candidate_entities`, use this to see its actual data before using it in a filter.
 
-    Returns:
-        A dictionary containing the properties and corresponding values of the entity.
-    """
+**EXAMPLE:**
+- To see what you can filter on for a Person: `get_entity_properties("ecrm:E21_Person")`
+- To see the details of Mozart: `get_entity_properties("http://data.doremus.org/artist/4802a043...")`
+
+Args:
+    entity_uri: The full URI or compact URI (prefixed) of the entity or class to inspect.
+
+Returns:
+    A dictionary where keys are Property URIs and values are their corresponding RDF values/literals.
+"""
     return get_entity_properties_internal(entity_uri)
 
 

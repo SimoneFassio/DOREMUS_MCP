@@ -316,6 +316,10 @@ class QueryContainer:
     def set_group_by(self, variables: List[Dict[str, Any]]) -> None:
         self.group_by = variables
 
+    def add_group_by(self, variable: Dict[str, Any]) -> None:
+        if variable not in self.group_by:
+            self.group_by.append(variable)
+
     def add_having(self, condition: Dict[str, Any]) -> None:
         self.having.append(condition)
 
@@ -949,8 +953,8 @@ You should select an option different to 0 ONLY if the variable represent a new 
         return self.question
     
     def get_non_aggregated_vars(self) -> List[str]:
-        """Return a list of variable names in SELECT that are NOT aggregated."""
-        return [item for item in self.select if not item.get("aggregator")]
+        """Return a list of variables in SELECT that are NOT aggregated."""
+        return [item for item in self.select[2:] if not item.get("aggregator")]
 
     def dry_run_test(self) -> bool:
         """
@@ -1041,7 +1045,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
                 # Check if this variable is part of the grouping
                 is_grouped = any(g["var_name"] == var_name for g in self.group_by)
                 
-                if is_grouped:
+                if is_grouped and item.get("aggregator") is None:
                     # Case 1: Variable is grouped -> Select as is
                     select_vars_str.append(f"?{var_name}")
                 
