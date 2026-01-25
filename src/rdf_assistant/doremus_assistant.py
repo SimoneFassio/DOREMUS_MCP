@@ -87,7 +87,7 @@ def create_model(provider: str, model_name=None, api_key=None):
     elif provider == "ollama":
         if api_key:
             return ChatOllama(
-                base_url=os.getenv("OLLAMA_API_URL"),
+                base_url="https://ollama.com",
                 model=model_name,
                 client_kwargs={"headers": {"Authorization": f"Bearer {api_key}"}},
                 stream=True,

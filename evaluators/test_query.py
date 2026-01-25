@@ -329,7 +329,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
                     return 0.0
             except Exception as e:
                 print(f" LLM Judge Error: {e}")
-                return 0.0
+                return f" LLM Judge Error: {e}"
         
         query_total_uris = 0
         query_correct_uris = 0
@@ -413,7 +413,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
             return {"score": round(data.get("score", 0), 2), "comment": "".join(data.get("reasoning", ""))}
         except Exception as e:
             print(f"LLM Evaluator Error: {e}")
-            return {"score": 0, "comment": f"Evaluation failed: {e}"}
+            return {"score": "LLM Error", "comment": f"Evaluation failed: {e}"}
     
     async def llm_is_correct(outputs: dict, reference_outputs: dict) -> dict:
         """Use an LLM to evaluate if the query is practically correct ignoring minor details."""
@@ -480,7 +480,7 @@ Output ONLY a single number: 1.0, 0.5, or 0.0.
             return {"score": 1 if is_correct else 0, "comment": "".join(data.get("reasoning", ""))}
         except Exception as e:
             print(f"LLM Evaluator Error: {e}")
-            return {"score": 0, "comment": f"Evaluation failed: {e}"}
+            return {"score": "LLM Error", "comment": f"Evaluation failed: {e}"}
         
     def type_I_error(outputs: dict) -> int:
         """
@@ -637,7 +637,7 @@ Reasoning must be very concise bullet points (max 3 bullets).
             return {"score": 1 if is_outOfTopic else 0, "comment": "".join(data.get("reasoning", ""))}
         except Exception as e:
             print(f" LLM Judge Error: {e}")
-            return {"score": 0, "comment": f"Evaluation failed: {e}"}
+            return {"score": "LLM Error", "comment": f"Evaluation failed: {e}"}
 
 
     async def combined_evaluator(run, example):
