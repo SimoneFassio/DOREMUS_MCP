@@ -210,10 +210,6 @@ def find_candidate_entities_utils(
             e["type"] = " & ".join(sorted_types)
             del e["types"] # Remove the set before returning
             entities.append(e)
-    
-    # Bug fix: swap first and second result
-    if len(entities) > 1:
-        entities[0], entities[1] = entities[1], entities[0]
             
         return {
             "query": name,
