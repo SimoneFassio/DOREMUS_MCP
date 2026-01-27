@@ -49,7 +49,7 @@ def create_fallback_client(api_key=None):
         )
     elif sampling_provider == "custom":
         return OpenAI(
-            base_url="http://localhost:8964/v1/",
+            base_url="http://host.docker.internal:8964/v1/",
             api_key="1234"
         )
     elif sampling_provider == "nvidia":
@@ -62,7 +62,7 @@ def create_fallback_client(api_key=None):
         return ZaiClient(api_key=api_key or os.getenv("ZAI_API_KEY"))
     elif api_key:
         return Client(
-            host=os.getenv("OLLAMA_API_URL"),
+            host="https://ollama.com",
             headers= {"Authorization": f"Bearer {api_key}"},
         )
     else:

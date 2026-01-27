@@ -22,7 +22,7 @@ from pydantic import ValidationError
 # Add src to path for local development
 sys.path.insert(0, 'src')
 
-from rdf_assistant.doremus_assistant import doremus_assistant, client, create_model, initialize_agent
+from rdf_assistant.doremus_assistant import client, create_model, initialize_agent
 from rdf_assistant.eval.doremus_dataset import examples_queries
 from server.utils import execute_sparql_query
 
@@ -49,8 +49,8 @@ if DATASET_ORIGIN:
     print(f"Using origin: {DATASET_ORIGIN}")
 
 # LLM evaluator setup
-provider = "ollama"
-model_name = "gpt-oss:120b"
+provider = "nvidia"
+model_name = "openai/gpt-oss-120b"
 
 class KeyManager:
     def __init__(self, keys):
@@ -70,7 +70,7 @@ class KeyManager:
 
 key_manager = KeyManager(API_KEYS_LIST)
 
-EVALUATION_TIMEOUT_SECONDS = int(os.getenv("EVALUATION_TIMEOUT_SECONDS", 500))
+EVALUATION_TIMEOUT_SECONDS = int(os.getenv("EVALUATION_TIMEOUT_SECONDS", 2000))
 
 async def main():
     async def target_doremus_assistant(inputs: dict) -> dict:
@@ -84,7 +84,7 @@ async def main():
         else:
              max_retries = len(key_manager.keys) + 1 # Allow initial run + retries for all keys
 
-        current_agent = doremus_assistant
+        current_agent = await initialize_agent(key_manager.get_current_key())
         
         # Helper to run the stream with timeout
         async def process_stream():
@@ -731,17 +731,41 @@ Reasoning must be very concise bullet points (max 3 bullets).
             metadata={"split": DATASET_SPLITS}
             )
     else:
-        dataset = client.list_examples(
-            dataset_name=DATASET_NAME
-            )
+        dataset = client.list_examples( dataset_name=DATASET_NAME )
+    
+    # Convert to list to support slicing/resumption
+    dataset = list(dataset)
+    total_examples = len(dataset)
+    
+    EVALUATION_START_OFFSET = int(os.getenv("EVALUATION_START_OFFSET", 0))
+    if EVALUATION_START_OFFSET > 0:
+        if EVALUATION_START_OFFSET >= total_examples:
+            print(f"⚠️ Start offset {EVALUATION_START_OFFSET} is >= total examples {total_examples}. Nothing to run.")
+            return
+        
+        print(f"⏩ Resuming evaluation: Skipping first {EVALUATION_START_OFFSET} examples. Running {total_examples - EVALUATION_START_OFFSET} remaining examples.")
+        dataset = dataset[EVALUATION_START_OFFSET:]
+    else:
+        print(f"Running evaluation on all {total_examples} examples.")
+
+    experiment_args = {
+        "experiment_prefix": EXPERIMENT_PREFIX + "-" + LLM_EVAL_MODEL,
+        "max_concurrency": 1,
+        "num_repetitions": int(EVALUATION_NUM_REPETITIONS)
+    }
+    
+    existing_experiment = os.getenv("EVALUATION_EXISTING_EXPERIMENT")
+    if existing_experiment:
+        print(f"🔗 Appending results to existing experiment: {existing_experiment}")
+        experiment_args["experiment"] = existing_experiment
+        # When appending, we don't need prefix
+        del experiment_args["experiment_prefix"]
 
     evaluation = await client.aevaluate(
         target_doremus_assistant,
         data=dataset,
         evaluators=[combined_evaluator],
-        experiment_prefix=EXPERIMENT_PREFIX + "-" + LLM_EVAL_MODEL, 
-        max_concurrency=1,
-        num_repetitions=int(EVALUATION_NUM_REPETITIONS)
+        **experiment_args
     )
 
 if __name__ == "__main__":

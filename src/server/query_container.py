@@ -911,6 +911,10 @@ You should select an option different to 0 ONLY if the variable represent a new 
             for t in triples:
                 score = 0
 
+                # skip "a" triples
+                if t["pred"] == "a":
+                    continue
+
                 # Check subject match
                 if t["subj"]["var_name"] == subj_name:
                     score += 2  # Exact match gets higher weight
@@ -926,8 +930,8 @@ You should select an option different to 0 ONLY if the variable represent a new 
                 
                 # Update best match if this triple has a higher score
                 if score > best_score:
-                    best_match = t
-                    best_score = score
+                         best_match = t
+                         best_score = score
         if best_match:
             return best_match
 
@@ -972,7 +976,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
             
         # Execute Query with LIMIT 1
         query_str = self.to_string(for_execution=True)
-        res = execute_sparql_query(query_str, limit=1, timeout=15)
+        res = execute_sparql_query(query_str, limit=1, timeout=30)
         
         if not res["success"]:
             logger.warning(f"Dry Run Failed: Query execution error: {res.get('error')}")
@@ -1040,7 +1044,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         select_mod = "DISTINCT " if self.distinct_select else ""
         select_vars_str = []
 
-        has_aggregator = any(item.get("aggregator") for item in self.select)
+        has_aggregator = any(item.get("aggregator") and item.get("aggregator") != "SAMPLE" for item in self.select)
 
         for item in self.select:
             var_name = item["var_name"]
@@ -1064,7 +1068,10 @@ You should select an option different to 0 ONLY if the variable represent a new 
                 else:
                     # Case 3: Variable is NOT grouped and NO aggregator -> Auto-SAMPLE
                     select_vars_str.append(f"SAMPLE(?{var_name}) as ?{var_name}_sample")
-            
+            elif item.get("aggregator"):
+                # Case 4: Variable has SAMPLE aggregator
+                agg = item["aggregator"]
+                select_vars_str.append(f"{agg}(?{var_name}) as ?{var_name}_{agg.lower()}")
             else:
                 select_vars_str.append(f"?{var_name}")
 

@@ -61,15 +61,15 @@ def create_model(provider: str, model_name=None, api_key=None):
         model_name = evaluation_models[provider]
     
     if provider == "openai":
-        return ChatOpenAI(model=model_name, temperature=0, api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        return ChatOpenAI(model=model_name, temperature=0, api_key=os.getenv("OPENAI_API_KEY"))
     elif provider == "groq":
-        return ChatGroq(model=model_name, temperature=0, api_key=api_key or os.getenv("GROQ_API_KEY"))
+        return ChatGroq(model=model_name, temperature=0, api_key=os.getenv("GROQ_API_KEY"))
     elif provider == "anthropic":
-        return ChatAnthropic(model=model_name, temperature=0, api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
+        return ChatAnthropic(model=model_name, temperature=0, api_key=os.getenv("ANTHROPIC_API_KEY"))
     elif provider == "cerebras":
         return ChatOpenAI(
             base_url="https://api.cerebras.ai/v1",
-            api_key=api_key or os.getenv("CEREBRAS_API_KEY"),
+            api_key=os.getenv("CEREBRAS_API_KEY"),
             model=model_name,
             temperature=0,
             rate_limiter=rate_limiter
@@ -84,14 +84,14 @@ def create_model(provider: str, model_name=None, api_key=None):
     elif provider == "zai":
         return ChatOpenAI(
             base_url="https://api.z.ai/api/paas/v4",
-            api_key=api_key or os.getenv("ZAI_API_KEY"),
+            api_key=os.getenv("ZAI_API_KEY"),
             model=model_name,
             temperature=0
         )
     elif provider == "nvidia":
         return ChatOpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
-            api_key=api_key or os.getenv("NVIDIA_API_KEY"),
+            api_key=os.getenv("NVIDIA_API_KEY"),
             model=model_name,
             temperature=0,
             rate_limiter=rate_limiter
@@ -276,8 +276,3 @@ async def initialize_agent(api_key=None):
         middleware=[handle_tool_errors, fix_hallucinated_json], # inject_step_count
     )
     return agent.with_config({"recursion_limit": recursion_limit})
-
-api_key = None
-if os.getenv("API_KEYS_LIST", None):
-    api_key = os.getenv("API_KEYS_LIST", "").split(",")[0]
-doremus_assistant = asyncio.run(initialize_agent(api_key))
