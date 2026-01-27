@@ -68,3 +68,6 @@ db.sqlite3-journal
 queries/
 experiments/
 results/
+
+#images (temporary)
+plots

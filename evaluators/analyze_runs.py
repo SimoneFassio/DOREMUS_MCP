@@ -18,6 +18,11 @@ if not api_key:
 
 client = Client(api_key=api_key)
 
+def root_latency_seconds(root) -> float | None:
+    if getattr(root, "start_time", None) and getattr(root, "end_time", None):
+        return (root.end_time - root.start_time).total_seconds()
+    return None
+
 def analyze_runs(project_name: str = None, limit: int = None):
     """
     Fetch and analyze runs from LangSmith.
@@ -29,7 +34,7 @@ def analyze_runs(project_name: str = None, limit: int = None):
     """
     
     if not project_name:
-        project_name = os.getenv("EVALUATION_DATASET_NAME", "default")
+        project_name = os.getenv("EVALUATION_EXPERIMENT_NAME", "default")
         # Logic to find prefix if default not found
         all_projects = [p.name for p in client.list_projects()]
         if project_name not in all_projects:
@@ -225,15 +230,30 @@ def analyze_runs(project_name: str = None, limit: int = None):
         
         # 4. Metrics
         run_metrics = feedback_map.get(root.id, {})
-        # Filter for specific keys if desired, or all? User asked for accuracy and llm_is_correct
+        tokens_used = root.total_tokens
+
+        # 5. extract metadata
+        metadata = root.metadata
+        if isinstance(metadata, dict):
+            difficulty = metadata.get("ls_example_split", "unknown")
+            print(difficulty)
+        else:
+            difficulty = "unknown"
+        
         relevant_metrics = {
             "accuracy": run_metrics.get("accuracy"),
-            "llm_is_correct": run_metrics.get("llm_is_correct")
+            "llm score": run_metrics.get("llm score"),
+            "type 1 errors": run_metrics.get("type 1 errors"),
+            "type 2 errors": run_metrics.get("type 2 errors"),
+            "type 3 errors": run_metrics.get("type 3 errors"),
+            "tokens": tokens_used,
+            "latency": root_latency_seconds(root)
         }
         
         simple_results.append({
             "run_id": str(root.id),
             "question": question,
+            "difficulty": difficulty,
             "output": final_output,
             "metrics": relevant_metrics,
             "tools": filetered_tools
