@@ -23,7 +23,6 @@ from pydantic import ValidationError
 sys.path.insert(0, 'src')
 
 from rdf_assistant.doremus_assistant import client, create_model, initialize_agent
-from rdf_assistant.eval.doremus_dataset import examples_queries
 from server.utils import execute_sparql_query
 
 # Suppress httpx INFO logs
@@ -686,7 +685,7 @@ Reasoning must be very concise bullet points (max 3 bullets).
             score_data = await llm_score(run.outputs, example.outputs)
             
             # 3. Logic from llm_is_correct()
-            is_correct_data = await llm_is_correct(run.outputs, example.outputs)
+            # is_correct_data = await llm_is_correct(run.outputs, example.outputs)
 
             # 4. Logic from type_I_error()
             type_I_errors = type_I_error(run.outputs)
@@ -770,4 +769,3 @@ Reasoning must be very concise bullet points (max 3 bullets).
 
 if __name__ == "__main__":
     asyncio.run(main())
-
