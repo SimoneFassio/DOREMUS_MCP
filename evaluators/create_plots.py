@@ -1,20 +1,121 @@
 import os
+import io
+import textwrap
+import cairosvg
+from PIL import Image
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 ORIGIN_DATA_DIR = "experiments"
-GPT_FILENAME = "Doremus_Questions_1.1_PC_30s-timeout-gpt-4.1-1c61477b.json"
-QWEN30B_FILENAME = "Doremus_Questions_1.1_D4-qwen3-coder-30b-04b611b3.json"
+GPT4_1_FILENAME = "Doremus_Questions_1.1_PC_30s-timeout-gpt-4.1-1c61477b.json"
+GPT5_2_FILENAME = "Doremus_Questions_1.1_D4-gpt-5.2-f875f349.json"
+QWEN30B_FILENAME = "Doremus_Questions_1.1_PC_30s-timeout-qwen3-coder-30b-129c9985.json"
 QWEN480B_FILENAME = "Doremus_Questions_1.1_PC_30s-timeout-qwen-qwen3-coder-480b-a35b-instruct-00ae6bb5.json"
 QWEN30B_BQ_AF_FILENAME = "Doremus_Questions_1.1_Config_2_BQ_AF-qwen3-coder-30b-bb5f8234.json"
 QWEN30B_BQ_AF_FBQ_FILENAME = "Doremus_Questions_1.1_Config_3_BQ_AF_FBQ-qwen3-coder-30b-19dfbf62.json"
 QWEN30B_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-qwen3-coder-30b-4b26a45c.json"
 QWEN30B_BQ_AF_FBQ_ACC_SAV_FILENAME = "Doremus_Questions_1.1_Config_5_BQ_AF_FBQ_ACC_SAV-qwen3-coder-30b-d9d0488a.json"
-QWEN30B_FULL_GH_FILENAME = "Doremus_Questions_1.1_Config_6_FULL_GH-qwen3-coder-30b-8b9b4fc4.json"
+QWEN30B_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_FULL_GH-qwen3-coder-30b-8b9b4fc4.json"
+GPT4_1_WIKIDATA_FILENAME = "Doremus_Questions_1.1_WIKIDATA-gpt-4.1-bf3935e3.json"
+GPT4_1_BQ_AF_FILENAME = "Doremus_Questions_1.1_Config_2_BQ_AF-gpt-4.1-bca6fcb6.json"
+GPT4_1_BQ_AF_FBQ_FILENAME = "Doremus_Questions_1.1_Config_3_BQ_AF_FBQ-gpt-4.1-3ee40e4f.json"
+GPT4_1_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-gpt-4.1-a86e6cf0.json"
+GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME = "Doremus_Questions_1.1_Config_5_BQ_AF_FBQ_ACC_SAV-gpt-4.1-2eb8d146.json"
+GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_BQ_AF_FBQ_ACC_SAV_GH-gpt-4.1-8f510930.json"
 PLOTS_DIR_OUTPUT = "data/evaluation/plots/"
 
+# STYLE ICONS
+style = {
+    "GPT-4.1": {"color": "tab:blue", "icon": "data/icons/chatgpt-icon.svg"},
+    "GPT-5.2": {"color": "tab:red", "icon": "data/icons/chatgpt-icon.svg"},
+    "QWEN-3 Coders 30B": {"color": "tab:orange", "icon": "data/icons/qwen-ai-icon.svg"},
+    "QWEN-3 Coders 480B": {"color": "tab:green", "icon": "data/icons/qwen-ai-icon.svg"},
+    "GLM-4.7": {"color": "tab:purple", "icon": "data/icons/z-ai-icon.png"},
+}
+default_style = {"color": "tab:gray", "icon": None}
+
+_ICON_CACHE = {}
+
+def _load_icon_rgba(path: str):
+    if path in _ICON_CACHE:
+        return _ICON_CACHE[path]
+
+    ext = os.path.splitext(path)[1].lower()
+
+    if ext == ".svg":
+        # Optional dependency; only needed for SVG icons.
+
+        png_bytes = cairosvg.svg2png(url=path, output_width=128, output_height=128)
+        rgba = np.asarray(Image.open(io.BytesIO(png_bytes)).convert("RGBA"))
+    else:
+        # PNG recommended if you want zero extra deps.
+        rgba = plt.imread(path)
+
+    _ICON_CACHE[path] = rgba
+    return rgba
+
+def scatter_icons(
+    ax,
+    xs,
+    ys,
+    labels,
+    style_map,
+    zoom=0.22,
+    show_model_name=True,
+    name_offset_points=(0, -18),
+    name_wrap_width=8,
+    name_kwargs=None,
+):
+    # Keep limits/autoscale consistent (invisible anchors)
+    ax.scatter(xs, ys, s=0)
+
+    if name_kwargs is None:
+        name_kwargs = {}
+
+    seen = set()
+    for x, y, label in zip(xs, ys, labels):
+        st = style_map.get(label, {"color": "tab:gray", "icon": None})
+        icon_path = st.get("icon")
+
+        if icon_path and os.path.exists(icon_path):
+            rgba = _load_icon_rgba(icon_path)
+            ab = AnnotationBbox(OffsetImage(rgba, zoom=zoom), (x, y), frameon=False)
+            ax.add_artist(ab)
+        else:
+            ax.scatter([x], [y], s=200, color=st.get("color", "tab:gray"), marker="o")
+
+        # Draw model name under the icon (in display-point offset)
+        if show_model_name and label:
+            display_label = (
+                textwrap.fill(
+                    label,
+                    width=name_wrap_width,
+                    break_long_words=True,
+                    break_on_hyphens=True,
+                )
+                if name_wrap_width
+                else label
+            )
+
+            ax.annotate(
+                display_label,
+                (x, y),
+                xytext=name_offset_points,
+                textcoords="offset points",
+                ha="center",
+                va="top",
+                fontsize=name_kwargs.get("fontsize", 9),
+                fontweight=name_kwargs.get("fontweight", "normal"),
+                linespacing=name_kwargs.get("linespacing", 1.0),
+            )
+
+        # Legend label once per model (still text-only)
+        if label not in seen:
+            seen.add(label)
+            ax.scatter([], [], s=200, color=st.get("color", "tab:gray"), marker="o", label=label)
 
 def create_scatter_accuracy_consistency(data):
     """
@@ -27,42 +128,22 @@ def create_scatter_accuracy_consistency(data):
     consistencies = [item['consistency'] for item in data]
     labels = [item.get('label', '') for item in data]
 
-    plt.figure(figsize=(6, 5))
-    style = {
-        "GPT-4.1": ("tab:blue", "s"),
-        "QWEN-3 Coders 30B": ("tab:orange", "o"),
-        "QWEN-3 Coders 480B": ("tab:green", "^"),
-    }
-    default_color, default_marker = ("tab:gray", "D")
+    fig, ax = plt.subplots(figsize=(6, 5))
+    xs = np.array(accuracies) * 100
+    ys = np.array(consistencies) * 100
+    scatter_icons(ax, xs, ys, labels, style, zoom=0.20)
+    ax.set_xlabel('Accuracy (%)')
+    ax.set_ylabel('Consistency (%)')
 
-    seen = set()
-    for i, label in enumerate(labels):
-        color, marker = style.get(label, (default_color, default_marker))
-
-        # only add legend label once per model
-        legend_label = label if label not in seen else None
-        seen.add(label)
-
-        plt.scatter(
-            accuracies[i] * 100,
-            consistencies[i] * 100,
-            s=200,
-            color=color,
-            marker=marker,
-            label=legend_label,
-        )
-
-    plt.xlabel('Accuracy (%)')
-    plt.ylabel('Consistency (%)')
-    plt.title('Scatter Plot of Accuracy vs Consistency')
-    plt.xlim(20, 60)
-    plt.ylim(60, 104)
-    plt.grid(alpha=0.3)
-    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
-    plt.tight_layout()
+    ax.set_title('Scatter Plot of Accuracy vs Consistency')
+    ax.set_xlim(30, 60)
+    ax.set_ylim(80, 102)
+    ax.grid(alpha=0.3)
+    #ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
+    fig.tight_layout()
     if not os.path.exists(PLOTS_DIR_OUTPUT):
         os.makedirs(PLOTS_DIR_OUTPUT)
-    plt.savefig(PLOTS_DIR_OUTPUT + 'accuracy_vs_consistency.png')
+    fig.savefig(PLOTS_DIR_OUTPUT + 'accuracy_vs_consistency.png')
 
 def create_scatter_accuracy_vs_token_cost(data):
     """
@@ -75,88 +156,49 @@ def create_scatter_accuracy_vs_token_cost(data):
     token_costs = [item['total_token_cost'] for item in data]
     labels = [item.get('label', '') for item in data]
 
-    plt.figure(figsize=(6, 5))
-    style = {
-        "GPT-4.1": ("tab:blue", "s"),
-        "QWEN-3 Coders 30B": ("tab:orange", "o"),
-        "QWEN-3 Coders 480B": ("tab:green", "^"),
-    }
-    default_color, default_marker = ("tab:gray", "D")
-
-    seen = set()
-    for i, label in enumerate(labels):
-        color, marker = style.get(label, (default_color, default_marker))
-
-        # only add legend label once per model
-        legend_label = label if label not in seen else None
-        seen.add(label)
-
-        plt.scatter(
-            accuracies[i] * 100,
-            token_costs[i] / 1e6,
-            s=200,
-            color=color,
-            marker=marker,
-            label=legend_label,
-        )
-    plt.xlabel('Accuracy')
-    plt.ylabel('Total Token Cost of run (Millions)')
-    plt.title('Scatter Plot of Accuracy vs Total Token Cost')
-    plt.xlim(20, 60)
-    plt.ylim(4, 7)
-    plt.grid(alpha=0.3)
-    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
-    plt.tight_layout()
+    fig, ax = plt.subplots(figsize=(6, 5))
+    xs = np.array(accuracies) * 100
+    ys = np.array(token_costs) / 1_000_000  # convert to millions
+    scatter_icons(ax, xs, ys, labels, style, zoom=0.20)
+    
+    ax.set_xlabel('Accuracy')
+    ax.set_ylabel('Total Token Cost of run (Millions)')
+    ax.set_title('Scatter Plot of Accuracy vs Total Token Cost')
+    ax.set_xlim(35, 60)
+    ax.set_ylim(3, 7)
+    ax.grid(alpha=0.3)
+    #ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
+    fig.tight_layout()
     if not os.path.exists(PLOTS_DIR_OUTPUT):
         os.makedirs(PLOTS_DIR_OUTPUT)
-    plt.savefig(PLOTS_DIR_OUTPUT + 'accuracy_vs_token_cost.png')
+    fig.savefig(PLOTS_DIR_OUTPUT + 'accuracy_vs_token_cost.png')
 
 def create_scatter_accuracy_vs_latency(data):
     """
     Create a scatter plot of accuracy vs average latency.
 
     Args:
-        data (list of dict): List containing dictionaries with 'accuracy' and 'average_latency' keys.
+        data (list of dict): List containing dictionaries with 'accuracy' and 'average_tool_calls' keys.
     """
     accuracies = [item['accuracy'] for item in data]
-    latencies = [item['average_latency'] for item in data]
+    latencies = [item['average_tool_calls'] for item in data]
     labels = [item.get('label', '') for item in data]
 
-    plt.figure(figsize=(6, 5))
-    style = {
-        "GPT-4.1": ("tab:blue", "s"),
-        "QWEN-3 Coders 30B": ("tab:orange", "o"),
-        "QWEN-3 Coders 480B": ("tab:green", "^"),
-    }
-    default_color, default_marker = ("tab:gray", "D")
-
-    seen = set()
-    for i, label in enumerate(labels):
-        color, marker = style.get(label, (default_color, default_marker))
-
-        # only add legend label once per model
-        legend_label = label if label not in seen else None
-        seen.add(label)
-
-        plt.scatter(
-            accuracies[i] * 100,
-            latencies[i],
-            s=200,
-            color=color,
-            marker=marker,
-            label=legend_label,
-        )
-    plt.xlabel('Accuracy')
-    plt.ylabel('Average Latency (seconds)')
-    plt.title('Scatter Plot of Accuracy vs Average Latency')
-    plt.xlim(20, 60)
-    plt.ylim(50, 130)
-    plt.grid(alpha=0.3)
-    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
-    plt.tight_layout()
+    fig, ax = plt.subplots(figsize=(6, 5))
+    xs = np.array(accuracies) * 100
+    ys = np.array(latencies)
+    scatter_icons(ax, xs, ys, labels, style, zoom=0.20)
+    ax.set_xlabel('Accuracy')
+    ax.set_ylabel('Average Tool Calls per run')
+    ax.set_title('Scatter Plot of Accuracy vs Average Tool Calls')
+    ax.set_xlim(20, 60)
+    ax.set_ylim(6, 9)
+    ax.grid(alpha=0.3)
+    #ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
+    fig.tight_layout()
     if not os.path.exists(PLOTS_DIR_OUTPUT):
         os.makedirs(PLOTS_DIR_OUTPUT)
-    plt.savefig(PLOTS_DIR_OUTPUT + 'accuracy_vs_latency.png')
+    fig.savefig(PLOTS_DIR_OUTPUT + 'accuracy_vs_latency.png')
 
 def create_heatmap_by_complexity(models_data, model_name):
     """
@@ -251,7 +293,7 @@ def line_chart_config_accuracy(data, model_name):
     plt.xlabel('Configurations')
     plt.ylabel('Accuracy (%)')
     plt.title(f'Line Chart of Accuracy across Configurations for {model_name}')
-    plt.ylim(10, 60)
+    plt.ylim(5, 60)
     plt.grid(alpha=0.3)
     plt.tight_layout()
     if not os.path.exists(PLOTS_DIR_OUTPUT):
@@ -295,6 +337,8 @@ def clean_data_for_plotting(runs_data, model_name):
     cleaned_data["total_token_cost"] = data["metrics"].apply(lambda x: x.get("tokens", np.nan) if isinstance(x, dict) else np.nan).sum()/n_grouped_runs
     # Average latency
     cleaned_data["average_latency"] = data["metrics"].apply(lambda x: x.get("latency", np.nan) if isinstance(x, dict) else np.nan).mean()
+    # Number of tool calls
+    cleaned_data["average_tool_calls"] = data["tools"].apply(lambda l: len(l) if isinstance(l, list) else np.nan).mean()
     # Failure type I
     cleaned_data["type_1_error_rate"] = data["metrics"].apply(lambda x: x.get("type 1 errors", np.nan) if isinstance(x, dict) else np.nan).mean()
     # Failure type II
@@ -324,7 +368,8 @@ def clean_data_for_plotting(runs_data, model_name):
 
 
 if __name__ == "__main__":
-    gpt_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT_FILENAME))
+    gpt4_1_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_FILENAME))
+    gpt5_2_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT5_2_FILENAME))
     qwen30b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_FILENAME))
     qwen480b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN480B_FILENAME))
 
@@ -332,12 +377,22 @@ if __name__ == "__main__":
     qwen30b_bq_af_fbq_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_BQ_AF_FBQ_FILENAME))
     qwen30b_bq_af_fbq_acc_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_BQ_AF_FBQ_ACC_FILENAME))
     qwen30b_bq_af_fbq_acc_sav_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_BQ_AF_FBQ_ACC_SAV_FILENAME))
-    qwen30b_full_gh_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_FULL_GH_FILENAME))
+    qwen30b_bq_af_fbq_acc_sav_gh_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_BQ_AF_FBQ_ACC_SAV_GH_FILENAME))
+    qwen30b_full_data = qwen30b_data.copy()
+
+    gpt4_1_wiki_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_WIKIDATA_FILENAME))
+    gpt4_1_bq_af_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FILENAME))
+    gpt4_1_bq_af_fbq_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_FILENAME))
+    gpt4_1_bq_af_fbq_acc_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_FILENAME))
+    gpt4_1_bq_af_fbq_acc_sav_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME))
+    gpt4_1_bq_af_fbq_acc_sav_gh_data = gpt4_1_data.copy(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME))
+    gpt4_1_full_data = gpt4_1_data.copy()
 
     # TEST ON DIFFERENT LLMS
     data_cleaned = []
     data_cleaned.append(clean_data_for_plotting(qwen30b_data, "QWEN-3 Coders 30B"))
-    data_cleaned.append(clean_data_for_plotting(gpt_data, "GPT-4.1"))
+    data_cleaned.append(clean_data_for_plotting(gpt4_1_data, "GPT-4.1"))
+    data_cleaned.append(clean_data_for_plotting(gpt5_2_data, "GPT-5.2"))
     data_cleaned.append(clean_data_for_plotting(qwen480b_data, "QWEN-3 Coders 480B"))
     create_scatter_accuracy_consistency(data_cleaned)
     create_scatter_accuracy_vs_token_cost(data_cleaned)
@@ -345,11 +400,23 @@ if __name__ == "__main__":
     create_heatmap_by_complexity(data_cleaned, "Models Comparison by Question Complexity")
     create_stacked_bar_failure_types(data_cleaned)
 
-    # TEST ON DIFFERENT CONFIGURATIONS OF THE SAME MODEL
-    data_cleaned_configs = []
-    data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_data, "BQ + AF"))
-    data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_fbq_data, "+ FBQ"))
-    data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_fbq_acc_data, "+ ACC"))
-    data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_fbq_acc_sav_data, "+ SAV"))
-    data_cleaned_configs.append(clean_data_for_plotting(qwen30b_full_gh_data, "+ GH"))
-    line_chart_config_accuracy(data_cleaned_configs, "QWEN-3 Coders 30B")
+    # TEST ON DIFFERENT CONFIGURATIONS OF THE SAME MODEL - QWEN-3 CODERS 30B
+    qwen30b_data_cleaned_configs = []
+    qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_data, "BQ + AF"))
+    qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_fbq_data, "+ FBQ"))
+    qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_fbq_acc_data, "+ ACC"))
+    qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_fbq_acc_sav_data, "+ SAV"))
+    qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_fbq_acc_sav_gh_data, "+ GH"))
+    qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_full_data, "+ AT"))
+    line_chart_config_accuracy(qwen30b_data_cleaned_configs, "QWEN-3 Coders 30B")
+
+    # TEST ON DIFFERENT CONFIGURATIONS OF THE SAME MODEL - GPT-4.1
+    gpt4_1_data_cleaned_configs = []
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_wiki_data, "WIKIDATA"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_data, "BQ + AF"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_data, "+ FBQ"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_data, "+ ACC"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_data, "+ SAV"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_gh_data, "+ GH"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_full_data, "+ AT"))
+    line_chart_config_accuracy(gpt4_1_data_cleaned_configs, "GPT-4.1")
