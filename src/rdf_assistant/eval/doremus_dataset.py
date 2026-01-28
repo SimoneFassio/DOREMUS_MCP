@@ -3,7 +3,7 @@ import pathlib
 
 # Read cq .rq files from data directory
 project_root = pathlib.Path(__file__).parent.parent.parent.parent
-competency_dir = project_root / "data" / "eval_dataset"
+competency_dir = project_root / "eval_dataset"
 
 def load_rq_files(directory):
     examples = []

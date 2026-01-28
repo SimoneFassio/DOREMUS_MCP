@@ -22,10 +22,14 @@ def get_sparql_executor():
     from server.utils import execute_sparql_query
     return execute_sparql_query
 
-from server.config import PREFIXES
+from server.config_loader import PREFIXES, CONFIG_DIR
 
 def contract_uri_simple(uri: str) -> str:
     """Contract a full URI to a prefixed one using server.config.PREFIXES."""
+    if uri is None:
+        return None
+    if uri == "a":
+        return "a"
     if not uri or not uri.startswith("http"):
         return uri
         
@@ -35,7 +39,7 @@ def contract_uri_simple(uri: str) -> str:
     return uri
 
 # Directory containing template files
-TEMPLATES_DIR = Path(__file__).parent / "data" / "templates"
+TEMPLATES_DIR = CONFIG_DIR / "templates"
 
 
 @dataclass

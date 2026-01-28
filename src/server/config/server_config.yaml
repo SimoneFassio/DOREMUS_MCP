@@ -1,0 +1,59 @@
+sparql_endpoint: "https://data.doremus.org/sparql/"
+request_timeout: 60
+prefixes:
+    mus: "http://data.doremus.org/ontology#"
+    ecrm: "http://erlangen-crm.org/current/"
+    efrbroo: "http://erlangen-crm.org/efrbroo/"
+    skos: "http://www.w3.org/2004/02/skos/core#"
+    modsrdf: "http://www.loc.gov/standards/mods/rdf/v1/#"
+    rdfs: "http://www.w3.org/2000/01/rdf-schema#"
+    foaf: "http://xmlns.com/foaf/0.1/"
+    geonames: "http://www.geonames.org/ontology#"
+    time: "http://www.w3.org/2006/time#"
+    rdf : "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    dbpprop : "http://dbpedia.org/property/"
+    schema : "http://schema.org/"
+
+# Discovery Configuration
+discovery:
+  label_predicates:
+    artist: "foaf:name"
+    vocabulary: "skos:prefLabel"
+    place: "geonames:name"
+    others: "rdfs:label"
+
+  # Query to find candidate entities
+  # Placeholders: {label_predicate}, {search_literal}
+  candidate_entities_query: |
+    SELECT ?entity ?label ?type
+    WHERE {{
+    {{
+        SELECT ?entity ?type (SUBSTR(MIN(CONCAT(?priority, ?label_lang)), 2) AS ?label) (MAX(?sc) AS ?maxSc)
+        WHERE {{
+            ?entity {label_predicate} ?label_lang .
+            ?entity a ?type .
+            ?label_lang bif:contains "{search_literal}" option (score ?sc) .
+
+            BIND(IF(LANG(?label_lang) = "en", "1", IF(LANG(?label_lang) = "", "2", "3")) AS ?priority)
+        }}
+        GROUP BY ?entity ?type
+    }}
+
+    # Calculate the length difference
+    BIND(ABS(STRLEN(?label) - STRLEN("{search_literal}")) AS ?lenDiff)
+
+    # We divide the score by the length difference (adding 1 to avoid division by zero)
+    # This makes longer strings have a lower relevance.
+    BIND((xsd:float(?maxSc) / (xsd:float(?lenDiff) + 1.0)) AS ?hybridScore)
+    }}
+    ORDER BY DESC(?hybridScore)
+
+  # Query to get the label of a specific entity
+  # Placeholders: {uri}
+  get_entity_label_query: |
+    SELECT ?label
+    WHERE {{
+        <{uri}> rdfs:label | skos:prefLabel | foaf:name ?label .
+        BIND(IF(LANG(?label) = "en", 1, IF(LANG(?label) = "", 2, 3)) AS ?priority)
+    }}
+    ORDER BY ASC(?priority)

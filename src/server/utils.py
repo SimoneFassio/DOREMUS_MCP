@@ -3,10 +3,11 @@ import requests
 import re
 from typing import Any, Optional, Dict, List, Callable
 from server.tool_sampling import tool_sampling_request
-from server.config import (
+from server.config_loader import (
     SPARQL_ENDPOINT,
     REQUEST_TIMEOUT,
-    PREFIXES
+    PREFIXES,
+    DISCOVERY_CONFIG
 )
 
 logger = logging.getLogger("doremus-mcp")
@@ -41,14 +42,12 @@ def get_entity_label(uri: str) -> str:
     """
     Given a uri return the label, if present
     """
-    query = f"""
-    SELECT ?label
-    WHERE {{
-        <{uri}> rdfs:label | skos:prefLabel | foaf:name ?label .
-        BIND(IF(LANG(?label) = "en", 1, IF(LANG(?label) = "", 2, 3)) AS ?priority)
-    }}
-    ORDER BY ASC(?priority)
-    """
+    query_template = DISCOVERY_CONFIG.get("get_entity_label_query", "")
+    if not query_template:
+        logger.warning("get_entity_label_query not found in config")
+        return None
+
+    query = query_template.format(uri=uri)
     result = execute_sparql_query(query, 1)
     
     if result["success"] and len(result["results"])>0:
@@ -136,17 +135,12 @@ def find_candidate_entities_utils(
     limit: int = 15
 ) -> Dict[str, Any]:
     normalized_type = (entity_type or "").strip().lower()
-    if normalized_type not in {"artist", "vocabulary", "place", "others"}:
+
+    label_predicates = DISCOVERY_CONFIG.get("label_predicates", {})
+    if normalized_type not in label_predicates.keys():
         normalized_type = "others"
 
-    label_predicates = {
-        "artist": "foaf:name",
-        "vocabulary": "skos:prefLabel",
-        "place": "geonames:name",
-        "others": "rdfs:label",
-    }
-
-    label_predicate = label_predicates[normalized_type]
+    label_predicate = label_predicates.get(normalized_type, "rdfs:label")
 
     search_term = (name or "").strip()
     if not search_term:
@@ -158,30 +152,15 @@ def find_candidate_entities_utils(
     search_term_escaped = search_term.replace("'", "''").replace('"', '\\"')
     search_literal = f"'{search_term_escaped}'"
 
-    query = f"""
-    SELECT ?entity ?label ?type
-    WHERE {{
-    {{
-        SELECT ?entity ?type (SUBSTR(MIN(CONCAT(?priority, ?label_lang)), 2) AS ?label) (MAX(?sc) AS ?maxSc)
-        WHERE {{
-            ?entity {label_predicate} ?label_lang .
-            ?entity a ?type .
-            ?label_lang bif:contains "{search_literal}" option (score ?sc) .
-
-            BIND(IF(LANG(?label_lang) = "en", "1", IF(LANG(?label_lang) = "", "2", "3")) AS ?priority)
-        }}
-        GROUP BY ?entity ?type
-    }}
-
-    # Calculate the length difference
-    BIND(ABS(STRLEN(?label) - STRLEN("{search_literal}")) AS ?lenDiff)
-
-    # We divide the score by the length difference (adding 1 to avoid division by zero)
-    # This makes longer strings have a lower relevance.
-    BIND((xsd:float(?maxSc) / (xsd:float(?lenDiff) + 1.0)) AS ?hybridScore)
-    }}
-    ORDER BY DESC(?hybridScore)
-    """
+    query_template = DISCOVERY_CONFIG.get("candidate_entities_query", "")
+    if not query_template:
+        logger.warning("candidate_entities_query not found in config")
+        return {
+            "success": False,
+            "error": "candidate_entities_query not found in config"
+        }
+    
+    query = query_template.format(label_predicate=label_predicate, search_literal=search_literal)
 
     result = execute_sparql_query(query, limit=limit)
     

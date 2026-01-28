@@ -23,6 +23,7 @@ openai = "^1.0.0"
 groq = "^0.37.1"
 ollama = "^0.6.1"
 zai-sdk = "*"
+pyyaml = "^6.0.3"
 
 # --- Group for Evaluator/Client-Only Dependencies ---
 [tool.poetry.group.eval]

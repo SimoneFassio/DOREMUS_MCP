@@ -1,4 +1,6 @@
 # Analyze KG graph tools
+Tool used to generate statistics about the KG graph and to extract the ontology.
+Copy the 4 generated .csv files to /server/data/.
 
 ## analyze_graph.py
 This tool query the KG and return 3 files:

@@ -2,9 +2,14 @@
 
 A Model Context Protocol (MCP) server for accessing the DOREMUS Knowledge Graph, providing comprehensive access to classical music metadata including composers, works, performances, recordings, and instrumentation.
 
+> **General Purpose SPARQL Server**: While primarily tested with DOREMUS, this server is designed as a **general-purpose solution for any SPARQL-based Knowledge Graph**. Its unique template-driven architecture allows it to be adapted to any ontology (Wikidata, DBpedia, Corporate KGs) simply by modifying configuration files and SPARQL templates.
+
 ## Overview
 
 This MCP server enables LLMs to query the DOREMUS Knowledge Graph (https://data.doremus.org) using natural language, with optimized tools for:
+- **Entity Discovery**: Fuzzy searching for artists, works, and concepts.
+- **Query Construction**: Building complex SPARQL queries step-by-step using a graph-based approach.
+- **Data Retrieval**: Executing optimized queries to fetch structured data.
 
 ## Quick Start
 
@@ -86,12 +91,21 @@ poetry install --only main
 ```
 DOREMUS_MCP/
 ├── src/
-│   ├── server/              # MCP Server implementation
-│   │   ├── server.py        # Main FastMCP server with tools
-│   │   ├── query_builder.py # Parametric SPARQL query builder
-│   │   ├── find_paths.py    # Graph path finding utilities
+│   ├── server/                  # MCP Server implementation
+│   │   ├── config/              # Configuration & Templates (Package Data)
+│   │   │   ├── templates/       # SPARQL Query Templates (.rq)
+│   │   │   ├── server_config.yaml
+│   │   │   ├── strategies.yaml
+│   │   │   └── tools.yaml
+│   │   ├── main.py              # Main FastMCP server with tools
+│   │   ├── config_loader.py     # Configuration management
+│   │   ├── tools_internal.py    # Core tool implementation
+│   │   ├── template_parser.py   # SPARQL template engine
+│   │   ├── query_container.py   # Dynamic query builder state
+│   │   ├── graph_schema_explorer.py
+│   │   ├── utils.py             # Internal utilities
 │   │   └── __init__.py
-│   └── rdf_assistant/       # LangChain assistant for evaluations
+│   └── rdf_assistant/           # LangChain assistant for evaluations
 │       ├── doremus_assistant.py
 │       ├── extended_mcp_client.py
 │       ├── prompts.py
@@ -105,6 +119,7 @@ DOREMUS_MCP/
 │   ├── graph.csv
 │   └── cq.json             # Competency questions
 ├── docs/                    # Documentation
+│   ├── custom_kg_tutorial.md # GUIDE: Adpating to your own KG
 │   ├── ENDPOINT_GUIDE.md
 │   └── EXAMPLES.md
 ├── pyproject.toml          # Poetry dependencies and config
@@ -112,6 +127,15 @@ DOREMUS_MCP/
 ├── docker-compose.yml      # Docker Compose setup
 └── README.md               # This file
 ```
+
+## Adapt to Your Knowledge Graph
+
+This server is designed to be ontology-agnostic. The "Tools" are abstract operations (Build Query, Apply Filter, Find Entities) that work on *any* graph.
+
+*   **Configuration**: Define your SPARQL endpoint and Namespace prefixes in `src/server/config/server_config.yaml`.
+*   **Templates**: Map user intent to your specific graph patterns using `.rq` templates in `src/server/config/templates/`.
+
+👉 **[Read the Custom KG Tutorial](docs/custom_kg_tutorial.md)** to learn how to adapt this server to your own data.
 
 ## Resources
 
@@ -143,4 +167,4 @@ For issues related to:
 
 ---
 
-**Last Updated**: December 2025
+**Last Updated**: January 2026

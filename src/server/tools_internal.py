@@ -3,18 +3,19 @@ import logging
 import os
 import re 
 from nanoid import generate
-from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from typing import Any, Optional, Dict, List, Callable
-from difflib import get_close_matches
-from server.find_paths import load_graph, find_k_shortest_paths, find_term_in_graph_internal, find_inverse_arcs_internal, recur_domain
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from server.find_paths import load_graph, find_inverse_arcs_internal, recur_domain
 from server.graph_schema_explorer import GraphSchemaExplorer
 from server.query_container import QueryContainer, create_triple_element
+from server.tool_sampling import format_paths_for_llm, tool_sampling_request
+from server.config_loader import load_strategies
+from server.template_parser import get_cached_template, TemplateParseError, TemplateValidationError, convert_triples_to_module, TEMPLATES_DIR
 from server.utils import (
     execute_sparql_query,
     contract_uri,
     contract_uri_restrict,
-    expand_prefixed_uri,
     get_entity_label,
     find_candidate_entities_utils,
     remove_redundant_paths,
@@ -24,8 +25,6 @@ from server.utils import (
     get_quantity_property,
     format_as_markdown_table
 )
-from server.tool_sampling import format_paths_for_llm, tool_sampling_request
-from server.template_parser import get_cached_template, TemplateParseError, TemplateValidationError, convert_triples_to_module, parse_triple_string
 
 logger = logging.getLogger("doremus-mcp")
 
@@ -139,14 +138,7 @@ def get_entity_properties_internal(
 # QUERY BUILDER INTERNALS
 #-------------------------------
 
-
-
-#-------------------------------
-# NEW QUERY BUILDER V2 INTERNALS
-#-------------------------------
-
-
-async def build_query_v2_internal(
+async def build_query_internal(
     question: str,
     template: str
 ) -> Dict[str, Any]:
@@ -207,7 +199,7 @@ async def build_query_v2_internal(
         
         # Get all templates and their filters
         other_filters_text = "Filters available in other templates (use these by changing the template arg in apply_filter):"
-        templates_dir = pathlib.Path(__file__).parent / "data" / "templates"
+        templates_dir = TEMPLATES_DIR
         for template_file in templates_dir.glob("*.rq"):
             try:
                 tmpl_name = template_file.stem
@@ -218,74 +210,25 @@ async def build_query_v2_internal(
             except Exception as e:
                 logger.warning(f"Could not load template {template_file}: {e}")
 
+        strategies = load_strategies()
+        
         strategy = ""
-        # CATEGOPRY 3: Strict filtering
-        if "strictly" in question.lower() or "exactly" in question.lower() or "quartet" in question.lower() or "trio" in question.lower():
-            strategy = """
-### TYPE 3: Strict/Exact Filters (Closed Sets)
-*Trigger:* "Strictly...", "Exactly...", "String Quartet" (implied set), "Trio"
-*Strategy:*
-1. `build_query`
-2. `add_component_constraint` for EACH instrument.
-3. `groupBy` to count the Total Number of Parts (ensuring no extra instruments).
-
-*Example:* "Works written for violin, clarinet and piano (strictly)"
--> build_query(template="expression")
--> find_candidate_entities("violin", "vocabulary") -> violin_uri
--> find_candidate_entities("clarinet", "vocabulary") -> clarinet_uri
--> find_candidate_entities("piano", "vocabulary") -> piano_uri
--> add_component_constraint(expression, violin_uri, q_id)
--> add_component_constraint(expression, clarinet_uri, q_id)
--> add_component_constraint(expression, piano_uri, q_id)
--> groupBy(casting, q_id, castingDetail, COUNT, equal, 3) 
-(Note: Logic is 'equal 3' because we have 3 distinct instrument parts)
-
-*Example:* "Works for String Quartet" (2 Violins, 1 Viola, 1 Cello = 3 distinct parts usually)
--> build_query(template="expression")
--> find_candidate_entities("violin", "vocabulary") -> violin_uri
--> find_candidate_entities("viola", "vocabulary") -> viola_uri
--> find_candidate_entities("cello", "vocabulary") -> cello_uri
--> add_component_constraint(expression, violin_uri, q_id, 2)
--> add_component_constraint(expression, viola_uri, q_id, 1)
--> add_component_constraint(expression, cello_uri, q_id, 1)
--> groupBy(casting, q_id, castingDetail, COUNT, equal, 3)
-            """
-
-        # CATEGORY 2: Open filters
-        elif "for" in question.lower() or "at least" in question.lower():
-            strategy = """
-### TYPE 2: Open Filters (Inclusion)
-*Trigger:* "Works for oboe...", "involving at least...", "for choir and orchestra"
-*Strategy:* 1. `build_query` (set template="expression")
-2. `add_component_constraint` for EACH instrument mentioned.
-3. `filter_by_quantity` if a date/time is mentioned.
-4. DO NOT use `groupBy` (we allow other instruments to be present).
-
-*Example:* "Works written for oboe and orchestra in 1900"
--> build_query(template="expression")
--> find_candidate_entities("oboe", "vocabulary") -> oboe_uri
--> find_candidate_entities("orchestra", "vocabulary") -> orchestra_uri
--> add_component_constraint(expression, oboe_uri, q_id)
--> add_component_constraint(expression, orchestra_uri, q_id)
--> filter_by_quantity(expCreation, time-span, range, "01-01-1900", "31-12-1900", q_id)
-
-*Example:* "Concerts recorded at Royal Alber Hall by Nirvana between 1995 and 2014"
--> build_query(template="recording_event")
--> apply_filter(q_id, base_variable="recordingEvent", template="recording_event", filters={"location": "Royal Alber Hall", "recorded_by": "Nirvana"})
--> filter_by_quantity(expCreation, time-span, range, "01-01-1995", "31-12-2014", q_id)
-            """
-
-        # CATEGORY 1: simple metadata queries that can be asked with query builder -> default
-        else: 
-            strategy = """
-### TYPE 1: Simple Metadata (Composer, Genre, Title)
-*Trigger:* "Who composed...", "Works by...", "Sacred music..."
-*Strategy:* Use `build_query` with filters. Do NOT use entity associations unless instruments are mentioned.
-*Example:* "Works by Mozart"
--> build_query(template="expression")
--> apply_filter(query_id, base_variable="work", template="expression", filters={"composer_name": "Mozart"})
-Review what has been done by the build_query tool and if necessary call it again
-            """
+        user_query = question.lower()
+        
+        # Determine strategy based on triggers
+        # DEFAULT
+        selected_strategy = strategies.get("default", {})
+        strategy = selected_strategy.get("description", "")
+        
+        # Check specific strategies
+        for strat_key, strat_data in strategies.items():
+            if strat_key == "default":
+                continue
+            
+            triggers = strat_data.get("trigger", [])
+            if any(t in user_query for t in triggers):
+                strategy = strat_data.get("description", "")
+                break 
 
         # Generate strategy guide based on template
         strategy_guide = f"""
@@ -1341,7 +1284,6 @@ def execute_query_from_id_internal(query_id: str, limit: int, order_by_variable:
         logger.info(f"Executing query : {query_str} with limit {limit}")
         
         # Run both queries in parallel using ThreadPoolExecutor
-        from concurrent.futures import ThreadPoolExecutor, as_completed
         
         with ThreadPoolExecutor(max_workers=2) as executor:
             # Submit both queries

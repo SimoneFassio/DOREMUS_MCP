@@ -1,0 +1,62 @@
+strategies:
+  strict: 
+    trigger: ["strictly", "exactly", "quartet", "trio"]
+    description: |
+      ### TYPE 3: Strict/Exact Filters (Closed Sets)
+      *Trigger:* "Strictly...", "Exactly...", "String Quartet" (implied set), "Trio"
+      *Strategy:*
+      1. `build_query`
+      2. `add_component_constraint` for EACH instrument.
+      3. `groupBy_having` to count the Total Number of Parts (ensuring no extra instruments).
+
+      *Example:* "Works written for violin, clarinet and piano (strictly)"
+      -> build_query(template="expression")
+      -> find_candidate_entities("violin", "vocabulary") -> violin_uri
+      -> find_candidate_entities("clarinet", "vocabulary") -> clarinet_uri
+      -> find_candidate_entities("piano", "vocabulary") -> piano_uri
+      -> add_component_constraint(expression, violin_uri, q_id)
+      -> add_component_constraint(expression, clarinet_uri, q_id)
+      -> add_component_constraint(expression, piano_uri, q_id)
+      -> groupBy_having(casting, q_id, castingDetail, COUNT, equal, 3) 
+      (Note: Logic is 'equal 3' because we have 3 distinct instrument parts)
+
+      *Example:* "Works for String Quartet" (2 Violins, 1 Viola, 1 Cello = 3 distinct parts usually)
+      -> build_query(template="expression")
+      -> find_candidate_entities("violin", "vocabulary") -> violin_uri
+      -> find_candidate_entities("viola", "vocabulary") -> viola_uri
+      -> find_candidate_entities("cello", "vocabulary") -> cello_uri
+      -> add_component_constraint(expression, violin_uri, q_id, 2)
+      -> add_component_constraint(expression, viola_uri, q_id, 1)
+      -> add_component_constraint(expression, cello_uri, q_id, 1)
+      -> groupBy_having(casting, q_id, castingDetail, COUNT, equal, 3)
+  open:
+    trigger: ["for", "at least"]
+    description: |
+      ### TYPE 2: Open Filters (Inclusion)
+      *Trigger:* "Works for oboe...", "involving at least...", "for choir and orchestra"
+      *Strategy:* 1. `build_query` (set template="expression")
+      2. `add_component_constraint` for EACH instrument mentioned.
+      3. `filter_by_quantity` if a date/time is mentioned.
+      4. DO NOT use `groupBy` (we allow other instruments to be present).
+
+      *Example:* "Works written for oboe and orchestra in 1900"
+      -> build_query(template="expression")
+      -> find_candidate_entities("oboe", "vocabulary") -> oboe_uri
+      -> find_candidate_entities("orchestra", "vocabulary") -> orchestra_uri
+      -> add_component_constraint(expression, oboe_uri, q_id)
+      -> add_component_constraint(expression, orchestra_uri, q_id)
+      -> filter_by_quantity(expCreation, time-span, range, "01-01-1900", "31-12-1900", q_id)
+
+      *Example:* "Concerts recorded at Royal Alber Hall by Nirvana between 1995 and 2014"
+      -> build_query(template="recording_event")
+      -> apply_filter(q_id, base_variable="recordingEvent", template="recording_event", filters={"location": "Royal Alber Hall", "recorded_by": "Nirvana"})
+      -> filter_by_quantity(expCreation, time-span, range, "01-01-1995", "31-12-2014", q_id)
+  default:
+    description: |
+      ### TYPE 1: Simple Metadata (Composer, Genre, Title)
+      *Trigger:* "Who composed...", "Works by...", "Sacred music..."
+      *Strategy:* Use `build_query` with filters. Do NOT use entity associations unless instruments are mentioned.
+      *Example:* "Works by Mozart"
+      -> build_query(template="expression")
+      -> apply_filter(query_id, base_variable="work", template="expression", filters={"composer_name": "Mozart"})
+      Review what has been done by the build_query tool and if necessary call it again
