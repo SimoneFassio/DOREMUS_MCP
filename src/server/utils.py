@@ -54,7 +54,7 @@ def get_entity_label(uri: str) -> str:
     else:
         return None
     
-def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
+def execute_sparql_query(query: str, limit: int = 100, timeout: Optional[int] = None):
     """
     Execute a SPARQL query against the DOREMUS endpoint.
     
@@ -67,16 +67,17 @@ def execute_sparql_query(query: str, limit: int = 100) -> dict[str, Any]:
     """
     try:
         logger.info(f"Executing SPARQL query with limit {limit}")
-        prefix_lines = ""#.join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
-        query = prefix_lines + "\n" + query
+        # prefix_lines.join(f"PREFIX {p}: <{uri}>\n" for p, uri in PREFIXES.items())
+        # query = prefix_lines + "\n" + query
         if "LIMIT" not in query.upper():
             query = f"{query}\nLIMIT {limit}"
+        
 
         response = requests.get(
             SPARQL_ENDPOINT,
             params={"query": query},
             headers={"Accept": "application/sparql-results+json"},
-            timeout=REQUEST_TIMEOUT
+            timeout=(timeout if timeout is not None else REQUEST_TIMEOUT)
         )
         try:
             response.raise_for_status()
