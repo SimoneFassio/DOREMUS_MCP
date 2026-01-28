@@ -104,6 +104,12 @@ async def tool_sampling_request(system_prompt: str, pattern_intent: str, log_cal
     3. Return the selected option index as string
     """
     start_time = time.time()
+    
+    # Check Feature Flag
+    if os.getenv("ENABLE_SAMPLING", "true").lower() != "true":
+        logger.info("Sampling disabled by ENABLE_SAMPLING env var. Returning default option '0'.")
+        return "0"
+
     used_model = "unknown"
     llm_response = ""
     error_msg = None
@@ -201,7 +207,7 @@ You MUST reply with exactly one token: the integer index only — nothing else, 
                             max_completion_tokens=20,
                             temperature=0
                         )
-                        llm_response = response.choices[0].message.content
+                        llm_response = response.choices[0].message.content or ""
                     else:
                         response = fallback_client.chat(
                             model=sampling_model,
@@ -211,7 +217,7 @@ You MUST reply with exactly one token: the integer index only — nothing else, 
                             ],
                             options={"temperature":0}
                         )
-                        llm_response = response.message.content
+                        llm_response = response.message.content or ""
                     # Success
                     break
                 except Exception as call_error:

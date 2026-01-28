@@ -295,7 +295,7 @@ class QueryContainer:
             raise Exception("Optional modules not yet implemented.")
 
         # 2. DRY RUN TEST
-        if dry_run:
+        if dry_run and os.getenv("ENABLE_DRY_RUN", "true").lower() == "true":
             try:
                 self.dry_run_test()
             except Exception as e:
@@ -970,10 +970,13 @@ You should select an option different to 0 ONLY if the variable represent a new 
         Connectivity is already checked in add_module, so this checks buildability.
         Also executes the query with LIMIT 1 to check for 0 results or errors.
         """
+        if os.getenv("ENABLE_DRY_RUN", "true").lower() == "false":
+            return True
+
         if not self.where:
             logger.warning("Dry Run Failed: WHERE clause is empty.")
             raise Exception("Dry Run Failed: WHERE clause is empty.")
-            
+
         # Execute Query with LIMIT 1
         query_str = self.to_string(for_execution=True)
         res = execute_sparql_query(query_str, limit=1, timeout=30)
