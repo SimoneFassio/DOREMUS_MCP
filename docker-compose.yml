@@ -9,6 +9,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - MCP_ENABLED_TOOLS
+      - ENABLE_SAMPLING
+      - ENABLE_DRY_RUN
     restart: unless-stopped
     volumes:
       - ./queries:/app/queries

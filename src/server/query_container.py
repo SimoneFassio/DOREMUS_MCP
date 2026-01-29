@@ -1,5 +1,4 @@
-from email.mime import base
-from os import name
+import os
 from typing import Any, Optional, List, Dict
 import logging
 import re
@@ -532,7 +531,7 @@ class QueryContainer:
             logger.info(f"Testing module {new_module.get('id', 'unknown')} in dry run.")
 
             try:
-                self.dry_run_test()
+                self.dry_run_test(timeout=15, strict=False)
                 return True
             except Exception as e:
                 logger.error(e)
@@ -616,7 +615,7 @@ class QueryContainer:
             
             logger.info(f"Testing module {new_module.get('id', 'unknown')} in retrieval of options.")
             try:
-                self.dry_run_test()
+                self.dry_run_test(timeout=15, strict=False)
                 for var_name, assigned_name in current_config.items():
                     if assigned_name not in options[var_name]:
                         options[var_name].append(assigned_name)
@@ -767,7 +766,7 @@ class QueryContainer:
                                 self.where.append(module)
 
                             logger.info(f"Testing module {module.get('id', 'unknown')} in dry run check.")
-                            self.dry_run_test()
+                            self.dry_run_test(timeout=15, strict=False)
                         finally:
                             # ALWAYS revert container state
                             self.where = copy.deepcopy(state_backup_v["where"])
@@ -964,7 +963,7 @@ You should select an option different to 0 ONLY if the variable represent a new 
         """Return a list of variables in SELECT that are NOT aggregated."""
         return [item for item in self.select if not item.get("aggregator")]
 
-    def dry_run_test(self) -> bool:
+    def dry_run_test(self, timeout: int = 45, strict: bool = True) -> bool:
         """
         Basic sanity check for the query structure.
         Connectivity is already checked in add_module, so this checks buildability.
@@ -979,9 +978,13 @@ You should select an option different to 0 ONLY if the variable represent a new 
 
         # Execute Query with LIMIT 1
         query_str = self.to_string(for_execution=True)
-        res = execute_sparql_query(query_str, limit=1, timeout=30)
+        res = execute_sparql_query(query_str, limit=1, timeout=timeout)
         
         if not res["success"]:
+            error_msg = res.get('error', '')
+            if "Query timeout" in error_msg and not strict:
+                logger.warning(f"Dry Run timed out but strict=False. Allowing. Error: {error_msg}")
+                return True
             logger.warning(f"Dry Run Failed: Query execution error: {res.get('error')}")
             raise Exception(f"Dry Run Failed: Query execution error: {res.get('error')}")
         

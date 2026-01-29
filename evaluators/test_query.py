@@ -96,7 +96,7 @@ async def main():
                 if "messages" in chunk:
                     messages = chunk["messages"]
 
-        for attempt in range(max_retries):
+        for attempt in range(max(max_retries, 5)):
             try:
                 # Enforce time limit on the generation process
                 await asyncio.wait_for(process_stream(), timeout=EVALUATION_TIMEOUT_SECONDS)

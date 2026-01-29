@@ -18,7 +18,8 @@ TOOL_MAP = {
     "FBQ": "filter_by_quantity",
     "ACC": "add_component_constraint",
     "SAV": "select_aggregate_variable",
-    "GH": "groupBy_having"
+    "GH": "groupBy_having",
+    "AT": "add_triplet"
 }
 
 # Define the configurations to test.
@@ -48,6 +49,10 @@ CONFIGURATIONS = [
     {
         "name": "Config_6_BQ_AF_FBQ_ACC_SAV_GH",
         "tools": COMMON_TOOLS + [TOOL_MAP["BQ"], TOOL_MAP["AF"], TOOL_MAP["FBQ"], TOOL_MAP["ACC"], TOOL_MAP["SAV"], TOOL_MAP["GH"]]
+    },
+    {
+        "name": "FULL",
+        "tools": COMMON_TOOLS + [TOOL_MAP["BQ"], TOOL_MAP["AF"], TOOL_MAP["FBQ"], TOOL_MAP["ACC"], TOOL_MAP["SAV"], TOOL_MAP["GH"], TOOL_MAP["AT"]]
     }
 ]
 

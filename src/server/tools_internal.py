@@ -784,7 +784,7 @@ async def has_quantity_of_internal(subject: str, property: str, type: str, value
         is_time_span = "time-span" in propery.lower()
         is_duration = "duration" in propery.lower()
 
-        if valueEnd == "":
+        if valueEnd == "" or valueEnd == "None":
             valueEnd = None
 
         def _format_value(val):
