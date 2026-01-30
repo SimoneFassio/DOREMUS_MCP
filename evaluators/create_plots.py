@@ -25,6 +25,12 @@ GPT4_1_BQ_AF_FBQ_FILENAME = "Doremus_Questions_1.1_Config_3_BQ_AF_FBQ-gpt-4.1-3e
 GPT4_1_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-gpt-4.1-a86e6cf0.json"
 GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME = "Doremus_Questions_1.1_Config_5_BQ_AF_FBQ_ACC_SAV-gpt-4.1-2eb8d146.json"
 GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_BQ_AF_FBQ_ACC_SAV_GH-gpt-4.1-8f510930.json"
+GPT4_1_SAMPLINGOFF_DRYRUNOFF_FILENAME = "Doremus_Questions_1.1_Sampling_OFF_DryRun_OFF-gpt-4.1-b8a6bf09.json"
+GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME = "Doremus_Questions_1.1_Sampling_OFF_DryRun_ON-gpt-4.1-74359adc.json"
+GPT4_1_SAMPLINGON_DRYRUNOFF_FILENAME = "Doremus_Questions_1.1_Sampling_ON_DryRun_OFF-gpt-4.1-3a3b4bb5.json"
+GPT4_1_SAMPLINGON_DRYRUNON_FILENAME = "Doremus_Questions_1.1_FULL-gpt-4.1-7d383e36.json"
+
+
 PLOTS_DIR_OUTPUT = "data/evaluation/plots/"
 
 # STYLE ICONS
@@ -300,6 +306,22 @@ def line_chart_config_accuracy(data, model_name):
         os.makedirs(PLOTS_DIR_OUTPUT)
     plt.savefig(PLOTS_DIR_OUTPUT + f'{model_name}_config_accuracy_line_chart.png')
 
+def print_table(data):
+    """
+    Print a formatted table of the data.
+
+    Args:
+        data (list of dict): List containing dictionaries with model metrics.
+    """
+    labels = [item.get('label', '') for item in data]
+    accuracies = [item.get('accuracy', 0) for item in data]
+    n_tokens = [item.get('total_token_cost', 0) for item in data]
+    n_tool_calls = [item.get('average_tool_calls', 0) for item in data]
+    print(f"{'Configuration':<30} {'Accuracy (%)':<15} {'Total Token Cost':<20} {'Avg Tool Calls':<15}")
+    print("-" * 85)
+    for label, acc, tokens, calls in zip(labels, accuracies, n_tokens, n_tool_calls):
+        print(f"{label:<30} {acc*100:<15.2f} {tokens:<20.2f} {calls:<15.2f}")
+
 def clean_data_for_plotting(runs_data, model_name):
     """
     Clean and structure the runs data for plotting.
@@ -388,6 +410,11 @@ if __name__ == "__main__":
     gpt4_1_bq_af_fbq_acc_sav_gh_data = gpt4_1_data.copy(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME))
     gpt4_1_full_data = gpt4_1_data.copy()
 
+    gpt4_1_sampling_off_dryrun_off_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGOFF_DRYRUNOFF_FILENAME))
+    gpt4_1_sampling_off_dryrun_on_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME))
+    gpt4_1_sampling_on_dryrun_off_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGON_DRYRUNOFF_FILENAME))
+    gpt4_1_sampling_on_dryrun_on_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGON_DRYRUNON_FILENAME))
+
     # TEST ON DIFFERENT LLMS
     data_cleaned = []
     data_cleaned.append(clean_data_for_plotting(qwen30b_data, "QWEN-3 Coders 30B"))
@@ -420,3 +447,11 @@ if __name__ == "__main__":
     gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_gh_data, "+ GH"))
     gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_full_data, "+ AT"))
     line_chart_config_accuracy(gpt4_1_data_cleaned_configs, "GPT-4.1")
+
+    # ABLATION STUDY ON SAMPLING AND DRY RUN - GPT-4.1
+    gpt4_1_ablation_data_cleaned = []
+    gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_off_dryrun_off_data, "Sampling OFF + Dry Run OFF"))
+    gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_off_dryrun_on_data, "Sampling OFF + Dry Run ON"))
+    gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_on_dryrun_off_data, "Sampling ON + Dry Run OFF"))
+    gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_on_dryrun_on_data, "Sampling ON + Dry Run ON"))
+    print_table(gpt4_1_ablation_data_cleaned)
