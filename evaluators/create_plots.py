@@ -9,26 +9,38 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
-ORIGIN_DATA_DIR = "experiments"
-GPT4_1_FILENAME = "Doremus_Questions_1.1_PC_30s-timeout-gpt-4.1-1c61477b.json"
-GPT5_2_FILENAME = "Doremus_Questions_1.1_D4-gpt-5.2-f875f349.json"
-QWEN30B_FILENAME = "Doremus_Questions_1.1_PC_30s-timeout-qwen3-coder-30b-129c9985.json"
-QWEN480B_FILENAME = "Doremus_Questions_1.1_PC_30s-timeout-qwen-qwen3-coder-480b-a35b-instruct-00ae6bb5.json"
-QWEN30B_BQ_AF_FILENAME = "Doremus_Questions_1.1_Config_2_BQ_AF-qwen3-coder-30b-bb5f8234.json"
-QWEN30B_BQ_AF_FBQ_FILENAME = "Doremus_Questions_1.1_Config_3_BQ_AF_FBQ-qwen3-coder-30b-19dfbf62.json"
-QWEN30B_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-qwen3-coder-30b-4b26a45c.json"
-QWEN30B_BQ_AF_FBQ_ACC_SAV_FILENAME = "Doremus_Questions_1.1_Config_5_BQ_AF_FBQ_ACC_SAV-qwen3-coder-30b-d9d0488a.json"
-QWEN30B_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_FULL_GH-qwen3-coder-30b-8b9b4fc4.json"
+ORIGIN_DATA_DIR = "experiments/data"
+
+# DIFFERENT LLMs TESTS
+GPT4_1_FILENAME = "Doremus_Questions_1.1_NDR-gpt-4.1-cfbf6e21.json" # ADD THE ONE FROM FULL TOOLS
+GPT5_2_FILENAME_CONSISTENCY = "Doremus_Questions_1.1_D4-gpt-5.2-f875f349.json" 
+GPT5_2_FILENAME = GPT5_2_FILENAME_CONSISTENCY # Need to re-do 1
+QWEN30B_FILENAME_CONSISTENCY = "Doremus_Questions_1.1_PC_30s-timeout-qwen3-coder-30b-129c9985.json"
+QWEN30B_FILENAME = "Doremus_Questions_1.1_FULL-qwen3-coder-30b-cace8e10.json"
+QWEN480B_FILENAME_CONSISTENCY = "Doremus_Questions_1.1_PC_30s-timeout-qwen-qwen3-coder-480b-a35b-instruct-00ae6bb5.json"
+QWEN480B_FILENAME = QWEN480B_FILENAME_CONSISTENCY # Need to re-do 1
+GPTOSS20B_FILENAME = "Doremus_Questions_1.1_NDR-gpt-oss-20b-7a96e3e0.json"
+RNJ_18B_FILENAME = "Doremus_Questions_1.1_NDR-rnj-1-8b-cloud-ade6d780.json"
+
+# CONFIG TESTS
+QWEN30B_WIKIDATA_FILENAME = "" # NEED TO DO 1
+QWEN30B_BQ_AF_FILENAME = "Doremus_Questions_1.1_Config_2_BQ_AF-qwen3-coder-30b-416165c4.json" 
+QWEN30B_BQ_AF_FBQ_FILENAME = "Doremus_Questions_1.1_Config_3_BQ_AF_FBQ-qwen3-coder-30b-1164bdae.json"
+QWEN30B_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-qwen3-coder-30b-1f65a5e5.json"
+QWEN30B_BQ_AF_FBQ_ACC_SAV_FILENAME = "Doremus_Questions_1.1_Config_5_BQ_AF_FBQ_ACC_SAV-qwen3-coder-30b-d2c7fc65.json"
+QWEN30B_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_BQ_AF_FBQ_ACC_SAV_GH-qwen3-coder-30b-3abc4da4.json"
 GPT4_1_WIKIDATA_FILENAME = "Doremus_Questions_1.1_WIKIDATA-gpt-4.1-bf3935e3.json"
 GPT4_1_BQ_AF_FILENAME = "Doremus_Questions_1.1_Config_2_BQ_AF-gpt-4.1-bca6fcb6.json"
 GPT4_1_BQ_AF_FBQ_FILENAME = "Doremus_Questions_1.1_Config_3_BQ_AF_FBQ-gpt-4.1-3ee40e4f.json"
-GPT4_1_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-gpt-4.1-a86e6cf0.json"
-GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME = "Doremus_Questions_1.1_Config_5_BQ_AF_FBQ_ACC_SAV-gpt-4.1-2eb8d146.json"
-GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_BQ_AF_FBQ_ACC_SAV_GH-gpt-4.1-8f510930.json"
+GPT4_1_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-gpt-4.1-a86e6cf0.json" # need to re-do 1
+GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME = "Doremus_Questions_1.1_Config_5_BQ_AF_FBQ_ACC_SAV-gpt-4.1-2eb8d146.json" # need to re-do 1
+GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_BQ_AF_FBQ_ACC_SAV_GH-gpt-4.1-8f510930.json" # need to re-do 1
+
+# SAMPLING ABLATION
 GPT4_1_SAMPLINGOFF_DRYRUNOFF_FILENAME = "Doremus_Questions_1.1_Sampling_OFF_DryRun_OFF-gpt-4.1-b8a6bf09.json"
-GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME = "Doremus_Questions_1.1_Sampling_OFF_DryRun_ON-gpt-4.1-74359adc.json"
+GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME = "Doremus_Questions_1.1_Sampling_OFF_DryRun_ON-gpt-4.1-74359adc.json" # need to re-do 1
 GPT4_1_SAMPLINGON_DRYRUNOFF_FILENAME = "Doremus_Questions_1.1_Sampling_ON_DryRun_OFF-gpt-4.1-3a3b4bb5.json"
-GPT4_1_SAMPLINGON_DRYRUNON_FILENAME = "Doremus_Questions_1.1_FULL-gpt-4.1-7d383e36.json"
+GPT4_1_SAMPLINGON_DRYRUNON_FILENAME = GPT4_1_FILENAME
 
 
 PLOTS_DIR_OUTPUT = "data/evaluation/plots/"
@@ -39,7 +51,9 @@ style = {
     "GPT-5.2": {"color": "tab:red", "icon": "data/icons/chatgpt-icon.svg"},
     "QWEN-3 Coders 30B": {"color": "tab:orange", "icon": "data/icons/qwen-ai-icon.svg"},
     "QWEN-3 Coders 480B": {"color": "tab:green", "icon": "data/icons/qwen-ai-icon.svg"},
-    "GLM-4.7": {"color": "tab:purple", "icon": "data/icons/z-ai-icon.png"},
+    "GLM-4.7": {"color": "tab:purple", "icon": "data/icons/z-ai-icon.svg"},
+    "GPT-OSS 20B": {"color": "tab:brown", "icon": "data/icons/gpt-oss-icon.svg"},
+    "RNJ 18B": {"color": "tab:pink", "icon": "data/icons/essential-ai-logo.svg"},
 }
 default_style = {"color": "tab:gray", "icon": None}
 
@@ -91,7 +105,7 @@ def scatter_icons(
             ab = AnnotationBbox(OffsetImage(rgba, zoom=zoom), (x, y), frameon=False)
             ax.add_artist(ab)
         else:
-            ax.scatter([x], [y], s=200, color=st.get("color", "tab:gray"), marker="o")
+            ax.scatter([x], [y], s=100, color=st.get("color", "tab:gray"), marker="o")
 
         # Draw model name under the icon (in display-point offset)
         if show_model_name and label:
@@ -113,7 +127,7 @@ def scatter_icons(
                 textcoords="offset points",
                 ha="center",
                 va="top",
-                fontsize=name_kwargs.get("fontsize", 9),
+                fontsize=name_kwargs.get("fontsize", 8),
                 fontweight=name_kwargs.get("fontweight", "normal"),
                 linespacing=name_kwargs.get("linespacing", 1.0),
             )
@@ -121,7 +135,7 @@ def scatter_icons(
         # Legend label once per model (still text-only)
         if label not in seen:
             seen.add(label)
-            ax.scatter([], [], s=200, color=st.get("color", "tab:gray"), marker="o", label=label)
+            ax.scatter([], [], s=100, color=st.get("color", "tab:gray"), marker="o", label=label)
 
 def create_scatter_accuracy_consistency(data):
     """
@@ -137,7 +151,7 @@ def create_scatter_accuracy_consistency(data):
     fig, ax = plt.subplots(figsize=(6, 5))
     xs = np.array(accuracies) * 100
     ys = np.array(consistencies) * 100
-    scatter_icons(ax, xs, ys, labels, style, zoom=0.20)
+    scatter_icons(ax, xs, ys, labels, style, zoom=0.18)
     ax.set_xlabel('Accuracy (%)')
     ax.set_ylabel('Consistency (%)')
 
@@ -165,12 +179,12 @@ def create_scatter_accuracy_vs_token_cost(data):
     fig, ax = plt.subplots(figsize=(6, 5))
     xs = np.array(accuracies) * 100
     ys = np.array(token_costs) / 1_000_000  # convert to millions
-    scatter_icons(ax, xs, ys, labels, style, zoom=0.20)
+    scatter_icons(ax, xs, ys, labels, style, zoom=0.18)
     
     ax.set_xlabel('Accuracy')
     ax.set_ylabel('Total Token Cost of run (Millions)')
     ax.set_title('Scatter Plot of Accuracy vs Total Token Cost')
-    ax.set_xlim(35, 60)
+    ax.set_xlim(30, 60)
     ax.set_ylim(3, 7)
     ax.grid(alpha=0.3)
     #ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
@@ -198,7 +212,7 @@ def create_scatter_accuracy_vs_latency(data):
     ax.set_ylabel('Average Tool Calls per run')
     ax.set_title('Scatter Plot of Accuracy vs Average Tool Calls')
     ax.set_xlim(20, 60)
-    ax.set_ylim(6, 9)
+    ax.set_ylim(3.5, 9)
     ax.grid(alpha=0.3)
     #ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
     fig.tight_layout()
@@ -213,7 +227,7 @@ def create_heatmap_by_complexity(models_data, model_name):
     Args:
         models_data (list of dict): List containing dictionaries with model names and accuracies by complexity.
     """
-    complexities = ['easy', 'medium', 'hard']
+    complexities = ['easy', 'medium', 'hard', 'very hard']
     accuracy_matrix = np.array([[item.get(f"{complexity}_accuracy", np.nan) for complexity in complexities] for item in models_data])
 
     plt.figure(figsize=(7, 5))
@@ -337,15 +351,19 @@ def clean_data_for_plotting(runs_data, model_name):
     cleaned_data['accuracy'] = data['metrics'].apply(lambda x: x.get('accuracy', np.nan)).mean()
     # Mean accuracy by difficulty (row filtering via .loc)
     if "difficulty" in data.columns:
-        for diff in ("easy", "medium", "hard"):
+        for diff in ("easy", "medium", "hard", "impossible"):
             subset = data.loc[data["difficulty"] == diff, "metrics"].apply(
                 lambda d: d.get("accuracy", np.nan) if isinstance(d, dict) else np.nan
             )
-            cleaned_data[f"{diff}_accuracy"] = float(subset.mean()) if len(subset) else np.nan
+            if diff != "impossible":
+                cleaned_data[f"{diff}_accuracy"] = float(subset.mean()) if len(subset) else np.nan
+            else:
+                cleaned_data["very hard_accuracy"] = float(subset.mean()) if len(subset) else np.nan
     else:
         cleaned_data["easy_accuracy"] = np.nan
         cleaned_data["medium_accuracy"] = np.nan
         cleaned_data["hard_accuracy"] = np.nan
+        cleaned_data["very hard_accuracy"] = np.nan
     # Consistency: percentage of equal accuracy measurements for each question
     data["accuracy"] = data["metrics"].apply(
         lambda d: d.get("accuracy", np.nan) if isinstance(d, dict) else np.nan
@@ -392,8 +410,13 @@ def clean_data_for_plotting(runs_data, model_name):
 if __name__ == "__main__":
     gpt4_1_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_FILENAME))
     gpt5_2_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT5_2_FILENAME))
+    gpt5_2_consistency = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT5_2_FILENAME_CONSISTENCY))
     qwen30b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_FILENAME))
+    qwen30b_consistency = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_FILENAME_CONSISTENCY))
     qwen480b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN480B_FILENAME))
+    qwen480b_consistency = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN480B_FILENAME_CONSISTENCY))
+    gptoss20b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPTOSS20B_FILENAME))
+    rnj_18b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, RNJ_18B_FILENAME))
 
     qwen30b_bq_af_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_BQ_AF_FILENAME))
     qwen30b_bq_af_fbq_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_BQ_AF_FBQ_FILENAME))
@@ -405,23 +428,37 @@ if __name__ == "__main__":
     gpt4_1_wiki_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_WIKIDATA_FILENAME))
     gpt4_1_bq_af_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FILENAME))
     gpt4_1_bq_af_fbq_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_FILENAME))
-    gpt4_1_bq_af_fbq_acc_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_FILENAME))
-    gpt4_1_bq_af_fbq_acc_sav_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME))
-    gpt4_1_bq_af_fbq_acc_sav_gh_data = gpt4_1_data.copy(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME))
+    #gpt4_1_bq_af_fbq_acc_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_FILENAME))
+    #gpt4_1_bq_af_fbq_acc_sav_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME))
+    #gpt4_1_bq_af_fbq_acc_sav_gh_data = gpt4_1_data.copy(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME))
     gpt4_1_full_data = gpt4_1_data.copy()
 
     gpt4_1_sampling_off_dryrun_off_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGOFF_DRYRUNOFF_FILENAME))
-    gpt4_1_sampling_off_dryrun_on_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME))
+    #gpt4_1_sampling_off_dryrun_on_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME))
     gpt4_1_sampling_on_dryrun_off_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGON_DRYRUNOFF_FILENAME))
     gpt4_1_sampling_on_dryrun_on_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGON_DRYRUNON_FILENAME))
 
     # TEST ON DIFFERENT LLMS
     data_cleaned = []
-    data_cleaned.append(clean_data_for_plotting(qwen30b_data, "QWEN-3 Coders 30B"))
     data_cleaned.append(clean_data_for_plotting(gpt4_1_data, "GPT-4.1"))
-    data_cleaned.append(clean_data_for_plotting(gpt5_2_data, "GPT-5.2"))
-    data_cleaned.append(clean_data_for_plotting(qwen480b_data, "QWEN-3 Coders 480B"))
+    gpt5_2_cleaned = clean_data_for_plotting(gpt5_2_data, "GPT-5.2")
+    gpt5_2_cleaned_consistency = clean_data_for_plotting(gpt5_2_consistency, "GPT-5.2 (Consistency Test)")
+    gpt5_2_cleaned["consistency"] = gpt5_2_cleaned_consistency["consistency"]
+    data_cleaned.append(gpt5_2_cleaned)
+    qwen30b_cleaned = clean_data_for_plotting(qwen30b_data, "QWEN-3 Coders 30B")
+    qwen30b_cleaned_consistency = clean_data_for_plotting(qwen30b_consistency, "QWEN-3 Coders 30B (Consistency Test)")
+    qwen30b_cleaned["consistency"] = qwen30b_cleaned_consistency["consistency"]
+    data_cleaned.append(qwen30b_cleaned)
+    qwen480b_cleaned = clean_data_for_plotting(qwen480b_data, "QWEN-3 Coders 480B")
+    qwen480b_cleaned_consistency = clean_data_for_plotting(qwen480b_consistency, "QWEN-3 Coders 480B (Consistency Test)")
+    qwen480b_cleaned["consistency"] = qwen480b_cleaned_consistency["consistency"]
+    data_cleaned.append(qwen480b_cleaned)
     create_scatter_accuracy_consistency(data_cleaned)
+
+    # Models with no consistency test
+    data_cleaned.append(clean_data_for_plotting(gptoss20b_data, "GPT-OSS 20B"))
+    data_cleaned.append(clean_data_for_plotting(rnj_18b_data, "RNJ 18B"))
+    
     create_scatter_accuracy_vs_token_cost(data_cleaned)
     create_scatter_accuracy_vs_latency(data_cleaned)
     create_heatmap_by_complexity(data_cleaned, "Models Comparison by Question Complexity")
@@ -442,16 +479,16 @@ if __name__ == "__main__":
     gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_wiki_data, "WIKIDATA"))
     gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_data, "BQ + AF"))
     gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_data, "+ FBQ"))
-    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_data, "+ ACC"))
-    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_data, "+ SAV"))
-    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_gh_data, "+ GH"))
+    #gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_data, "+ ACC"))
+    #gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_data, "+ SAV"))
+    #gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_gh_data, "+ GH"))
     gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_full_data, "+ AT"))
     line_chart_config_accuracy(gpt4_1_data_cleaned_configs, "GPT-4.1")
 
     # ABLATION STUDY ON SAMPLING AND DRY RUN - GPT-4.1
     gpt4_1_ablation_data_cleaned = []
     gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_off_dryrun_off_data, "Sampling OFF + Dry Run OFF"))
-    gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_off_dryrun_on_data, "Sampling OFF + Dry Run ON"))
+    #gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_off_dryrun_on_data, "Sampling OFF + Dry Run ON"))
     gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_on_dryrun_off_data, "Sampling ON + Dry Run OFF"))
     gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_on_dryrun_on_data, "Sampling ON + Dry Run ON"))
     print_table(gpt4_1_ablation_data_cleaned)
