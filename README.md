@@ -135,7 +135,7 @@ This server is designed to be ontology-agnostic. The "Tools" are abstract operat
 *   **Configuration**: Define your SPARQL endpoint and Namespace prefixes in `src/server/config/server_config.yaml`.
 *   **Templates**: Map user intent to your specific graph patterns using `.rq` templates in `src/server/config/templates/`.
 
-👉 **[Read the Custom KG Tutorial](docs/custom_kg_tutorial.md)** to learn how to adapt this server to your own data.
+👉 **[Read the Custom KG Tutorial](docs/custom_kg_config.md)** to learn how to adapt this server to your own data.
 
 ## Resources
 
