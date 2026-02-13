@@ -12,18 +12,19 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 ORIGIN_DATA_DIR = "experiments/data"
 
 # DIFFERENT LLMs TESTS
-GPT4_1_FILENAME = "Doremus_Questions_1.1_NDR-gpt-4.1-cfbf6e21.json" # ADD THE ONE FROM FULL TOOLS
+GPT4_1_FILENAME = "Doremus_Questions_1.1_NDR-gpt-4.1-cfbf6e21.json"
 GPT5_2_FILENAME_CONSISTENCY = "Doremus_Questions_1.1_D4-gpt-5.2-f875f349.json" 
-GPT5_2_FILENAME = GPT5_2_FILENAME_CONSISTENCY # Need to re-do 1
+GPT5_2_FILENAME = "Doremus_Questions_1.1_D4-gpt-5.2-da387451.json"
 QWEN30B_FILENAME_CONSISTENCY = "Doremus_Questions_1.1_PC_30s-timeout-qwen3-coder-30b-129c9985.json"
 QWEN30B_FILENAME = "Doremus_Questions_1.1_FULL-qwen3-coder-30b-cace8e10.json"
-QWEN480B_FILENAME_CONSISTENCY = "Doremus_Questions_1.1_PC_30s-timeout-qwen-qwen3-coder-480b-a35b-instruct-00ae6bb5.json"
-QWEN480B_FILENAME = QWEN480B_FILENAME_CONSISTENCY # Need to re-do 1
+QWEN480B_FILENAME = "Doremus_Questions_1.1_NDR-qwen-qwen3-coder-480b-a35b-instruct-8ca86d65.json"
+GPTOSS120B_FILENAME = "Doremus_Questions_1.1_NDR-gpt-oss-120b-cloud-d89d58fb.json"
 GPTOSS20B_FILENAME = "Doremus_Questions_1.1_NDR-gpt-oss-20b-7a96e3e0.json"
 RNJ_18B_FILENAME = "Doremus_Questions_1.1_NDR-rnj-1-8b-cloud-ade6d780.json"
+MINISTRAL14B_3_FILENAME = "Doremus_Questions_1.1_NDR-ministral-3-14b-e8f635d0.json"
 
 # CONFIG TESTS
-QWEN30B_WIKIDATA_FILENAME = "" # NEED TO DO 1
+QWEN30B_WIKIDATA_FILENAME = "Doremus_Questions_1.1_NDR-qwen3-coder-30b-b6a78aa7.json"
 QWEN30B_BQ_AF_FILENAME = "Doremus_Questions_1.1_Config_2_BQ_AF-qwen3-coder-30b-416165c4.json" 
 QWEN30B_BQ_AF_FBQ_FILENAME = "Doremus_Questions_1.1_Config_3_BQ_AF_FBQ-qwen3-coder-30b-1164bdae.json"
 QWEN30B_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-qwen3-coder-30b-1f65a5e5.json"
@@ -32,13 +33,13 @@ QWEN30B_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_BQ_AF_FB
 GPT4_1_WIKIDATA_FILENAME = "Doremus_Questions_1.1_WIKIDATA-gpt-4.1-bf3935e3.json"
 GPT4_1_BQ_AF_FILENAME = "Doremus_Questions_1.1_Config_2_BQ_AF-gpt-4.1-bca6fcb6.json"
 GPT4_1_BQ_AF_FBQ_FILENAME = "Doremus_Questions_1.1_Config_3_BQ_AF_FBQ-gpt-4.1-3ee40e4f.json"
-GPT4_1_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-gpt-4.1-a86e6cf0.json" # need to re-do 1
-GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME = "Doremus_Questions_1.1_Config_5_BQ_AF_FBQ_ACC_SAV-gpt-4.1-2eb8d146.json" # need to re-do 1
-GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_BQ_AF_FBQ_ACC_SAV_GH-gpt-4.1-8f510930.json" # need to re-do 1
+GPT4_1_BQ_AF_FBQ_ACC_FILENAME = "Doremus_Questions_1.1_Config_4_BQ_AF_FBQ_ACC-gpt-4.1-ce88c785.json"
+GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME = "Doremus_Questions_1.1_Config_5_BQ_AF_FBQ_ACC_SAV-gpt-4.1-54d1a53c.json"
+GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME = "Doremus_Questions_1.1_Config_6_BQ_AF_FBQ_ACC_SAV_GH-gpt-4.1-9fb44080.json"
 
 # SAMPLING ABLATION
 GPT4_1_SAMPLINGOFF_DRYRUNOFF_FILENAME = "Doremus_Questions_1.1_Sampling_OFF_DryRun_OFF-gpt-4.1-b8a6bf09.json"
-GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME = "Doremus_Questions_1.1_Sampling_OFF_DryRun_ON-gpt-4.1-74359adc.json" # need to re-do 1
+GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME = "Doremus_Questions_1.1_Sampling_OFF_DryRun_ON-gpt-4.1-42648e76.json"
 GPT4_1_SAMPLINGON_DRYRUNOFF_FILENAME = "Doremus_Questions_1.1_Sampling_ON_DryRun_OFF-gpt-4.1-3a3b4bb5.json"
 GPT4_1_SAMPLINGON_DRYRUNON_FILENAME = GPT4_1_FILENAME
 
@@ -49,11 +50,13 @@ PLOTS_DIR_OUTPUT = "data/evaluation/plots/"
 style = {
     "GPT-4.1": {"color": "tab:blue", "icon": "data/icons/chatgpt-icon.svg"},
     "GPT-5.2": {"color": "tab:red", "icon": "data/icons/chatgpt-icon.svg"},
-    "QWEN-3 Coders 30B": {"color": "tab:orange", "icon": "data/icons/qwen-ai-icon.svg"},
-    "QWEN-3 Coders 480B": {"color": "tab:green", "icon": "data/icons/qwen-ai-icon.svg"},
+    "QWEN-C 30B": {"color": "tab:orange", "icon": "data/icons/qwen-ai-icon.svg"},
+    "QWEN-C 480B": {"color": "tab:green", "icon": "data/icons/qwen-ai-icon.svg"},
     "GLM-4.7": {"color": "tab:purple", "icon": "data/icons/z-ai-icon.svg"},
-    "GPT-OSS 20B": {"color": "tab:brown", "icon": "data/icons/gpt-oss-icon.svg"},
-    "RNJ 18B": {"color": "tab:pink", "icon": "data/icons/essential-ai-logo.svg"},
+    "GPT-OSS": {"color": "tab:brown", "icon": "data/icons/gpt-oss-icon.svg"},
+    "GPT-OSS": {"color": "tab:brown", "icon": "data/icons/gpt-oss-icon.svg"},
+    "RNJ1": {"color": "tab:pink", "icon": "data/icons/essential-ai-logo.svg"},
+    "MINISTRAL-3": {"color": "tab:gray", "icon": "data/icons/mistral-ai-icon.svg"},
 }
 default_style = {"color": "tab:gray", "icon": None}
 
@@ -85,7 +88,7 @@ def scatter_icons(
     style_map,
     zoom=0.22,
     show_model_name=True,
-    name_offset_points=(0, -18),
+    name_offset_points=(0, -20),
     name_wrap_width=8,
     name_kwargs=None,
 ):
@@ -127,7 +130,7 @@ def scatter_icons(
                 textcoords="offset points",
                 ha="center",
                 va="top",
-                fontsize=name_kwargs.get("fontsize", 8),
+                fontsize=name_kwargs.get("fontsize", 10),
                 fontweight=name_kwargs.get("fontweight", "normal"),
                 linespacing=name_kwargs.get("linespacing", 1.0),
             )
@@ -148,16 +151,21 @@ def create_scatter_accuracy_consistency(data):
     consistencies = [item['consistency'] for item in data]
     labels = [item.get('label', '') for item in data]
 
-    fig, ax = plt.subplots(figsize=(6, 5))
+    fig, ax = plt.subplots(figsize=(10, 5))
+    fig.set_facecolor('#e4f4f6')
+    ax.set_facecolor('#e4f4f6')
+    # Hide top/right spines
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     xs = np.array(accuracies) * 100
     ys = np.array(consistencies) * 100
-    scatter_icons(ax, xs, ys, labels, style, zoom=0.18)
+    scatter_icons(ax, xs, ys, labels, style, zoom=0.25)
     ax.set_xlabel('Accuracy (%)')
     ax.set_ylabel('Consistency (%)')
 
-    ax.set_title('Scatter Plot of Accuracy vs Consistency')
-    ax.set_xlim(30, 60)
-    ax.set_ylim(80, 102)
+    ax.set_title('Accuracy vs Consistency', fontsize=20)
+    ax.set_xlim(40, 60)
+    ax.set_ylim(75, 95)
     ax.grid(alpha=0.3)
     #ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
     fig.tight_layout()
@@ -176,16 +184,21 @@ def create_scatter_accuracy_vs_token_cost(data):
     token_costs = [item['total_token_cost'] for item in data]
     labels = [item.get('label', '') for item in data]
 
-    fig, ax = plt.subplots(figsize=(6, 5))
+    fig, ax = plt.subplots(figsize=(7, 5))
+    fig.set_facecolor('#e4f4f6')
+    ax.set_facecolor('#e4f4f6')
+    # Hide top/right spines
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     xs = np.array(accuracies) * 100
     ys = np.array(token_costs) / 1_000_000  # convert to millions
-    scatter_icons(ax, xs, ys, labels, style, zoom=0.18)
+    scatter_icons(ax, xs, ys, labels, style, zoom=0.25)
     
-    ax.set_xlabel('Accuracy')
+    ax.set_xlabel('Accuracy (%)')
     ax.set_ylabel('Total Token Cost of run (Millions)')
-    ax.set_title('Scatter Plot of Accuracy vs Total Token Cost')
-    ax.set_xlim(30, 60)
-    ax.set_ylim(3, 7)
+    ax.set_title('Accuracy vs Total Token Cost')
+    ax.set_xlim(40, 60)
+    ax.set_ylim(4, 7)
     ax.grid(alpha=0.3)
     #ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
     fig.tight_layout()
@@ -204,15 +217,20 @@ def create_scatter_accuracy_vs_latency(data):
     latencies = [item['average_tool_calls'] for item in data]
     labels = [item.get('label', '') for item in data]
 
-    fig, ax = plt.subplots(figsize=(6, 5))
+    fig, ax = plt.subplots(figsize=(7, 5))
+    fig.set_facecolor('#e4f4f6')
+    ax.set_facecolor('#e4f4f6')
+    # Hide top/right spines
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     xs = np.array(accuracies) * 100
     ys = np.array(latencies)
-    scatter_icons(ax, xs, ys, labels, style, zoom=0.20)
+    scatter_icons(ax, xs, ys, labels, style, zoom=0.25)
     ax.set_xlabel('Accuracy')
     ax.set_ylabel('Average Tool Calls per run')
-    ax.set_title('Scatter Plot of Accuracy vs Average Tool Calls')
-    ax.set_xlim(20, 60)
-    ax.set_ylim(3.5, 9)
+    ax.set_title('Accuracy vs Average Tool Calls')
+    ax.set_xlim(40, 60)
+    ax.set_ylim(6, 12)
     ax.grid(alpha=0.3)
     #ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
     fig.tight_layout()
@@ -227,10 +245,17 @@ def create_heatmap_by_complexity(models_data, model_name):
     Args:
         models_data (list of dict): List containing dictionaries with model names and accuracies by complexity.
     """
-    complexities = ['easy', 'medium', 'hard', 'very hard']
+    models_data = sorted(models_data, key=lambda x: x.get('accuracy', 0), reverse=True)
+    complexities = ['easy', 'medium', 'hard', 'very hard', 'TOTAL']
     accuracy_matrix = np.array([[item.get(f"{complexity}_accuracy", np.nan) for complexity in complexities] for item in models_data])
+    # Compute totals
+    for i, item in enumerate(models_data):
+        total_acc = item.get('accuracy', np.nan)
+        accuracy_matrix[i, -1] = total_acc
 
-    plt.figure(figsize=(7, 5))
+    plt.figure(figsize=(16, 7))
+    plt.gca().set_facecolor('#e4f4f6')
+    plt.gcf().set_facecolor('#e4f4f6')
     cmap = plt.cm.get_cmap("RdYlGn")
     norm = mcolors.Normalize(vmin=0.0, vmax=1.0)  # accuracies are fractions 0..1
 
@@ -250,15 +275,21 @@ def create_heatmap_by_complexity(models_data, model_name):
             plt.text(
                 j, i, f"{val * 100:.1f}%",
                 ha="center", va="center",
-                color=text_color
+                color=text_color,
+                fontsize=17
             )
 
-    plt.colorbar(im, label="Accuracy")
-    plt.xticks(ticks=np.arange(len(complexities)), labels=complexities)
-    plt.yticks(ticks=np.arange(len(models_data)), labels=[item['label'] for item in models_data])
-    plt.xlabel('Question Complexity')
-    plt.ylabel('Models')
-    plt.title('Heatmap of Accuracy by Question Complexity')
+    cbar = plt.colorbar(im)
+    cbar.set_label("Accuracy (%)", fontsize=15)
+    ticks = cbar.get_ticks()
+    cbar.set_ticks(ticks)
+    cbar.set_ticklabels([f"{t*100:.0f}" for t in ticks])
+    cbar.ax.tick_params(labelsize=13) 
+    plt.xticks(ticks=np.arange(len(complexities)), labels=complexities, fontsize=12)
+    plt.yticks(ticks=np.arange(len(models_data)), labels=[item['label'] for item in models_data], fontsize=15)
+    #plt.xlabel('Question Complexity')
+    #plt.ylabel('Models')
+    plt.title('Accuracy by Question Complexity', fontsize=16)
     plt.tight_layout()
     if not os.path.exists(PLOTS_DIR_OUTPUT):
         os.makedirs(PLOTS_DIR_OUTPUT)
@@ -271,6 +302,8 @@ def create_stacked_bar_failure_types(models_data):
     Args:
         models_data (list of dict): List containing dictionaries with model names and failure type rates.
     """
+    models_data = sorted(models_data, key=lambda x: x.get('accuracy', 0), reverse=True)
+
     labels = [item['label'] for item in models_data]
     type_1_errors = [item.get('type_1_error_rate', 0) for item in models_data]
     type_2_errors = [item.get('type_2_error_rate', 0) for item in models_data]
@@ -279,21 +312,39 @@ def create_stacked_bar_failure_types(models_data):
     x = np.arange(len(labels))
     width = 0.35
 
-    plt.figure(figsize=(10, 6))
-    plt.bar(x, type_1_errors, width, label='Type 1 Errors', color='steelblue')
-    plt.bar(x, type_2_errors, width, bottom=type_1_errors, label='Type 2 Errors', color='mediumaquamarine')
-    bottom_type_3 = np.array(type_1_errors) + np.array(type_2_errors)
-    plt.bar(x, type_3_errors, width, bottom=bottom_type_3, label='Type 3 Errors', color='mediumpurple')
+    fig, ax = plt.subplots(figsize=(10, 5))
+    fig.set_facecolor('#e4f4f6')
+    ax.set_facecolor('#e4f4f6')
 
-    plt.xlabel('Models')
-    plt.ylabel('Avg error occurrence per run')
-    plt.title('Stacked Bar Chart of Failure Types by Model')
-    plt.xticks(ticks=x, labels=labels)
-    plt.legend(title='Failure Types', loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
-    plt.tight_layout()
+    # Hide top/right spines
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    b1 = ax.bar(x, type_1_errors, width, label='Schema Hallucination', color='steelblue')
+    b2 = ax.bar(x, type_2_errors, width, bottom=type_1_errors, label='Tool Drift', color='mediumaquamarine')
+    bottom_type_3 = np.array(type_1_errors) + np.array(type_2_errors)
+    b3 = ax.bar(x, type_3_errors, width, bottom=bottom_type_3, label='Semantic Drift', color='mediumpurple')
+
+    ax.set_xlabel('Models', fontsize=12)
+    ax.set_ylabel('Avg error occurrence per run', fontsize=12)
+    ax.set_title('Failure Types by Model', fontsize=16)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+
+    # ---- Numeric labels (per stacked segment) ----
+    def _fmt(vals):
+        # hide labels for tiny/zero segments to reduce clutter
+        return [f"{v:.2f}" for v in vals]
+
+    ax.bar_label(b1, labels=_fmt(type_1_errors), label_type="center", fontsize=10, color="black")
+    ax.bar_label(b2, labels=_fmt(type_2_errors), label_type="center", fontsize=10, color="black")
+    ax.bar_label(b3, labels=_fmt(type_3_errors), label_type="edge", fontsize=10, color="black")
+
+    ax.legend(title='Failure Types', loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
+    fig.tight_layout()
     if not os.path.exists(PLOTS_DIR_OUTPUT):
         os.makedirs(PLOTS_DIR_OUTPUT)
-    plt.savefig(PLOTS_DIR_OUTPUT + 'failure_types_stacked_bar.png')
+    fig.savefig(PLOTS_DIR_OUTPUT + 'failure_types_stacked_bar.png')
 
 def line_chart_config_accuracy(data, model_name):
     """
@@ -312,8 +363,8 @@ def line_chart_config_accuracy(data, model_name):
         plt.text(i, acc * 100 + 3, f"{acc * 100:.1f}%", ha='center', color='steelblue')
     plt.xlabel('Configurations')
     plt.ylabel('Accuracy (%)')
-    plt.title(f'Line Chart of Accuracy across Configurations for {model_name}')
-    plt.ylim(5, 60)
+    plt.title(f'Accuracy across Configurations for {model_name}')
+    plt.ylim(0, 60)
     plt.grid(alpha=0.3)
     plt.tight_layout()
     if not os.path.exists(PLOTS_DIR_OUTPUT):
@@ -335,6 +386,52 @@ def print_table(data):
     print("-" * 85)
     for label, acc, tokens, calls in zip(labels, accuracies, n_tokens, n_tool_calls):
         print(f"{label:<30} {acc*100:<15.2f} {tokens:<20.2f} {calls:<15.2f}")
+
+def combined_line_chart_config_accuracy(data):
+    """
+    Create a combined line chart of accuracy across different configurations for multiple models.
+
+    Args:
+        data (dict): Dictionary where keys are model names and values are lists of dictionaries with 'accuracy' and configuration names.
+    """
+    line_style = {
+        "GPT-4.1": "steelblue",
+        "QWEN-3 C 30B": "darkorange",
+        }
+
+    plt.figure(figsize=(16,7))
+    fig = plt.gcf() # Get current figure
+    fig.set_facecolor('#e4f4f6')
+    ax = plt.gca()
+    ax.set_facecolor('#e4f4f6')
+
+    # Hide top/right spines
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    for model_name, model_data in data.items():
+        configurations = [item['label'] for item in model_data]
+        accuracies = [item['accuracy'] for item in model_data]
+        plt.plot(configurations, [acc * 100 for acc in accuracies], linestyle='--', label=model_name, color=line_style[model_name])
+        plt.scatter(configurations, [acc * 100 for acc in accuracies], s=100, marker='s', color=line_style[model_name])
+        for i, acc in enumerate(accuracies):
+            if model_name == "QWEN-3 C 30B":
+                plt.text(i, acc * 100 - 6, f"{acc * 100:.1f}%", ha='center', color=line_style[model_name], fontsize=19)
+            else:
+                plt.text(i, acc * 100 + 3, f"{acc * 100:.1f}%", ha='center', color=line_style[model_name], fontsize=19)
+
+    plt.xlabel('Configurations', fontsize=22)
+    plt.ylabel('Accuracy (%)', fontsize=22)
+    plt.xticks(fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.title('Accuracy contribution across Configurations', fontsize=16)
+    plt.ylim(0, 60)
+    plt.grid(alpha=0.3)
+    plt.legend(title='Models', loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3, fontsize=20)
+    plt.tight_layout()
+    if not os.path.exists(PLOTS_DIR_OUTPUT):
+        os.makedirs(PLOTS_DIR_OUTPUT)
+    plt.savefig(PLOTS_DIR_OUTPUT + 'combined_config_accuracy_line_chart.png')
 
 def clean_data_for_plotting(runs_data, model_name):
     """
@@ -414,10 +511,11 @@ if __name__ == "__main__":
     qwen30b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_FILENAME))
     qwen30b_consistency = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_FILENAME_CONSISTENCY))
     qwen480b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN480B_FILENAME))
-    qwen480b_consistency = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN480B_FILENAME_CONSISTENCY))
+    gptoss120b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPTOSS120B_FILENAME))
     gptoss20b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPTOSS20B_FILENAME))
-    rnj_18b_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, RNJ_18B_FILENAME))
+    ministral14b_3_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, MINISTRAL14B_3_FILENAME))
 
+    qwen30b_wiki_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_WIKIDATA_FILENAME))
     qwen30b_bq_af_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_BQ_AF_FILENAME))
     qwen30b_bq_af_fbq_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_BQ_AF_FBQ_FILENAME))
     qwen30b_bq_af_fbq_acc_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, QWEN30B_BQ_AF_FBQ_ACC_FILENAME))
@@ -428,13 +526,13 @@ if __name__ == "__main__":
     gpt4_1_wiki_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_WIKIDATA_FILENAME))
     gpt4_1_bq_af_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FILENAME))
     gpt4_1_bq_af_fbq_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_FILENAME))
-    #gpt4_1_bq_af_fbq_acc_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_FILENAME))
-    #gpt4_1_bq_af_fbq_acc_sav_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME))
-    #gpt4_1_bq_af_fbq_acc_sav_gh_data = gpt4_1_data.copy(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME))
+    gpt4_1_bq_af_fbq_acc_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_FILENAME))
+    gpt4_1_bq_af_fbq_acc_sav_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_FILENAME))
+    gpt4_1_bq_af_fbq_acc_sav_gh_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_BQ_AF_FBQ_ACC_SAV_GH_FILENAME))
     gpt4_1_full_data = gpt4_1_data.copy()
 
     gpt4_1_sampling_off_dryrun_off_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGOFF_DRYRUNOFF_FILENAME))
-    #gpt4_1_sampling_off_dryrun_on_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME))
+    gpt4_1_sampling_off_dryrun_on_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGOFF_DRYRUNON_FILENAME))
     gpt4_1_sampling_on_dryrun_off_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGON_DRYRUNOFF_FILENAME))
     gpt4_1_sampling_on_dryrun_on_data = pd.read_json(os.path.join(ORIGIN_DATA_DIR, GPT4_1_SAMPLINGON_DRYRUNON_FILENAME))
 
@@ -445,27 +543,25 @@ if __name__ == "__main__":
     gpt5_2_cleaned_consistency = clean_data_for_plotting(gpt5_2_consistency, "GPT-5.2 (Consistency Test)")
     gpt5_2_cleaned["consistency"] = gpt5_2_cleaned_consistency["consistency"]
     data_cleaned.append(gpt5_2_cleaned)
-    qwen30b_cleaned = clean_data_for_plotting(qwen30b_data, "QWEN-3 Coders 30B")
-    qwen30b_cleaned_consistency = clean_data_for_plotting(qwen30b_consistency, "QWEN-3 Coders 30B (Consistency Test)")
+    qwen30b_cleaned = clean_data_for_plotting(qwen30b_data, "QWEN-C 30B")
+    qwen30b_cleaned_consistency = clean_data_for_plotting(qwen30b_consistency, "QWEN-C 30B (Consistency Test)")
     qwen30b_cleaned["consistency"] = qwen30b_cleaned_consistency["consistency"]
     data_cleaned.append(qwen30b_cleaned)
-    qwen480b_cleaned = clean_data_for_plotting(qwen480b_data, "QWEN-3 Coders 480B")
-    qwen480b_cleaned_consistency = clean_data_for_plotting(qwen480b_consistency, "QWEN-3 Coders 480B (Consistency Test)")
-    qwen480b_cleaned["consistency"] = qwen480b_cleaned_consistency["consistency"]
-    data_cleaned.append(qwen480b_cleaned)
-    create_scatter_accuracy_consistency(data_cleaned)
+    data_cleaned.append(clean_data_for_plotting(qwen480b_data, "QWEN-C 480B"))
+    data_cleaned.append(clean_data_for_plotting(ministral14b_3_data, "MINISTRAL-3"))
+    data_cleaned.append(clean_data_for_plotting(gptoss120b_data, "GPT-OSS"))
 
-    # Models with no consistency test
-    data_cleaned.append(clean_data_for_plotting(gptoss20b_data, "GPT-OSS 20B"))
-    data_cleaned.append(clean_data_for_plotting(rnj_18b_data, "RNJ 18B"))
+    create_scatter_accuracy_consistency(data_cleaned)
     
     create_scatter_accuracy_vs_token_cost(data_cleaned)
+
     create_scatter_accuracy_vs_latency(data_cleaned)
     create_heatmap_by_complexity(data_cleaned, "Models Comparison by Question Complexity")
     create_stacked_bar_failure_types(data_cleaned)
 
     # TEST ON DIFFERENT CONFIGURATIONS OF THE SAME MODEL - QWEN-3 CODERS 30B
     qwen30b_data_cleaned_configs = []
+    qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_wiki_data, "EXP-GEN"))
     qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_data, "BQ + AF"))
     qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_fbq_data, "+ FBQ"))
     qwen30b_data_cleaned_configs.append(clean_data_for_plotting(qwen30b_bq_af_fbq_acc_data, "+ ACC"))
@@ -476,19 +572,26 @@ if __name__ == "__main__":
 
     # TEST ON DIFFERENT CONFIGURATIONS OF THE SAME MODEL - GPT-4.1
     gpt4_1_data_cleaned_configs = []
-    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_wiki_data, "WIKIDATA"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_wiki_data, "EXP-GEN"))
     gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_data, "BQ + AF"))
     gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_data, "+ FBQ"))
-    #gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_data, "+ ACC"))
-    #gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_data, "+ SAV"))
-    #gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_gh_data, "+ GH"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_data, "+ ACC"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_data, "+ SAV"))
+    gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_bq_af_fbq_acc_sav_gh_data, "+ GH"))
     gpt4_1_data_cleaned_configs.append(clean_data_for_plotting(gpt4_1_full_data, "+ AT"))
     line_chart_config_accuracy(gpt4_1_data_cleaned_configs, "GPT-4.1")
+
+    # COMBINED LINE CHART CONFIGURATIONS - QWEN-3 CODERS 30B VS GPT-4.1
+    combined_data_configs = {
+        "QWEN-3 C 30B": qwen30b_data_cleaned_configs,
+        "GPT-4.1": gpt4_1_data_cleaned_configs
+    }
+    combined_line_chart_config_accuracy(combined_data_configs)
 
     # ABLATION STUDY ON SAMPLING AND DRY RUN - GPT-4.1
     gpt4_1_ablation_data_cleaned = []
     gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_off_dryrun_off_data, "Sampling OFF + Dry Run OFF"))
-    #gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_off_dryrun_on_data, "Sampling OFF + Dry Run ON"))
+    gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_off_dryrun_on_data, "Sampling OFF + Dry Run ON"))
     gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_on_dryrun_off_data, "Sampling ON + Dry Run OFF"))
     gpt4_1_ablation_data_cleaned.append(clean_data_for_plotting(gpt4_1_sampling_on_dryrun_on_data, "Sampling ON + Dry Run ON"))
     print_table(gpt4_1_ablation_data_cleaned)

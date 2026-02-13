@@ -61,7 +61,7 @@ def create_model(provider: str, model_name=None, api_key=None):
         model_name = evaluation_models[provider]
     
     if provider == "openai":
-        return ChatOpenAI(model=model_name, temperature=0, api_key=os.getenv("OPENAI_API_KEY"))
+        return ChatOpenAI(model=model_name, temperature=0, api_key=os.getenv("OPENAI_API_KEY"), reasoning_effort="medium")
     elif provider == "groq":
         return ChatGroq(model=model_name, temperature=0, api_key=os.getenv("GROQ_API_KEY"))
     elif provider == "anthropic":
@@ -150,7 +150,7 @@ async def inject_step_count(request, handler):
     limit = int(recursion_limit)
     remaining_steps = int((limit / 2) - 1 - current_step)
     
-    if remaining_steps <= 5:
+    if remaining_steps <= 10:
         if remaining_steps == 1:
             content = "FINAL STEP WARNING: This is your absolute last turn. You MUST call 'execute_query' NOW even if partial results are returned or the session will terminate without results."
         elif remaining_steps == 2:
@@ -273,6 +273,6 @@ async def initialize_agent(api_key=None):
         model=llm,
         tools=tools,
         system_prompt=agent_system_prompt,
-        middleware=[handle_tool_errors, fix_hallucinated_json], # inject_step_count
+        middleware=[handle_tool_errors, fix_hallucinated_json, inject_step_count],
     )
     return agent.with_config({"recursion_limit": recursion_limit})
