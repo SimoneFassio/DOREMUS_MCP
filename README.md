@@ -2,7 +2,7 @@
 
 A **Model Context Protocol (MCP)** server for agentic retrieval over SPARQL-based Knowledge Graphs (DOREMUS by default). The server exposes a small set of **ontology-agnostic tools** (entity discovery, query building, filtering, execution) that an LLM can call to iteratively construct valid SPARQL.
 
-[Overall Server Architecture](docs/MCP%20Server%20schema.png)
+![Overall Server Architecture](docs/MCP%20Server%20schema.png)
 
 > While primarily tested with DOREMUS (https://data.doremus.org), this codebase is designed to be adapted to any SPARQL endpoint by changing configuration + query templates.
 
